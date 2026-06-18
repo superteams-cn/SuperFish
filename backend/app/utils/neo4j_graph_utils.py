@@ -89,10 +89,10 @@ class Neo4jGraphClient:
 
     def build_indices_and_constraints(self):
         with self.driver.session() as session:
-            session.run("CREATE INDEX mirofish_entity_uuid IF NOT EXISTS FOR (n:Entity) ON (n.uuid)")
-            session.run("CREATE INDEX mirofish_entity_group IF NOT EXISTS FOR (n:Entity) ON (n.group_id)")
-            session.run("CREATE INDEX mirofish_entity_name IF NOT EXISTS FOR (n:Entity) ON (n.name)")
-            session.run("CREATE INDEX mirofish_relates_group IF NOT EXISTS FOR ()-[r:RELATES_TO]-() ON (r.group_id)")
+            session.run("CREATE CONSTRAINT entity_uuid IF NOT EXISTS FOR (n:Entity) REQUIRE n.uuid IS UNIQUE")
+            session.run("CREATE INDEX entity_group IF NOT EXISTS FOR (n:Entity) ON (n.group_id)")
+            session.run("CREATE INDEX entity_name IF NOT EXISTS FOR (n:Entity) ON (n.name)")
+            session.run("CREATE INDEX relates_group IF NOT EXISTS FOR ()-[r:RELATES_TO]-() ON (r.group_id)")
 
     def write_graph(
         self,
