@@ -215,7 +215,7 @@
         <div v-if="graphData" class="graph-legend">
           <div class="legend-item" v-for="type in entityTypes" :key="type.name">
             <span class="legend-dot" :style="{ background: type.color }"></span>
-            <span class="legend-label">{{ type.name }}</span>
+            <span class="legend-label">{{ displayEntityTypeName(type.name) }}</span>
             <span class="legend-count">{{ type.count }}</span>
           </div>
         </div>
@@ -268,27 +268,27 @@
                     :key="entity.name"
                     class="entity-tag"
                   >
-                    {{ entity.name }}
+                    {{ displayOntologyName(entity) }}
                   </span>
                 </div>
               </div>
               
               <div class="detail-section" v-if="projectData?.ontology">
-                <div class="detail-label">生成的关系类型 ({{ projectData.ontology.relation_types?.length || 0 }})</div>
+                <div class="detail-label">生成的关系类型 ({{ ontologyEdgeTypes.length }})</div>
                 <div class="relation-list">
                   <div 
-                    v-for="(rel, idx) in projectData.ontology.relation_types?.slice(0, 5) || []" 
+                    v-for="(rel, idx) in ontologyEdgeTypes.slice(0, 5)" 
                     :key="idx"
                     class="relation-item"
                   >
-                    <span class="rel-source">{{ rel.source_type }}</span>
+                    <span class="rel-source">{{ displayEntityTypeName(rel.source_type || rel.source_targets?.[0]?.source) }}</span>
                     <span class="rel-arrow">→</span>
-                    <span class="rel-name">{{ rel.name }}</span>
+                    <span class="rel-name">{{ displayOntologyName(rel) }}</span>
                     <span class="rel-arrow">→</span>
-                    <span class="rel-target">{{ rel.target_type }}</span>
+                    <span class="rel-target">{{ displayEntityTypeName(rel.target_type || rel.source_targets?.[0]?.target) }}</span>
                   </div>
-                  <div v-if="(projectData.ontology.relation_types?.length || 0) > 5" class="relation-more">
-                    +{{ projectData.ontology.relation_types.length - 5 }} 更多关系...
+                  <div v-if="ontologyEdgeTypes.length > 5" class="relation-more">
+                    +{{ ontologyEdgeTypes.length - 5 }} 更多关系...
                   </div>
                 </div>
               </div>
@@ -317,7 +317,7 @@
               <div class="detail-section">
                 <div class="detail-label">接口说明</div>
                 <div class="detail-content">
-                  基于生成的本体，将文档分块后调用 Zep API 构建知识图谱，提取实体和关系
+                  基于生成的本体，将文档分块后调用 图谱 schema 构建知识图谱，提取实体和关系
                 </div>
               </div>
               
@@ -474,6 +474,18 @@ const entityTypes = computed(() => {
   
   return Object.values(typeMap)
 })
+
+const ontologyEdgeTypes = computed(() => {
+  return projectData.value?.ontology?.edge_types || projectData.value?.ontology?.relation_types || []
+})
+
+const displayOntologyName = (item) => item?.display_name || item?.name || ''
+
+const displayEntityTypeName = (schemaName) => {
+  if (!schemaName) return ''
+  const entity = projectData.value?.ontology?.entity_types?.find(item => item.name === schemaName)
+  return entity?.display_name || schemaName
+}
 
 // 方法
 const goHome = () => {

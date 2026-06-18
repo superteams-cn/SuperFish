@@ -1,7 +1,6 @@
 """
-Graphiti 检索工具服务
+Neo4j 检索工具服务
 封装图谱搜索、节点读取、边查询等工具，供 Report Agent 使用
-（原 Zep Cloud 版本的直接替代，公共接口完全兼容）
 
 核心检索工具：
 1. InsightForge（深度洞察检索）- 自动生成子问题并多维度检索
@@ -18,9 +17,9 @@ from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.llm_client import LLMClient
 from ..utils.locale import get_locale, t
-from ..utils.graphiti_utils import get_graphiti_client, run_async, fetch_all_nodes, fetch_all_edges
+from ..utils.neo4j_graph_utils import get_neo4j_graph_client, run_async, fetch_all_nodes, fetch_all_edges
 
-logger = get_logger('mirofish.zep_tools')
+logger = get_logger('mirofish.neo4j_tools')
 
 
 # ─── 数据类（与原版完全兼容）────────────────────────────────────────────────
@@ -270,9 +269,9 @@ class InterviewResult:
 
 # ─── 主服务类 ────────────────────────────────────────────────────────────────
 
-class ZepToolsService:
+class Neo4jToolsService:
     """
-    Graphiti 检索工具服务（原 ZepToolsService 的直接替代）
+    Neo4j 检索工具服务
 
     【核心检索工具】
     1. insight_forge - 深度洞察检索（自动生成子问题，多维度检索）
@@ -291,7 +290,7 @@ class ZepToolsService:
 
     def __init__(self, api_key: Optional[str] = None, llm_client: Optional[LLMClient] = None):
         # api_key 参数保留以兼容现有调用
-        self._client = get_graphiti_client()
+        self._client = get_neo4j_graph_client()
         self._llm_client = llm_client
         logger.info(t("console.zepToolsInitialized"))
 
@@ -301,7 +300,7 @@ class ZepToolsService:
             self._llm_client = LLMClient()
         return self._llm_client
 
-    # ── 图谱搜索（核心，对接 Graphiti search API）────────────────────────────
+    # ── 图谱搜索（优先语义接口，当前降级为本地关键词匹配）────────────────────
 
     def search_graph(
         self,
@@ -321,7 +320,7 @@ class ZepToolsService:
                     num_results=limit,
                 )
             )
-            # Graphiti search() 返回 list[EntityEdge]
+            # 兼容未来语义搜索接口返回的边对象
             facts = []
             edges = []
             seen = set()
@@ -352,7 +351,7 @@ class ZepToolsService:
         limit: int = 10,
         scope: str = "edges",
     ) -> SearchResult:
-        """本地关键词匹配搜索（Graphiti 搜索失败时的降级方案）"""
+        """本地关键词匹配搜索"""
         logger.info(t("console.usingLocalSearch", query=query[:30]))
 
         query_lower = query.lower()
@@ -438,15 +437,11 @@ class ZepToolsService:
             cypher = """
             MATCH (n:Entity) WHERE n.uuid = $uuid
             RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary,
-                   labels(n) AS labels, n.attributes AS attributes
+                   labels(n) AS labels, n.attributes_json AS attributes_json
             """
 
-            async def _query():
-                result = await self._client.driver.execute_query(cypher, {"uuid": node_uuid})
-                records = result.records if hasattr(result, 'records') else result[0]
-                return list(records)
-
-            records = run_async(_query())
+            with self._client.driver.session() as session:
+                records = list(session.run(cypher, {"uuid": node_uuid}))
             if not records:
                 return None
             r = records[0]
@@ -455,7 +450,7 @@ class ZepToolsService:
                 name=r.get("name") or "",
                 labels=list(r.get("labels") or []),
                 summary=r.get("summary") or "",
-                attributes=r.get("attributes") or {},
+                attributes=json.loads(r.get("attributes_json") or "{}"),
             )
         except Exception as e:
             logger.error(t("console.fetchNodeDetailFailed", error=str(e)))
@@ -688,7 +683,7 @@ class ZepToolsService:
         logger.info(t("console.quickSearchComplete", count=result.total_count))
         return result
 
-    # ── InterviewAgents（不依赖 Zep/Graphiti，保持原有逻辑）─────────────────
+    # ── InterviewAgents（不依赖图谱后端，保持原有逻辑）──────────────────────
 
     def interview_agents(
         self,
@@ -982,3 +977,7 @@ class ZepToolsService:
         except Exception as e:
             logger.warning(t("console.generateInterviewSummaryFailed", error=e))
             return f"共采访了{len(interviews)}位受访者，包括：" + "、".join(i.agent_name for i in interviews)
+
+
+# Backward-compatible alias for older imports.
+ZepToolsService = Neo4jToolsService

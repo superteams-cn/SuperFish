@@ -1,17 +1,29 @@
 """
 图谱实体读取与过滤服务
-从 Graphiti/Neo4j 图谱中读取节点，筛选出符合预定义实体类型的节点
-（原 Zep Cloud 版本的直接替代，公共接口完全兼容）
+从 Neo4j 图谱中读取节点，筛选出符合预定义实体类型的节点
 """
 
+import json
 from typing import Dict, Any, List, Optional, Set
 from dataclasses import dataclass, field
 
 from ..config import Config
 from ..utils.logger import get_logger
-from ..utils.graphiti_utils import get_graphiti_client, run_async, fetch_all_nodes, fetch_all_edges
+from ..utils.neo4j_graph_utils import get_neo4j_graph_client, fetch_all_nodes, fetch_all_edges
 
-logger = get_logger('mirofish.zep_entity_reader')
+logger = get_logger('mirofish.neo4j_entity_reader')
+
+
+def _parse_attrs(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
 
 
 @dataclass
@@ -60,11 +72,11 @@ class FilteredEntities:
         }
 
 
-class ZepEntityReader:
+class Neo4jEntityReader:
     """
-    图谱实体读取与过滤服务（Graphiti 实现）
+    图谱实体读取与过滤服务（Neo4j 实现）
 
-    公共接口与原 Zep Cloud 版本完全相同，调用方无需修改。
+    公共接口与原 旧图谱 版本完全相同，调用方无需修改。
     """
 
     def __init__(self, api_key: Optional[str] = None):
@@ -73,7 +85,7 @@ class ZepEntityReader:
 
     def _get_client(self):
         if self._client is None:
-            self._client = get_graphiti_client()
+            self._client = get_neo4j_graph_client()
         return self._client
 
     def get_all_nodes(self, graph_id: str) -> List[Dict[str, Any]]:
@@ -104,22 +116,19 @@ class ZepEntityReader:
                    r.expired_at AS expired_at
             """
 
-            async def _query():
-                result = await client.driver.execute_query(cypher, {"uuid": node_uuid})
-                records = result.records if hasattr(result, 'records') else result[0]
-                return [
-                    {
-                        "uuid": r.get("uuid") or "",
-                        "name": r.get("name") or "",
-                        "fact": r.get("fact") or "",
-                        "source_node_uuid": r.get("source_node_uuid") or "",
-                        "target_node_uuid": r.get("target_node_uuid") or "",
-                        "attributes": {},
-                    }
-                    for r in records
-                ]
-
-            return run_async(_query())
+            with client.driver.session() as session:
+                records = list(session.run(cypher, {"uuid": node_uuid}))
+            return [
+                {
+                    "uuid": r.get("uuid") or "",
+                    "name": r.get("name") or "",
+                    "fact": r.get("fact") or "",
+                    "source_node_uuid": r.get("source_node_uuid") or "",
+                    "target_node_uuid": r.get("target_node_uuid") or "",
+                    "attributes": {},
+                }
+                for r in records
+            ]
 
         except Exception as e:
             logger.warning(f"获取节点 {node_uuid} 的边失败: {str(e)}")
@@ -230,15 +239,11 @@ class ZepEntityReader:
             cypher = """
             MATCH (n:Entity) WHERE n.uuid = $uuid
             RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary,
-                   labels(n) AS labels, n.attributes AS attributes
+                   labels(n) AS labels, n.attributes_json AS attributes_json
             """
 
-            async def _query():
-                result = await client.driver.execute_query(cypher, {"uuid": entity_uuid})
-                records = result.records if hasattr(result, 'records') else result[0]
-                return list(records)
-
-            records = run_async(_query())
+            with client.driver.session() as session:
+                records = list(session.run(cypher, {"uuid": entity_uuid}))
             if not records:
                 return None
 
@@ -272,7 +277,7 @@ class ZepEntityReader:
                 name=r.get("name") or "",
                 labels=list(r.get("labels") or []),
                 summary=r.get("summary") or "",
-                attributes=r.get("attributes") or {},
+                attributes=_parse_attrs(r.get("attributes_json")),
                 related_edges=related_edges,
                 related_nodes=[
                     {
@@ -303,3 +308,7 @@ class ZepEntityReader:
             enrich_with_edges=enrich_with_edges,
         )
         return result.entities
+
+
+# Backward-compatible alias for older imports.
+ZepEntityReader = Neo4jEntityReader

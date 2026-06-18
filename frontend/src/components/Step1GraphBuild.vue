@@ -32,7 +32,8 @@
             <div class="detail-header">
                <div class="detail-title-group">
                   <span class="detail-type-badge">{{ selectedOntologyItem.itemType === 'entity' ? 'ENTITY' : 'RELATION' }}</span>
-                  <span class="detail-name">{{ selectedOntologyItem.name }}</span>
+                  <span class="detail-name">{{ displayName(selectedOntologyItem) }}</span>
+                  <span v-if="selectedOntologyItem.display_name" class="detail-schema-name">{{ selectedOntologyItem.name }}</span>
                </div>
                <button class="close-btn" @click="selectedOntologyItem = null">×</button>
             </div>
@@ -64,9 +65,9 @@
                   <span class="section-label">CONNECTIONS</span>
                   <div class="conn-list">
                      <div v-for="(conn, idx) in selectedOntologyItem.source_targets" :key="idx" class="conn-item">
-                        <span class="conn-node">{{ conn.source }}</span>
+                        <span class="conn-node">{{ entityDisplayName(conn.source) }}</span>
                         <span class="conn-arrow">→</span>
-                        <span class="conn-node">{{ conn.target }}</span>
+                        <span class="conn-node">{{ entityDisplayName(conn.target) }}</span>
                      </div>
                   </div>
                </div>
@@ -83,7 +84,7 @@
                 class="entity-tag clickable"
                 @click="selectOntologyItem(entity, 'entity')"
               >
-                {{ entity.name }}
+                {{ displayName(entity) }}
               </span>
             </div>
           </div>
@@ -98,7 +99,7 @@
                 class="entity-tag clickable"
                 @click="selectOntologyItem(rel, 'relation')"
               >
-                {{ rel.name }}
+                {{ displayName(rel) }}
               </span>
             </div>
           </div>
@@ -209,6 +210,13 @@ defineEmits(['next-step'])
 const selectedOntologyItem = ref(null)
 const logContent = ref(null)
 const creatingSimulation = ref(false)
+
+const displayName = (item) => item?.display_name || item?.name || ''
+
+const entityDisplayName = (schemaName) => {
+  const entity = props.projectData?.ontology?.entity_types?.find(item => item.name === schemaName)
+  return entity?.display_name || schemaName
+}
 
 // 进入环境搭建 - 创建 simulation 并跳转
 const handleEnterEnvSetup = async () => {
@@ -458,6 +466,11 @@ watch(() => props.systemLogs.length, () => {
 .detail-name {
     font-size: 14px;
     font-weight: 700;
+}
+
+.detail-schema-name {
+    font-size: 11px;
+    color: #999;
     font-family: 'JetBrains Mono', monospace;
 }
 

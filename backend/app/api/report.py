@@ -957,9 +957,9 @@ def search_graph_tool():
                 "error": t('api.requireGraphIdAndQuery')
             }), 400
         
-        from ..services.zep_tools import ZepToolsService
+        from ..services.neo4j_tools import Neo4jToolsService
         
-        tools = ZepToolsService()
+        tools = Neo4jToolsService()
         result = tools.search_graph(
             graph_id=graph_id,
             query=query,
@@ -1001,9 +1001,9 @@ def get_graph_statistics_tool():
                 "error": t('api.requireGraphId')
             }), 400
         
-        from ..services.zep_tools import ZepToolsService
+        from ..services.neo4j_tools import Neo4jToolsService
         
-        tools = ZepToolsService()
+        tools = Neo4jToolsService()
         result = tools.get_graph_statistics(graph_id)
         
         return jsonify({

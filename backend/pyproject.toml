@@ -14,8 +14,7 @@ dependencies = [
     "flask-cors>=6.0.0",
     # LLM 相关
     "openai>=1.0.0",
-    # Graphiti 知识图谱（自托管，替代 Zep Cloud）
-    "graphiti-core>=0.3.0",
+    # Neo4j 知识图谱（schema 约束抽取）
     "neo4j>=5.0.0",
     # OASIS 社交媒体模拟
     "camel-oasis==0.2.5",
@@ -28,6 +27,8 @@ dependencies = [
     # 工具库
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
+    "llama-index-core>=0.14.22",
+    "llama-index-llms-openai-like>=0.7.2",
 ]
 
 [project.optional-dependencies]

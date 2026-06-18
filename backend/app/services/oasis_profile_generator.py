@@ -1,9 +1,9 @@
 """
 OASIS Agent Profile生成器
-将Zep图谱中的实体转换为OASIS模拟平台所需的Agent Profile格式
+将Neo4j图谱中的实体转换为OASIS模拟平台所需的Agent Profile格式
 
 优化改进：
-1. 调用Zep检索功能二次丰富节点信息
+1. 调用图谱检索功能二次丰富节点信息
 2. 优化提示词生成非常详细的人设
 3. 区分个人实体和抽象群体实体
 """
@@ -20,8 +20,8 @@ from openai import OpenAI
 from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.locale import get_language_instruction, get_locale, set_locale, t
-from ..utils.graphiti_utils import get_graphiti_client, run_async
-from .zep_entity_reader import EntityNode, ZepEntityReader
+from ..utils.neo4j_graph_utils import get_neo4j_graph_client, fetch_all_edges, fetch_all_nodes
+from .neo4j_entity_reader import EntityNode, Neo4jEntityReader
 
 logger = get_logger('mirofish.oasis_profile')
 
@@ -144,10 +144,10 @@ class OasisProfileGenerator:
     """
     OASIS Profile生成器
     
-    将Zep图谱中的实体转换为OASIS模拟所需的Agent Profile
+    将Neo4j图谱中的实体转换为OASIS模拟所需的Agent Profile
     
     优化特性：
-    1. 调用Zep图谱检索功能获取更丰富的上下文
+    1. 调用Neo4j图谱检索功能获取更丰富的上下文
     2. 生成非常详细的人设（包括基本信息、职业经历、性格特征、社交媒体行为等）
     3. 区分个人实体和抽象群体实体
     """
@@ -183,7 +183,7 @@ class OasisProfileGenerator:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model_name: Optional[str] = None,
-        zep_api_key: Optional[str] = None,
+        graph_api_key: Optional[str] = None,
         graph_id: Optional[str] = None
     ):
         self.api_key = api_key or Config.LLM_API_KEY
@@ -198,14 +198,14 @@ class OasisProfileGenerator:
             base_url=self.base_url
         )
         
-        # Graphiti 客户端用于检索丰富上下文
-        self._graphiti_client = None
+        # Neo4j 客户端用于检索丰富上下文
+        self._graph_client = None
         self.graph_id = graph_id
 
         try:
-            self._graphiti_client = get_graphiti_client()
+            self._graph_client = get_neo4j_graph_client()
         except Exception as e:
-            logger.warning(f"Graphiti客户端初始化失败: {e}")
+            logger.warning(f"Neo4j图谱客户端初始化失败: {e}")
     
     def generate_profile_from_entity(
         self, 
@@ -214,10 +214,10 @@ class OasisProfileGenerator:
         use_llm: bool = True
     ) -> OasisAgentProfile:
         """
-        从Zep实体生成OASIS Agent Profile
+        从Neo4j实体生成OASIS Agent Profile
         
         Args:
-            entity: Zep实体节点
+            entity: Neo4j实体节点
             user_id: 用户ID（用于OASIS）
             use_llm: 是否使用LLM生成详细人设
             
@@ -281,14 +281,14 @@ class OasisProfileGenerator:
         suffix = random.randint(100, 999)
         return f"{username}_{suffix}"
     
-    def _search_zep_for_entity(self, entity: EntityNode) -> Dict[str, Any]:
+    def _search_graph_for_entity(self, entity: EntityNode) -> Dict[str, Any]:
         """
-        使用 Graphiti 混合搜索获取实体相关的丰富上下文信息。
+        使用 Neo4j 图谱获取实体相关的丰富上下文信息。
         （方法名保留以兼容现有调用）
         """
         results: Dict[str, Any] = {"facts": [], "node_summaries": [], "context": ""}
 
-        if not self._graphiti_client or not self.graph_id:
+        if not self._graph_client or not self.graph_id:
             logger.debug(f"跳过图谱检索：client 或 graph_id 未设置")
             return results
 
@@ -296,39 +296,34 @@ class OasisProfileGenerator:
         query = t('progress.zepSearchQuery', name=entity_name)
 
         try:
-            # Graphiti 混合搜索（语义 + BM25）
-            edges = run_async(
-                self._graphiti_client.search(
-                    query=query,
-                    group_ids=[self.graph_id],
-                    num_results=30,
-                )
-            )
-            facts = list({getattr(e, 'fact', '') for e in edges if getattr(e, 'fact', '')})
+            all_edges = fetch_all_edges(self._graph_client, self.graph_id)
+            all_nodes = fetch_all_nodes(self._graph_client, self.graph_id)
+            node_map = {n["uuid"]: n for n in all_nodes}
+            entity_uuid = entity.uuid
+            related_edges = [
+                edge for edge in all_edges
+                if edge.get("source_node_uuid") == entity_uuid or edge.get("target_node_uuid") == entity_uuid
+            ]
+            facts = list({edge.get("fact", "") for edge in related_edges if edge.get("fact")})
             results["facts"] = facts
 
-            # 节点摘要：从搜索结果边的端点 UUID 查询
             node_uuids = set()
-            for e in edges:
-                src = getattr(e, 'source_node_uuid', '')
-                tgt = getattr(e, 'target_node_uuid', '')
+            for edge in related_edges:
+                src = edge.get('source_node_uuid', '')
+                tgt = edge.get('target_node_uuid', '')
                 if src:
                     node_uuids.add(str(src))
                 if tgt:
                     node_uuids.add(str(tgt))
 
             summaries: set = set()
-            if node_uuids:
-                from ..utils.graphiti_utils import fetch_all_nodes
-                all_nodes = fetch_all_nodes(self._graphiti_client, self.graph_id)
-                node_map = {n["uuid"]: n for n in all_nodes}
-                for uid in node_uuids:
-                    node = node_map.get(uid)
-                    if node:
-                        if node.get("summary"):
-                            summaries.add(node["summary"])
-                        if node.get("name") and node["name"] != entity_name:
-                            summaries.add(f"相关实体: {node['name']}")
+            for uid in node_uuids:
+                node = node_map.get(uid)
+                if node:
+                    if node.get("summary"):
+                        summaries.add(node["summary"])
+                    if node.get("name") and node["name"] != entity_name:
+                        summaries.add(f"相关实体: {node['name']}")
             results["node_summaries"] = list(summaries)
 
             context_parts = []
@@ -352,7 +347,7 @@ class OasisProfileGenerator:
         包括：
         1. 实体本身的边信息（事实）
         2. 关联节点的详细信息
-        3. Zep混合检索到的丰富信息
+        3. 图谱检索到的丰富信息
         """
         context_parts = []
         
@@ -406,17 +401,17 @@ class OasisProfileGenerator:
             if related_info:
                 context_parts.append("### 关联实体信息\n" + "\n".join(related_info))
         
-        # 4. 使用Zep混合检索获取更丰富的信息
-        zep_results = self._search_zep_for_entity(entity)
+        # 4. 使用图谱检索获取更丰富的信息
+        graph_results = self._search_graph_for_entity(entity)
         
-        if zep_results.get("facts"):
+        if graph_results.get("facts"):
             # 去重：排除已存在的事实
-            new_facts = [f for f in zep_results["facts"] if f not in existing_facts]
+            new_facts = [f for f in graph_results["facts"] if f not in existing_facts]
             if new_facts:
-                context_parts.append("### Zep检索到的事实信息\n" + "\n".join(f"- {f}" for f in new_facts[:15]))
+                context_parts.append("### 图谱检索到的事实信息\n" + "\n".join(f"- {f}" for f in new_facts[:15]))
         
-        if zep_results.get("node_summaries"):
-            context_parts.append("### Zep检索到的相关节点\n" + "\n".join(f"- {s}" for s in zep_results["node_summaries"][:10]))
+        if graph_results.get("node_summaries"):
+            context_parts.append("### 图谱检索到的相关节点\n" + "\n".join(f"- {s}" for s in graph_results["node_summaries"][:10]))
         
         return "\n\n".join(context_parts)
     
@@ -779,7 +774,7 @@ class OasisProfileGenerator:
             }
     
     def set_graph_id(self, graph_id: str):
-        """设置图谱ID用于Zep检索"""
+        """设置图谱ID用于图谱检索"""
         self.graph_id = graph_id
     
     def generate_profiles_from_entities(
@@ -799,7 +794,7 @@ class OasisProfileGenerator:
             entities: 实体列表
             use_llm: 是否使用LLM生成详细人设
             progress_callback: 进度回调函数 (current, total, message)
-            graph_id: 图谱ID，用于Zep检索获取更丰富上下文
+            graph_id: 图谱ID，用于图谱检索获取更丰富上下文
             parallel_count: 并行生成数量，默认5
             realtime_output_path: 实时写入的文件路径（如果提供，每生成一个就写入一次）
             output_platform: 输出平台格式 ("reddit" 或 "twitter")
@@ -810,7 +805,7 @@ class OasisProfileGenerator:
         import concurrent.futures
         from threading import Lock
         
-        # 设置graph_id用于Zep检索
+        # 设置graph_id用于图谱检索
         if graph_id:
             self.graph_id = graph_id
         
@@ -1136,4 +1131,3 @@ class OasisProfileGenerator:
         """[已废弃] 请使用 save_profiles() 方法"""
         logger.warning("save_profiles_to_json已废弃，请使用save_profiles方法")
         self.save_profiles(profiles, file_path, platform)
-

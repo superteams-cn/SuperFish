@@ -381,117 +381,36 @@ def build_graph():
             build_logger = get_logger('mirofish.build')
             try:
                 build_logger.info(f"[{task_id}] 开始构建图谱...")
-                task_manager.update_task(
-                    task_id, 
-                    status=TaskStatus.PROCESSING,
-                    message=t('progress.initGraphService')
-                )
-                
-                # 创建图谱构建服务
                 builder = GraphBuilderService(api_key=Config.NEO4J_URI)
-                
-                # 分块
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.textChunking'),
-                    progress=5
-                )
-                chunks = TextProcessor.split_text(
-                    text, 
-                    chunk_size=chunk_size, 
-                    overlap=chunk_overlap
-                )
-                total_chunks = len(chunks)
-                
-                # 创建图谱
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.creatingZepGraph'),
-                    progress=10
-                )
-                graph_id = builder.create_graph(name=graph_name)
-                
-                # 更新项目的graph_id
-                project.graph_id = graph_id
-                ProjectManager.save_project(project)
-                
-                # 设置本体
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.settingOntology'),
-                    progress=15
-                )
-                builder.set_ontology(graph_id, ontology)
-                
-                # 添加文本（progress_callback 签名是 (msg, progress_ratio)）
-                def add_progress_callback(msg, progress_ratio):
-                    progress = 15 + int(progress_ratio * 40)  # 15% - 55%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
-                    )
-                
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.addingChunks', count=total_chunks),
-                    progress=15
-                )
-                
-                episode_uuids = builder.add_text_batches(
-                    graph_id, 
-                    chunks,
+
+                builder.build_graph(
+                    task_id=task_id,
+                    text=text,
+                    ontology=ontology,
+                    graph_name=graph_name,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
                     batch_size=3,
-                    progress_callback=add_progress_callback
+                    locale=current_locale,
                 )
-                
-                # 等待Zep处理完成（查询每个episode的processed状态）
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.waitingZepProcess'),
-                    progress=55
-                )
-                
-                def wait_progress_callback(msg, progress_ratio):
-                    progress = 55 + int(progress_ratio * 35)  # 55% - 90%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
+
+                task = task_manager.get_task(task_id)
+                if task and task.status == TaskStatus.COMPLETED:
+                    result = task.result or {}
+                    graph_info = result.get("graph_info", {})
+                    project.graph_id = result.get("graph_id")
+                    project.status = ProjectStatus.GRAPH_COMPLETED
+                    project.error = None
+                    ProjectManager.save_project(project)
+
+                    build_logger.info(
+                        f"[{task_id}] 图谱构建完成: graph_id={project.graph_id}, "
+                        f"节点={graph_info.get('node_count', 0)}, 边={graph_info.get('edge_count', 0)}"
                     )
-                
-                builder._wait_for_episodes(episode_uuids, wait_progress_callback)
-                
-                # 获取图谱数据
-                task_manager.update_task(
-                    task_id,
-                    message=t('progress.fetchingGraphData'),
-                    progress=95
-                )
-                graph_data = builder.get_graph_data(graph_id)
-                
-                # 更新项目状态
-                project.status = ProjectStatus.GRAPH_COMPLETED
-                ProjectManager.save_project(project)
-                
-                node_count = graph_data.get("node_count", 0)
-                edge_count = graph_data.get("edge_count", 0)
-                build_logger.info(f"[{task_id}] 图谱构建完成: graph_id={graph_id}, 节点={node_count}, 边={edge_count}")
-                
-                # 完成
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.COMPLETED,
-                    message=t('progress.graphBuildComplete'),
-                    progress=100,
-                    result={
-                        "project_id": project_id,
-                        "graph_id": graph_id,
-                        "node_count": node_count,
-                        "edge_count": edge_count,
-                        "chunk_count": total_chunks
-                    }
-                )
+                elif task and task.status == TaskStatus.FAILED:
+                    project.status = ProjectStatus.FAILED
+                    project.error = task.error
+                    ProjectManager.save_project(project)
                 
             except Exception as e:
                 # 更新项目状态为失败
@@ -598,7 +517,7 @@ def get_graph_data(graph_id: str):
 @graph_bp.route('/delete/<graph_id>', methods=['DELETE'])
 def delete_graph(graph_id: str):
     """
-    删除Zep图谱
+    删除Neo4j图谱
     """
     try:
         if not Config.NEO4J_URI:

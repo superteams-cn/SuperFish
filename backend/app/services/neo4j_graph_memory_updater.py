@@ -1,9 +1,9 @@
 """
-Graphiti 图谱记忆更新服务
-将模拟中的 Agent 活动动态更新到 Graphiti/Neo4j 图谱中
-（原 Zep Cloud 版本的直接替代，公共接口完全兼容）
+Neo4j 图谱记忆更新服务
+将模拟中的 Agent 活动动态更新到当前项目图谱中。
 """
 
+import json
 import time
 import threading
 from typing import Dict, Any, List, Optional
@@ -11,14 +11,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from queue import Queue, Empty
 
-from graphiti_core.nodes import EpisodeType
-
-from ..config import Config
 from ..utils.logger import get_logger
-from ..utils.graphiti_utils import get_graphiti_client, run_async
+from ..utils.neo4j_graph_utils import get_neo4j_graph_client
 from ..utils.locale import get_locale, set_locale
 
-logger = get_logger('mirofish.zep_graph_memory_updater')
+logger = get_logger('mirofish.neo4j_graph_memory_updater')
 
 
 @dataclass
@@ -33,7 +30,7 @@ class AgentActivity:
     timestamp: str
 
     def to_episode_text(self) -> str:
-        """将活动转换为可以发送给 Graphiti 的自然语言描述"""
+        """将活动转换为自然语言描述"""
         action_descriptions = {
             "CREATE_POST": self._describe_create_post,
             "LIKE_POST": self._describe_like_post,
@@ -158,11 +155,11 @@ class AgentActivity:
         return f"执行了{self.action_type}操作"
 
 
-class ZepGraphMemoryUpdater:
+class Neo4jGraphMemoryUpdater:
     """
-    Graphiti 图谱记忆更新器（原 ZepGraphMemoryUpdater 的替代）
+    Neo4j 图谱记忆更新器
 
-    监控模拟的 actions 日志，将新的 Agent 活动实时写入 Graphiti 图谱。
+    监控模拟的 actions 日志，将新的 Agent 活动实时写入 Neo4j 图谱。
     按平台分组，每累积 BATCH_SIZE 条活动后批量合并为一个 episode 写入。
     """
 
@@ -175,7 +172,7 @@ class ZepGraphMemoryUpdater:
     def __init__(self, graph_id: str, api_key: Optional[str] = None):
         # api_key 参数保留以兼容现有调用
         self.graph_id = graph_id
-        self._client = get_graphiti_client()
+        self._client = get_neo4j_graph_client()
 
         self._activity_queue: Queue = Queue()
         self._platform_buffers: Dict[str, List[AgentActivity]] = {
@@ -216,7 +213,6 @@ class ZepGraphMemoryUpdater:
         self._flush_remaining()
         if self._worker_thread and self._worker_thread.is_alive():
             self._worker_thread.join(timeout=10)
-        run_async(self._client.close())
         logger.info(
             f"GraphMemoryUpdater 已停止: graph_id={self.graph_id}, "
             f"total={self._total_activities}, sent={self._total_items_sent}, "
@@ -276,14 +272,40 @@ class ZepGraphMemoryUpdater:
 
         for attempt in range(self.MAX_RETRIES):
             try:
-                run_async(self._client.add_episode(
-                    name=f"sim_activity_{platform}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
-                    episode_body=combined_text,
-                    source_description=f"MiroFish simulation activity ({display_name})",
-                    reference_time=datetime.now(timezone.utc),
-                    source=EpisodeType.text,
-                    group_id=self.graph_id,
-                ))
+                activity_uuid = f"activity_{platform}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+                with self._client.driver.session() as session:
+                    session.run(
+                        """
+                        MERGE (a:Entity:SimulationActivity {uuid: $uuid})
+                        SET a.name = $name,
+                            a.summary = $summary,
+                            a.group_id = $group_id,
+                            a.attributes_json = $attributes_json,
+                            a.created_at = $created_at
+                        WITH a
+                        UNWIND $agent_names AS agent_name
+                        MATCH (agent:Entity {group_id: $group_id})
+                        WHERE agent.name = agent_name
+                        MERGE (agent)-[r:RELATES_TO {uuid: $uuid + '_' + agent.uuid}]->(a)
+                        SET r.name = 'POSTED_ACTIVITY',
+                            r.fact = $summary,
+                            r.group_id = $group_id,
+                            r.attributes_json = '{}',
+                            r.created_at = $created_at
+                        """,
+                        {
+                            "uuid": activity_uuid,
+                            "name": f"{display_name}模拟活动",
+                            "summary": combined_text,
+                            "group_id": self.graph_id,
+                            "attributes_json": json.dumps({
+                                "platform": platform,
+                                "activity_count": len(activities),
+                            }, ensure_ascii=False),
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                            "agent_names": list({a.agent_name for a in activities if a.agent_name}),
+                        },
+                    )
                 self._total_sent += 1
                 self._total_items_sent += len(activities)
                 logger.info(f"成功写入 {len(activities)} 条{display_name}活动到图谱 {self.graph_id}")
@@ -332,26 +354,26 @@ class ZepGraphMemoryUpdater:
         }
 
 
-class ZepGraphMemoryManager:
+class Neo4jGraphMemoryManager:
     """管理多个模拟的图谱记忆更新器（接口与原版完全兼容）"""
 
-    _updaters: Dict[str, ZepGraphMemoryUpdater] = {}
+    _updaters: Dict[str, Neo4jGraphMemoryUpdater] = {}
     _lock = threading.Lock()
     _stop_all_done = False
 
     @classmethod
-    def create_updater(cls, simulation_id: str, graph_id: str) -> ZepGraphMemoryUpdater:
+    def create_updater(cls, simulation_id: str, graph_id: str) -> Neo4jGraphMemoryUpdater:
         with cls._lock:
             if simulation_id in cls._updaters:
                 cls._updaters[simulation_id].stop()
-            updater = ZepGraphMemoryUpdater(graph_id)
+            updater = Neo4jGraphMemoryUpdater(graph_id)
             updater.start()
             cls._updaters[simulation_id] = updater
             logger.info(f"创建图谱记忆更新器: simulation_id={simulation_id}, graph_id={graph_id}")
             return updater
 
     @classmethod
-    def get_updater(cls, simulation_id: str) -> Optional[ZepGraphMemoryUpdater]:
+    def get_updater(cls, simulation_id: str) -> Optional[Neo4jGraphMemoryUpdater]:
         return cls._updaters.get(simulation_id)
 
     @classmethod
@@ -379,3 +401,8 @@ class ZepGraphMemoryManager:
     @classmethod
     def get_all_stats(cls) -> Dict[str, Dict[str, Any]]:
         return {sid: u.get_stats() for sid, u in cls._updaters.items()}
+
+
+# Backward-compatible aliases for older imports.
+ZepGraphMemoryUpdater = Neo4jGraphMemoryUpdater
+ZepGraphMemoryManager = Neo4jGraphMemoryManager
