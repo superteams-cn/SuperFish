@@ -3,6 +3,8 @@
 使用严格本体约束的 LLM 抽取 + Neo4j 存储。
 """
 
+import asyncio
+import json
 import re
 import threading
 import time
@@ -15,9 +17,11 @@ from llama_index.core.graph_stores.types import KG_NODES_KEY, KG_RELATIONS_KEY
 from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
 from llama_index.core.schema import TextNode
 from llama_index.llms.openai_like import OpenAILike
+from pydantic import PrivateAttr
 
 from ..config import Config
 from ..models.task import TaskManager, TaskStatus
+from ..utils.llm_client import LLMClient
 from ..utils.neo4j_graph_utils import (
     delete_group,
     fetch_all_edges,
@@ -69,6 +73,12 @@ def _schema_label(name: str) -> str:
     return label or "ENTITY"
 
 
+def _schema_value(value: Any) -> str:
+    if hasattr(value, "value"):
+        value = value.value
+    return str(value or "").upper()
+
+
 def _enum_member_name(value: str) -> str:
     name = re.sub(r'[^a-zA-Z0-9_]+', '_', value or '').strip('_').upper()
     if not name:
@@ -76,6 +86,95 @@ def _enum_member_name(value: str) -> str:
     if name[0].isdigit():
         name = f"V_{name}"
     return name
+
+
+class MiroFishStructuredLLM(OpenAILike):
+    """OpenAI-compatible LLM wrapper that returns Pydantic objects via JSON mode."""
+
+    _json_client: LLMClient = PrivateAttr()
+
+    def __init__(self):
+        super().__init__(
+            model=Config.LLM_MODEL_NAME,
+            api_base=Config.LLM_BASE_URL,
+            api_key=Config.LLM_API_KEY,
+            temperature=0.1,
+            max_tokens=Config.GRAPH_EXTRACT_MAX_TOKENS,
+            is_chat_model=True,
+            is_function_calling_model=False,
+            timeout=120,
+        )
+        self._json_client = LLMClient()
+
+    def structured_predict(
+        self,
+        output_cls: Any,
+        prompt: Any,
+        llm_kwargs: Optional[Dict[str, Any]] = None,
+        **prompt_args: Any,
+    ) -> Any:
+        prompt_text = prompt.format(**prompt_args) if hasattr(prompt, "format") else str(prompt)
+        output_schema = output_cls.model_json_schema()
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You extract knowledge graph triplets from Chinese text. "
+                    "Return only a valid JSON object matching the provided JSON schema. "
+                    "Do not include markdown, explanations, or fields outside the schema."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{prompt_text}\n\n"
+                    "JSON schema to follow exactly:\n"
+                    f"{json.dumps(output_schema, ensure_ascii=False)}\n\n"
+                    "Important rules:\n"
+                    "- Use the enum values exactly as written.\n"
+                    "- Each triplet must contain subject, relation, and object.\n"
+                    "- Put a concise Chinese evidence sentence in relation.properties.fact when possible.\n"
+                    "- Put a concise Chinese summary in entity.properties.summary when useful.\n"
+                    "- Keep the JSON compact and complete.\n"
+                    "- If no valid triplet is present, return {\"triplets\": []}."
+                ),
+            },
+        ]
+        last_error = None
+        for attempt in range(2):
+            try:
+                data = self._json_client.chat_json(
+                    messages,
+                    temperature=0.1,
+                    max_tokens=Config.GRAPH_EXTRACT_MAX_TOKENS,
+                )
+                return output_cls.model_validate(data)
+            except Exception as exc:
+                last_error = exc
+                if attempt == 0:
+                    logger.warning("LlamaIndex schema extraction returned invalid JSON; retrying once")
+                    continue
+                message = str(exc)
+                logger.warning(
+                    "LlamaIndex schema extraction JSON validation failed after retry: "
+                    f"{type(exc).__name__}: {message[:500]}"
+                )
+        raise last_error
+
+    async def astructured_predict(
+        self,
+        output_cls: Any,
+        prompt: Any,
+        llm_kwargs: Optional[Dict[str, Any]] = None,
+        **prompt_args: Any,
+    ) -> Any:
+        return await asyncio.to_thread(
+            self.structured_predict,
+            output_cls,
+            prompt,
+            llm_kwargs,
+            **prompt_args,
+        )
 
 
 class GraphBuilderService:
@@ -94,16 +193,7 @@ class GraphBuilderService:
         self.client = get_neo4j_graph_client()
 
     def _make_llamaindex_llm(self) -> OpenAILike:
-        return OpenAILike(
-            model=Config.LLM_MODEL_NAME,
-            api_base=Config.LLM_BASE_URL,
-            api_key=Config.LLM_API_KEY,
-            temperature=0.1,
-            max_tokens=Config.GRAPH_EXTRACT_MAX_TOKENS,
-            is_chat_model=True,
-            is_function_calling_model=False,
-            timeout=120,
-        )
+        return MiroFishStructuredLLM()
 
     def build_graph_async(
         self,
@@ -368,7 +458,7 @@ class GraphBuilderService:
         nodes_by_name = {}
         valid_nodes = []
         for node in kg_nodes:
-            entity_type = str(getattr(node, "label", "") or "").upper()
+            entity_type = _schema_value(getattr(node, "label", ""))
             name = str(getattr(node, "name", "") or "").strip()
             if entity_type not in schema["entity_types"] or not name:
                 continue
@@ -398,7 +488,7 @@ class GraphBuilderService:
         for rel in kg_relations:
             source_id = str(getattr(rel, "source_id", "") or "")
             target_id = str(getattr(rel, "target_id", "") or "")
-            rel_type = str(getattr(rel, "label", "") or "").upper()
+            rel_type = _schema_value(getattr(rel, "label", ""))
             source = nodes_by_name.get(source_id)
             target = nodes_by_name.get(target_id)
             if not source or not target:
@@ -440,6 +530,14 @@ class GraphBuilderService:
                 for edge_name in schema["edge_types"]
             },
         )
+        validation_schema = [
+            (
+                entity_enum[_enum_member_name(source)],
+                relation_enum[_enum_member_name(relation)],
+                entity_enum[_enum_member_name(target)],
+            )
+            for source, relation, target in schema["allowed_triples"]
+        ]
         entity_props = sorted({
             attr
             for entity in schema["entity_types"].values()
@@ -450,13 +548,28 @@ class GraphBuilderService:
             for edge in schema["edge_types"].values()
             for attr in edge.get("attributes", [])
         })
+        allowed_triples_text = "\n".join(
+            f"- {source} --{relation}--> {target}"
+            for source, relation, target in sorted(schema["allowed_triples"])
+        )
+        extract_prompt = (
+            "Given the following Chinese text, extract a knowledge graph according to "
+            "the project ontology. Return at most {max_triplets_per_chunk} paths.\n"
+            "Only use these source-relation-target combinations:\n"
+            f"{allowed_triples_text}\n"
+            "Use specific named entities from the text as subject/object names.\n"
+            "-------\n"
+            "{text}\n"
+            "-------\n"
+        )
         return SchemaLLMPathExtractor(
             llm=self.llm,
+            extract_prompt=extract_prompt,
             possible_entities=entity_enum,
             possible_entity_props=entity_props,
             possible_relations=relation_enum,
             possible_relation_props=relation_props,
-            kg_validation_schema=list(schema["allowed_triples"]),
+            kg_validation_schema=validation_schema,
             strict=True,
             max_triplets_per_chunk=Config.GRAPH_EXTRACT_MAX_TRIPLETS,
             num_workers=1,

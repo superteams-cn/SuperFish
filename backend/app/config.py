@@ -31,6 +31,7 @@ class Config:
     LLM_API_KEY = os.environ.get('LLM_API_KEY')
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
+    LLM_REQUEST_TIMEOUT = float(os.environ.get('LLM_REQUEST_TIMEOUT', '120'))
 
     # 本体生成的最大输出token。推理类模型（如 deepseek-v4-pro）的思考过程也计入此预算，
     # 设得过小会导致 JSON 输出被截断、解析失败。默认 16384 留足余量。
