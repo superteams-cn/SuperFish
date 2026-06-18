@@ -31,7 +31,11 @@ class Config:
     LLM_API_KEY = os.environ.get('LLM_API_KEY')
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
-    
+
+    # 本体生成的最大输出token。推理类模型（如 deepseek-v4-pro）的思考过程也计入此预算，
+    # 设得过小会导致 JSON 输出被截断、解析失败。默认 16384 留足余量。
+    ONTOLOGY_MAX_TOKENS = int(os.environ.get('ONTOLOGY_MAX_TOKENS', '16384'))
+
     # Zep配置
     ZEP_API_KEY = os.environ.get('ZEP_API_KEY')
     
@@ -60,6 +64,9 @@ class Config:
     
     # Report Agent配置
     REPORT_AGENT_MAX_TOOL_CALLS = int(os.environ.get('REPORT_AGENT_MAX_TOOL_CALLS', '5'))
+    # 报告章节生成的最大输出token。推理类模型的思考过程也计入此预算，
+    # 设得过小会导致正文被截断。默认 8192。
+    REPORT_AGENT_MAX_TOKENS = int(os.environ.get('REPORT_AGENT_MAX_TOKENS', '8192'))
     REPORT_AGENT_MAX_REFLECTION_ROUNDS = int(os.environ.get('REPORT_AGENT_MAX_REFLECTION_ROUNDS', '2'))
     REPORT_AGENT_TEMPERATURE = float(os.environ.get('REPORT_AGENT_TEMPERATURE', '0.5'))
     

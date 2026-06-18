@@ -75,7 +75,9 @@
     "layoutGraph": "图谱",
     "layoutSplit": "双栏",
     "layoutWorkbench": "工作台",
-    "stepNames": ["图谱构建", "环境搭建", "开始模拟", "报告生成", "深度互动"]
+    "stepNames": ["图谱构建", "环境搭建", "开始模拟", "报告生成", "深度互动"],
+    "noPendingFiles": "未找到待处理的文件，请从首页重新上传文档并填写模拟需求。（提示：本页面刷新会丢失已选文件）正在返回首页…",
+    "buildInterrupted": "图谱构建任务已丢失，构建可能被中断（通常是后端重启导致）。请从首页重新发起构建。"
   },
   "step1": {
     "ontologyGeneration": "本体生成",

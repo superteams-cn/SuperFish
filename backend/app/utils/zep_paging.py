@@ -10,6 +10,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+import httpx
 from zep_cloud import InternalServerError
 from zep_cloud.client import Zep
 
@@ -41,7 +42,10 @@ def _fetch_page_with_retry(
     for attempt in range(max_retries):
         try:
             return api_call(*args, **kwargs)
-        except (ConnectionError, TimeoutError, OSError, InternalServerError) as e:
+        # httpx.TransportError 涵盖 ConnectError/ReadError/SSL 中断等瞬态网络错误，
+        # 它不是内置 ConnectionError/OSError 的子类，必须显式捕获，否则构建期间
+        # Zep 连接抖动会直接冒泡成 500。
+        except (ConnectionError, TimeoutError, OSError, InternalServerError, httpx.TransportError) as e:
             last_exception = e
             if attempt < max_retries - 1:
                 logger.warning(

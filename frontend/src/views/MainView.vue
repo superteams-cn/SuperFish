@@ -194,8 +194,10 @@ const initProject = async () => {
 const handleNewProject = async () => {
   const pending = getPendingUpload()
   if (!pending.isPending || pending.files.length === 0) {
-    error.value = 'No pending files found.'
-    addLog('Error: No pending files found for new project.')
+    error.value = t('main.noPendingFiles')
+    addLog('Error: No pending files found for new project. Redirecting to home.')
+    // 内存中的待上传文件已丢失（直接访问或刷新本页），无法恢复，引导用户回首页重新开始
+    setTimeout(() => router.replace('/'), 1500)
     return
   }
   
@@ -355,7 +357,36 @@ const pollTaskStatus = async (taskId) => {
       }
     }
   } catch (e) {
-    console.error(e)
+    // 404 表示后端已不认识该任务：内存任务在构建期间因后端重启而丢失。
+    // 不能无限轮询死任务，回退到查项目持久化状态做恢复判断。
+    if (e?.response?.status === 404) {
+      await handleMissingTask(taskId)
+    } else {
+      console.error(e)
+    }
+  }
+}
+
+const handleMissingTask = async (taskId) => {
+  stopPolling()
+  try {
+    const projRes = await getProject(currentProjectId.value)
+    if (projRes.success && projRes.data.status === 'graph_completed' && projRes.data.graph_id) {
+      // 任务虽丢失，但图谱已构建完成，正常收尾
+      stopGraphPolling()
+      projectData.value = projRes.data
+      currentPhase.value = 2
+      addLog('Build task not found, but graph already completed. Loading final graph.')
+      await loadGraph(projRes.data.graph_id)
+    } else {
+      // 任务丢失且未完成：构建被中断（通常是后端重启），无法恢复进度，需重新构建
+      stopGraphPolling()
+      error.value = t('main.buildInterrupted')
+      addLog(`Build task ${taskId} not found and graph not completed — build was interrupted (likely a backend restart). Please rebuild from the home page.`)
+    }
+  } catch (err) {
+    error.value = err.message
+    addLog(`Exception while recovering missing task: ${err.message}`)
   }
 }
 

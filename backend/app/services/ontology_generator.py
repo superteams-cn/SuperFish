@@ -7,6 +7,7 @@ import json
 import logging
 import re
 from typing import Dict, Any, List, Optional
+from ..config import Config
 from ..utils.llm_client import LLMClient
 from ..utils.locale import get_language_instruction
 
@@ -214,10 +215,12 @@ class OntologyGenerator:
         ]
         
         # 调用LLM
+        # 注意：推理类模型（如 deepseek-v4-pro）的思考过程也计入 max_tokens，
+        # 复杂的本体生成任务需要更大的输出预算，否则 JSON 会被截断导致解析失败。
         result = self.llm_client.chat_json(
             messages=messages,
             temperature=0.3,
-            max_tokens=4096
+            max_tokens=Config.ONTOLOGY_MAX_TOKENS
         )
         
         # 验证和后处理

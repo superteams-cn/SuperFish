@@ -75,7 +75,9 @@
     "layoutGraph": "Graph",
     "layoutSplit": "Split",
     "layoutWorkbench": "Workbench",
-    "stepNames": ["Graph Build", "Env Setup", "Run Simulation", "Report Generation", "Deep Interaction"]
+    "stepNames": ["Graph Build", "Env Setup", "Run Simulation", "Report Generation", "Deep Interaction"],
+    "noPendingFiles": "No pending files found. Please go back to the home page to re-upload your documents and enter the simulation requirement. (Note: refreshing this page clears the selected files.) Redirecting to home…",
+    "buildInterrupted": "The graph build task was lost and the build may have been interrupted (usually due to a backend restart). Please start a new build from the home page."
   },
   "step1": {
     "ontologyGeneration": "Ontology Generation",
