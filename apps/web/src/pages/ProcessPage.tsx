@@ -2,11 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import { GraphPanel } from '@/components/GraphPanel'
 import { Step1GraphBuild } from '@/components/Step1GraphBuild'
-import { LanguageSwitcher } from '@/components/LanguageSwitcher'
-import { ThemeSwitcher } from '@/components/ThemeSwitcher'
-import { PagePlaceholder } from '@/components/PagePlaceholder'
+import { WorkflowLayout, type WorkflowStatus } from '@/components/WorkflowLayout'
 import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData } from '@/lib/api/graph'
 import { getPendingUpload, clearPendingUpload } from '@/stores/pendingUpload'
 import type {
@@ -16,9 +13,6 @@ import type {
   ProjectData,
   SystemLog,
 } from '@/lib/process-types'
-import { cn } from '@/lib/utils'
-
-type ViewMode = 'graph' | 'split' | 'workbench'
 
 export default function ProcessPage() {
   const { projectId } = useParams()
@@ -26,10 +20,7 @@ export default function ProcessPage() {
   const { t } = useTranslation()
   const stepNames = t('main.stepNames', { returnObjects: true }) as string[]
 
-  // —— 布局与步骤 ——
-  const [viewMode, setViewMode] = useState<ViewMode>('split')
   // 本页只承载 Step1（图谱构建）；进入环境搭建由 Step1 直接跳转到 /simulation 路由
-  const currentStep = 1
 
   // —— 数据状态 ——
   const [projectData, setProjectData] = useState<ProjectData | null>(null)
@@ -296,11 +287,8 @@ export default function ProcessPage() {
     }
   }
 
-  const toggleMaximize = (target: ViewMode) => {
-    setViewMode((v) => (v === target ? 'split' : target))
-  }
-
   // —— 状态指示 ——
+  const statusVariant: WorkflowStatus = error ? 'error' : currentPhase >= 2 ? 'completed' : 'processing'
   const statusText = error
     ? 'Error'
     : currentPhase >= 2
@@ -310,80 +298,25 @@ export default function ProcessPage() {
         : currentPhase === 0
           ? 'Generating Ontology'
           : 'Initializing'
-  const statusColor = error ? 'bg-red-500' : currentPhase >= 2 ? 'bg-green-500' : 'bg-[#FF5722] animate-pulse'
-
-  const leftWidth = viewMode === 'graph' ? 'w-full' : viewMode === 'workbench' ? 'w-0 opacity-0' : 'w-1/2'
-  const rightWidth = viewMode === 'workbench' ? 'w-full' : viewMode === 'graph' ? 'w-0 opacity-0' : 'w-1/2'
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
-      {/* 头部 */}
-      <header className="relative z-10 flex h-[60px] items-center justify-between border-b px-6">
-        <div
-          className="cursor-pointer font-mono text-lg font-extrabold tracking-wide"
-          onClick={() => navigate('/')}
-        >
-          SUPERFISH
-        </div>
-
-        <div className="absolute left-1/2 -translate-x-1/2">
-          <div className="flex gap-1 rounded-md bg-muted p-1">
-            {(['graph', 'split', 'workbench'] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={cn(
-                  'rounded px-4 py-1.5 text-xs font-semibold transition',
-                  viewMode === mode ? 'bg-background shadow' : 'text-muted-foreground',
-                )}
-              >
-                {{ graph: t('main.layoutGraph'), split: t('main.layoutSplit'), workbench: t('main.layoutWorkbench') }[mode]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <ThemeSwitcher />
-          <LanguageSwitcher />
-          <div className="h-3.5 w-px bg-border" />
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-mono font-bold text-muted-foreground">Step {currentStep}/5</span>
-            <span className="font-bold">{stepNames?.[currentStep - 1]}</span>
-          </div>
-          <div className="h-3.5 w-px bg-border" />
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className={cn('h-2 w-2 rounded-full', statusColor)} />
-            {statusText}
-          </span>
-        </div>
-      </header>
-
-      {/* 内容区 */}
-      <main className="relative flex flex-1 overflow-hidden">
-        <div className={cn('h-full overflow-hidden border-r transition-all duration-300', leftWidth)}>
-          <GraphPanel
-            graphData={graphData}
-            loading={graphLoading}
-            onRefresh={refreshGraph}
-            onToggleMaximize={() => toggleMaximize('graph')}
-          />
-        </div>
-        <div className={cn('h-full overflow-hidden transition-all duration-300', rightWidth)}>
-          {currentStep === 1 ? (
-            <Step1GraphBuild
-              currentPhase={currentPhase}
-              projectData={projectData}
-              ontologyProgress={ontologyProgress}
-              buildProgress={buildProgress}
-              graphData={graphData}
-              systemLogs={systemLogs}
-            />
-          ) : (
-            <PagePlaceholder title={stepNames?.[currentStep - 1] ?? '环境搭建'} />
-          )}
-        </div>
-      </main>
-    </div>
+    <WorkflowLayout
+      step={1}
+      stepName={stepNames?.[0]}
+      statusText={statusText}
+      statusVariant={statusVariant}
+      graphData={graphData}
+      graphLoading={graphLoading}
+      onRefreshGraph={refreshGraph}
+    >
+      <Step1GraphBuild
+        currentPhase={currentPhase}
+        projectData={projectData}
+        ontologyProgress={ontologyProgress}
+        buildProgress={buildProgress}
+        graphData={graphData}
+        systemLogs={systemLogs}
+      />
+    </WorkflowLayout>
   )
 }

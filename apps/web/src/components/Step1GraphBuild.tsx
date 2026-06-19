@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 
+import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { createSimulation } from '@/lib/api/simulation'
 import type {
   BuildProgress,
@@ -38,12 +39,6 @@ export function Step1GraphBuild({
   const navigate = useNavigate()
   const [selected, setSelected] = useState<SelectedItem>(null)
   const [creating, setCreating] = useState(false)
-  const logRef = useRef<HTMLDivElement>(null)
-
-  // 日志自动滚动到底部
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
-  }, [systemLogs.length])
 
   const stats = {
     nodes: graphData?.node_count ?? graphData?.nodes?.length ?? 0,
@@ -287,20 +282,7 @@ export function Step1GraphBuild({
       </div>
 
       {/* 系统日志终端 */}
-      <div className="flex-shrink-0 border-t border-zinc-800 bg-black p-4 font-mono text-zinc-300">
-        <div className="mb-2 flex justify-between border-b border-zinc-700 pb-2 text-[10px] text-zinc-500">
-          <span>{t('common.systemDashboard')}</span>
-          <span>{projectData?.project_id || 'NO_PROJECT'}</span>
-        </div>
-        <div ref={logRef} className="flex h-20 flex-col gap-1 overflow-y-auto pr-1">
-          {systemLogs.map((log, idx) => (
-            <div key={idx} className="flex gap-3 text-[11px] leading-relaxed">
-              <span className="min-w-[75px] text-zinc-600">{log.time}</span>
-              <span className="break-all text-zinc-300">{log.msg}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <SystemLogTerminal logs={systemLogs} badge={projectData?.project_id || 'NO_PROJECT'} />
     </div>
   )
 }
