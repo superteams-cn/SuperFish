@@ -208,17 +208,61 @@ class ProjectManager:
 
     @classmethod
     def delete_project(cls, project_id: str) -> bool:
-        """删除项目元数据及其对象存储文件。"""
+        """删除项目及其级联数据：模拟、运行态、报告、知识图谱与对象存储文件。
+
+        兼容「项目行已被删除但模拟/图谱成为孤儿」的情形——只要清理到任一关联数据
+        即视为成功，避免历史列表里残留无法删除的孤儿记录。
+        """
+        from ..db_models import ReportRow, SimulationRow, SimulationRunStateRow
+
+        graph_ids: set[str] = set()
+        sim_ids: list[str] = []
         with session_scope() as session:
             row = session.get(ProjectRow, project_id)
-            if row is None:
-                return False
-            session.delete(row)
-        # 清理对象存储（事务外，失败不影响元数据删除）
+            if row is not None and row.graph_id:
+                graph_ids.add(row.graph_id)
+
+            sims = session.query(SimulationRow).filter(SimulationRow.project_id == project_id).all()
+            sim_ids = [s.simulation_id for s in sims]
+            for s in sims:
+                if s.graph_id:
+                    graph_ids.add(s.graph_id)
+
+            if sim_ids:
+                session.query(ReportRow).filter(ReportRow.simulation_id.in_(sim_ids)).delete(
+                    synchronize_session=False
+                )
+                session.query(SimulationRunStateRow).filter(
+                    SimulationRunStateRow.simulation_id.in_(sim_ids)
+                ).delete(synchronize_session=False)
+                session.query(SimulationRow).filter(
+                    SimulationRow.simulation_id.in_(sim_ids)
+                ).delete(synchronize_session=False)
+
+            existed = row is not None or bool(sim_ids)
+            if row is not None:
+                session.delete(row)
+
+        if not existed:
+            return False
+
+        # 以下均在事务外，单点失败不影响元数据删除
+        for gid in graph_ids:
+            try:
+                from ..services.graph_builder import GraphBuilderService
+
+                GraphBuilderService().delete_graph(gid)
+            except Exception:
+                pass
         try:
             object_store.delete_prefix(cls._project_prefix(project_id))
         except Exception:
             pass
+        for sid in sim_ids:
+            try:
+                object_store.delete_prefix(f"simulations/{sid}/")
+            except Exception:
+                pass
         return True
 
     # ============== 文件 / 文本（对象存储） ==============
