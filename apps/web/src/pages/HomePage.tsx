@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import { HistoryDatabase } from '@/components/HistoryDatabase'
 import { setPendingUpload } from '@/stores/pendingUpload'
 
 const ACCEPTED = ['pdf', 'md', 'txt']
@@ -154,6 +155,9 @@ export default function HomePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 历史模拟项目 */}
+      <HistoryDatabase />
     </div>
   )
 }
