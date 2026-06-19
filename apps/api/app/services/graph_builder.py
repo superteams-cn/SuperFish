@@ -625,7 +625,9 @@ class GraphBuilderService:
         schema: dict[str, Any],
         chunk_idx: int,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        extractor = self._make_schema_extractor(schema)
+        # 三元组上限随块长等比例放大,保持抽取密度不随 chunk_size 变化而漏抽
+        max_triplets = max(Config.GRAPH_EXTRACT_MAX_TRIPLETS, len(chunk) // 70)
+        extractor = self._make_schema_extractor(schema, max_triplets)
         text_node = TextNode(text=chunk, id_=f"chunk_{chunk_idx:04d}")
         extracted_node = extractor([text_node])[0]
 
@@ -690,7 +692,9 @@ class GraphBuilderService:
 
         return valid_nodes, valid_edges
 
-    def _make_schema_extractor(self, schema: dict[str, Any]) -> SchemaLLMPathExtractor:
+    def _make_schema_extractor(
+        self, schema: dict[str, Any], max_triplets: int | None = None
+    ) -> SchemaLLMPathExtractor:
         entity_members = _enum_mapping(
             [entity["label"] for entity in schema["entity_types"].values()]
         )
@@ -740,7 +744,7 @@ class GraphBuilderService:
             possible_relation_props=relation_props,
             kg_validation_schema=validation_schema,
             strict=True,
-            max_triplets_per_chunk=Config.GRAPH_EXTRACT_MAX_TRIPLETS,
+            max_triplets_per_chunk=max_triplets or Config.GRAPH_EXTRACT_MAX_TRIPLETS,
             num_workers=1,
             allow_additional_properties=False,
         )

@@ -37,8 +37,8 @@ class Config:
     # 本体生成的最大输出token。推理类模型（如 deepseek-v4-pro）的思考过程也计入此预算，
     # 设得过小会导致 JSON 输出被截断、解析失败。默认 16384 留足余量。
     ONTOLOGY_MAX_TOKENS = int(os.environ.get("ONTOLOGY_MAX_TOKENS", "16384"))
-    # 图谱抽取每个文本块的最大输出token。
-    GRAPH_EXTRACT_MAX_TOKENS = int(os.environ.get("GRAPH_EXTRACT_MAX_TOKENS", "8192"))
+    # 图谱抽取每个文本块的最大输出token。块更大、三元组更多时需更高,避免 JSON 被截断。
+    GRAPH_EXTRACT_MAX_TOKENS = int(os.environ.get("GRAPH_EXTRACT_MAX_TOKENS", "16384"))
     # LlamaIndex SchemaLLMPathExtractor 每个文本块最多抽取的三元组数量。
     GRAPH_EXTRACT_MAX_TRIPLETS = int(os.environ.get("GRAPH_EXTRACT_MAX_TRIPLETS", "20"))
 
