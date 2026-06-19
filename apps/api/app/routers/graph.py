@@ -251,6 +251,18 @@ def build_graph(req: BuildGraphRequest):
             ProjectStatus.FAILED,
             ProjectStatus.GRAPH_COMPLETED,
         ]:
+            # 清理上一次（可能因中断而残留）的图谱数据，避免 Neo4j 累积孤儿节点
+            if project.graph_id:
+                try:
+                    from ..utils.neo4j_graph_utils import (
+                        delete_group,
+                        get_neo4j_graph_client,
+                    )
+
+                    delete_group(get_neo4j_graph_client(), project.graph_id)
+                    logger.info(f"强制重建：已清理旧图谱数据 graph_id={project.graph_id}")
+                except Exception as exc:
+                    logger.warning(f"清理旧图谱数据失败（忽略）: {exc}")
             project.status = ProjectStatus.ONTOLOGY_GENERATED
             project.graph_id = None
             project.graph_build_task_id = None
@@ -280,9 +292,14 @@ def build_graph(req: BuildGraphRequest):
         task_id = task_manager.create_task(f"构建图谱: {graph_name}")
         logger.info(f"创建图谱构建任务: task_id={task_id}, project_id={project_id}")
 
+        # 提前生成 graph_id 并落库：构建期间节点/边会增量写入该图谱，
+        # 前端凭此 ID 轮询 /api/graph/data 即可实时展示图谱逐步生长。
+        graph_id = GraphBuilderService.create_graph(graph_name)
+
         # 更新项目状态
         project.status = ProjectStatus.GRAPH_BUILDING
         project.graph_build_task_id = task_id
+        project.graph_id = graph_id
         ProjectManager.save_project(project)
 
         # 在派生后台线程前捕获当前语言
@@ -305,13 +322,14 @@ def build_graph(req: BuildGraphRequest):
                     chunk_overlap=chunk_overlap,
                     batch_size=3,
                     locale=current_locale,
+                    graph_id=graph_id,
                 )
 
                 task = task_manager.get_task(task_id)
                 if task and task.status == TaskStatus.COMPLETED:
                     result = task.result or {}
                     graph_info = result.get("graph_info", {})
-                    project.graph_id = result.get("graph_id")
+                    project.graph_id = result.get("graph_id") or graph_id
                     project.status = ProjectStatus.GRAPH_COMPLETED
                     project.error = None
                     ProjectManager.save_project(project)

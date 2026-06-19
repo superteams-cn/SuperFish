@@ -47,6 +47,10 @@ class Config:
     NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "superfish_neo4j")
 
+    # Redis 配置（用于持久化任务状态等，跨进程/重启不丢失）
+    # 源码部署默认 localhost；docker compose 中由 compose 注入 redis://redis:6379/0
+    REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
     # 文件上传配置
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "../uploads")

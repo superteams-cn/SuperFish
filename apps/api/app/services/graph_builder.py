@@ -259,8 +259,12 @@ class GraphBuilderService:
         chunk_overlap: int = 50,
         batch_size: int = 3,
         locale: str = "zh",
+        graph_id: str | None = None,
     ):
-        """使用已有任务ID同步构建图谱，供 API 层托管项目状态。"""
+        """使用已有任务ID同步构建图谱，供 API 层托管项目状态。
+
+        若传入 ``graph_id``，则复用该 ID（API 层会提前写入项目以支持构建期间实时轮询）。
+        """
         self._build_graph_worker(
             task_id,
             text,
@@ -270,6 +274,7 @@ class GraphBuilderService:
             chunk_overlap,
             batch_size,
             locale,
+            graph_id,
         )
 
     def _build_graph_worker(
@@ -282,6 +287,7 @@ class GraphBuilderService:
         chunk_overlap: int,
         batch_size: int,
         locale: str = "zh",
+        graph_id: str | None = None,
     ):
         set_locale(locale)
 
@@ -294,7 +300,7 @@ class GraphBuilderService:
             )
 
             self.client.build_indices_and_constraints()
-            graph_id = self.create_graph(graph_name)
+            graph_id = graph_id or self.create_graph(graph_name)
             self.task_manager.update_task(
                 task_id,
                 progress=10,
@@ -316,6 +322,8 @@ class GraphBuilderService:
                 message=t("progress.textSplit", count=total_chunks),
             )
 
+            # 每抽取一个文本块就把已累积的节点/边增量写入 Neo4j，
+            # 让前端轮询 /api/graph/data 时能实时看到图谱逐步生长。
             nodes, edges = self._extract_chunks(
                 chunks=chunks,
                 schema=schema,
@@ -324,6 +332,7 @@ class GraphBuilderService:
                     progress=20 + int(prog * 0.65),
                     message=msg,
                 ),
+                write_callback=lambda n, e: self.client.write_graph(graph_id, n, e),
             )
 
             self.task_manager.update_task(
@@ -331,6 +340,7 @@ class GraphBuilderService:
                 progress=88,
                 message=t("progress.fetchingGraphInfo"),
             )
+            # 末次全量写入，确保最后一块及所有边都已落库。
             self.client.write_graph(graph_id, nodes, edges)
             graph_info = self._get_graph_info(graph_id)
 
@@ -352,7 +362,8 @@ class GraphBuilderService:
             logger.error(f"图谱构建失败: {error_msg}")
             self.task_manager.fail_task(task_id, error_msg)
 
-    def create_graph(self, name: str) -> str:
+    @staticmethod
+    def create_graph(name: str) -> str:
         """生成图谱 group_id。"""
         return f"superfish_{uuid.uuid4().hex[:16]}"
 
@@ -420,6 +431,7 @@ class GraphBuilderService:
         chunks: list[str],
         schema: dict[str, Any],
         progress_callback: Callable[[str, float], None] | None = None,
+        write_callback: Callable[[list[dict[str, Any]], list[dict[str, Any]]], None] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         nodes_by_key: dict[str, dict[str, Any]] = {}
         edges_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -473,6 +485,17 @@ class GraphBuilderService:
                         "target_node_uuid": target_uuid,
                         "attributes": edge.get("attributes", {}),
                     }
+
+            # 增量落库：写入当前已累积的全量节点/边（MERGE 幂等），
+            # 使前端轮询能实时看到本块新增的实体与关系。
+            if write_callback and (valid_nodes or valid_edges):
+                try:
+                    write_callback(
+                        list(nodes_by_key.values()),
+                        list(edges_by_key.values()),
+                    )
+                except Exception as exc:  # 增量写失败不应中断整体抽取
+                    logger.warning(f"增量写入 Neo4j 失败（块 {idx + 1}/{total}）: {exc}")
 
             if idx < total - 1:
                 time.sleep(0.2)

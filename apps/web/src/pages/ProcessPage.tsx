@@ -44,6 +44,8 @@ export default function ProcessPage() {
   const graphPollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const initedRef = useRef(false)
   const buildMsgRef = useRef<string | undefined>(undefined)
+  // 通过 ref 引用 startBuildGraph，打破 handleMissingTask ↔ startBuildGraph 的循环依赖
+  const startBuildGraphRef = useRef<((force?: boolean) => Promise<void>) | null>(null)
 
   const addLog = useCallback((msg: string) => {
     const now = new Date()
@@ -118,7 +120,7 @@ export default function ProcessPage() {
   const startGraphPolling = useCallback(() => {
     addLog('Started polling for graph data...')
     void fetchGraphData()
-    graphPollTimer.current = setInterval(fetchGraphData, 10000)
+    graphPollTimer.current = setInterval(fetchGraphData, 4000)
   }, [addLog, fetchGraphData])
 
   const handleMissingTask = useCallback(
@@ -132,6 +134,14 @@ export default function ProcessPage() {
           setCurrentPhase(2)
           addLog('Build task not found, but graph already completed. Loading final graph.')
           await loadGraph(projRes.data.graph_id)
+        } else if (projRes.success && projRes.data.status === 'graph_building') {
+          // 后台任务随服务端重启丢失（任务仅存于内存），但项目仍处于构建中：
+          // 先展示已增量落库的部分图谱，再自动以 force 续建直至完成。
+          setProjectData(projRes.data)
+          setCurrentPhase(1)
+          addLog(`Build task ${taskId} lost (likely server restart). Auto-resuming build...`)
+          if (projRes.data.graph_id) await fetchGraphData()
+          await startBuildGraphRef.current?.(true)
         } else {
           stopGraphPolling()
           setError(t('main.buildInterrupted'))
@@ -141,7 +151,7 @@ export default function ProcessPage() {
         setError((err as Error).message)
       }
     },
-    [addLog, loadGraph, stopGraphPolling, stopPolling, t],
+    [addLog, fetchGraphData, loadGraph, stopGraphPolling, stopPolling, t],
   )
 
   const pollTaskStatus = useCallback(
@@ -192,25 +202,34 @@ export default function ProcessPage() {
     [pollTaskStatus],
   )
 
-  const startBuildGraph = useCallback(async () => {
-    try {
-      setCurrentPhase(1)
-      setBuildProgress({ progress: 0, message: 'Starting build...' })
-      addLog('Initiating graph build...')
-      const res = await buildGraph({ project_id: projectIdRef.current })
-      if (res.success) {
-        addLog(`Graph build task started. Task ID: ${res.data.task_id}`)
-        startGraphPolling()
-        startPollingTask(res.data.task_id)
-      } else {
-        setError(res.error ?? '')
-        addLog(`Error starting build: ${res.error}`)
+  const startBuildGraph = useCallback(
+    async (force = false) => {
+      try {
+        setCurrentPhase(1)
+        setError('')
+        setBuildProgress({ progress: 0, message: 'Starting build...' })
+        addLog(force ? 'Resuming graph build (force)...' : 'Initiating graph build...')
+        const res = await buildGraph({ project_id: projectIdRef.current, force })
+        if (res.success) {
+          addLog(`Graph build task started. Task ID: ${res.data.task_id}`)
+          startGraphPolling()
+          startPollingTask(res.data.task_id)
+        } else {
+          setError(res.error ?? '')
+          addLog(`Error starting build: ${res.error}`)
+        }
+      } catch (err) {
+        setError((err as Error).message)
+        addLog(`Exception in startBuildGraph: ${(err as Error).message}`)
       }
-    } catch (err) {
-      setError((err as Error).message)
-      addLog(`Exception in startBuildGraph: ${(err as Error).message}`)
-    }
-  }, [addLog, startGraphPolling, startPollingTask])
+    },
+    [addLog, startGraphPolling, startPollingTask],
+  )
+
+  // 保持 ref 指向最新的 startBuildGraph，供 handleMissingTask 续建调用
+  useEffect(() => {
+    startBuildGraphRef.current = startBuildGraph
+  }, [startBuildGraph])
 
   const handleNewProject = useCallback(async () => {
     const pending = getPendingUpload()

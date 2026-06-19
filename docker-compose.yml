@@ -19,6 +19,21 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: superfish-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   superfish:
     image: ghcr.io/superteams-cn/superfish:latest
     # 加速镜像（如拉取缓慢可替换上方地址）
@@ -26,6 +41,9 @@ services:
     container_name: superfish
     env_file:
       - .env
+    environment:
+      # 容器内通过服务名访问 Redis（覆盖 .env 中的 localhost 默认值）
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "3000:3000"
       - "5001:5001"
@@ -33,9 +51,12 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./apps/api/uploads:/app/apps/api/uploads
 
 volumes:
   neo4j_data:
   neo4j_logs:
+  redis_data:
