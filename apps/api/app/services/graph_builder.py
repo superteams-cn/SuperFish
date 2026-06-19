@@ -335,7 +335,7 @@ class GraphBuilderService:
                 write_callback=lambda n, e: self.client.write_graph(graph_id, n, e),
             )
 
-            # 实体消解：合并同一实体的不同称谓(刘备/玄德、关羽/关公…)
+            # 实体消解：合并同一实体的不同称谓(全称/简称、别名/别称等)
             self.task_manager.update_task(
                 task_id,
                 progress=86,
@@ -522,7 +522,7 @@ class GraphBuilderService:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """实体消解：用 LLM 把同一现实实体的不同称谓(本名/字/号/简称/全称)聚类合并。
 
-        分块独立抽取 + 仅字面去重会把「刘备/玄德」「关羽/关公/关」拆成多个节点。
+        分块独立抽取 + 仅字面去重会把同一实体的不同称谓(全称/简称、别名/别称等)拆成多个节点。
         本步在全部抽完后,让 LLM 判定别名分组,选规范节点,合并摘要/属性并把边重指向
         规范 uuid,再交由调用方清空旧图并写入规范集。
 

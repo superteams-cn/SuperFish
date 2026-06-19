@@ -782,7 +782,7 @@ class OasisProfileGenerator:
 3. age: 年龄数字（必须是整数）
 4. gender: 性别，必须是英文: "male" 或 "female"
 5. mbti: MBTI类型（如INTJ、ENFP等）
-6. country: 国家（使用中文，如"中国"）
+6. country: 国家/地区（按实体所属或场景上下文推断，语言与本回复一致；无法判断时留空字符串）
 7. profession: 职业
 8. interested_topics: 感兴趣话题数组
 9. dimensions: 人设四维度对象（用于结构化展示，需与 persona 内容保持一致），包含四个字符串字段:
@@ -837,7 +837,7 @@ class OasisProfileGenerator:
 3. age: 固定填30（机构账号的虚拟年龄）
 4. gender: 固定填"other"（机构账号使用other表示非个人）
 5. mbti: MBTI类型，用于描述账号风格，如ISTJ代表严谨保守
-6. country: 国家（使用中文，如"中国"）
+6. country: 国家/地区（按实体所属或场景上下文推断，语言与本回复一致；无法判断时留空字符串）
 7. profession: 机构职能描述
 8. interested_topics: 关注领域数组
 9. dimensions: 账号四维度对象（用于结构化展示，需与 persona 内容保持一致），包含四个字符串字段:
@@ -897,7 +897,7 @@ class OasisProfileGenerator:
                 "age": 30,  # 机构虚拟年龄
                 "gender": "other",  # 机构使用other
                 "mbti": "ISTJ",  # 机构风格：严谨保守
-                "country": "中国",
+                "country": "",
                 "profession": "Media",
                 "interested_topics": ["General News", "Current Events", "Public Affairs"],
             }
@@ -909,7 +909,7 @@ class OasisProfileGenerator:
                 "age": 30,  # 机构虚拟年龄
                 "gender": "other",  # 机构使用other
                 "mbti": "ISTJ",  # 机构风格：严谨保守
-                "country": "中国",
+                "country": "",
                 "profession": entity_type,
                 "interested_topics": ["Public Policy", "Community", "Official Announcements"],
             }
@@ -1263,7 +1263,7 @@ class OasisProfileGenerator:
                 "age": profile.age if profile.age else 30,
                 "gender": self._normalize_gender(profile.gender),
                 "mbti": profile.mbti if profile.mbti else "ISTJ",
-                "country": profile.country if profile.country else "中国",
+                "country": profile.country if profile.country else "",
             }
 
             # 可选字段
