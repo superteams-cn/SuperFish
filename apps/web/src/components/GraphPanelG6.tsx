@@ -22,8 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { EmptyState } from '@/components/common/EmptyState'
-import { buildGraphView } from '@/lib/graph-view'
-import type { GraphData, GraphEdge, GraphNode } from '@/components/GraphPanel'
+import { buildGraphView, type GraphViewEdge } from '@/lib/graph-view'
+import type { GraphData, GraphNode } from '@/components/GraphPanel'
 
 type LayoutKind = 'd3-force' | 'radial' | 'concentric' | 'antv-dagre'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,7 +44,7 @@ const LAYOUTS: Record<LayoutKind, Any> = {
 type Selection = { type: 'node' | 'edge'; id: string }
 type Selected =
   | { kind: 'node'; data: GraphNode; type: string; color: string }
-  | { kind: 'edge'; data: GraphEdge }
+  | { kind: 'edge'; edge: GraphViewEdge }
   | null
 
 interface GraphPanelG6Props {
@@ -148,7 +148,12 @@ export function GraphPanelG6({
         id: e.id,
         source: e.source,
         target: e.target,
-        data: { color: e.color, predicate: e.predicate },
+        data: {
+          color: e.color,
+          predicate: e.predicate,
+          sourceLabel: e.sourceLabel,
+          targetLabel: e.targetLabel,
+        },
       }))
     return { nodes, edges }
   }, [view, hideIsolated])
@@ -254,7 +259,7 @@ export function GraphPanelG6({
             const it = items?.[0]
             if (!it) return ''
             const label = it.data?.predicate
-              ? `${it.source} —${it.data.predicate}→ ${it.target}`
+              ? `${it.data.sourceLabel ?? it.source} —${it.data.predicate}→ ${it.data.targetLabel ?? it.target}`
               : it.data?.label || it.id
             return `<div style="padding:4px 8px;font-size:12px">${label}</div>`
           },
@@ -416,7 +421,7 @@ export function GraphPanelG6({
     graph.on('edge:click', (e: Any) => {
       const id = e.target.id
       const edge = view.edges.find((x) => x.id === id)
-      toggleSelection({ type: 'edge', id }, edge ? { kind: 'edge', data: edge.raw } : null)
+      toggleSelection({ type: 'edge', id }, edge ? { kind: 'edge', edge } : null)
     })
     graph.on('canvas:click', () => clearSelections())
     graph.on('node:dblclick', (e: Any) => {
@@ -813,11 +818,11 @@ export function GraphPanelG6({
                 rows={[
                   [
                     t('graph.relationship'),
-                    `${selected.data.source_node_name ?? ''} → ${selected.data.name ?? selected.data.fact_type ?? ''} → ${selected.data.target_node_name ?? ''}`,
+                    `${selected.edge.sourceLabel} —${selected.edge.predicate}→ ${selected.edge.targetLabel}`,
                   ],
-                  ['UUID', selected.data.uuid],
-                  [t('graph.fieldFact'), selected.data.fact],
-                  [t('graph.fieldType'), selected.data.fact_type],
+                  ['UUID', selected.edge.raw.uuid],
+                  [t('graph.fieldFact'), selected.edge.raw.fact],
+                  [t('graph.fieldType'), selected.edge.raw.fact_type],
                 ]}
               />
             )}

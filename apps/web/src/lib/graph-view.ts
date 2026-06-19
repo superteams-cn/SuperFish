@@ -37,6 +37,9 @@ export interface GraphViewEdge {
   id: string
   source: string
   target: string
+  /** 源/目标节点的显示名称（节点 id 为 uuid，展示需用名称）。 */
+  sourceLabel: string
+  targetLabel: string
   predicate: string
   color: string
   raw: GraphEdge
@@ -113,8 +116,9 @@ export function buildGraphView(data: GraphData | null): GraphViewModel {
     }
   })
 
-  // 节点 id → 颜色，供边按源节点着色（避免逐边线性查找）
+  // 节点 id → 颜色/名称，供边按源节点着色及端点名称展示（避免逐边线性查找）
   const colorById = new Map(nodes.map((n) => [n.id, n.color]))
+  const labelById = new Map(nodes.map((n) => [n.id, n.label]))
 
   // 边 id：优先用 uuid，否则用 源>谓词>目标#序号 兜底保证唯一
   const seen = new Map<string, number>()
@@ -131,6 +135,8 @@ export function buildGraphView(data: GraphData | null): GraphViewModel {
       id,
       source: e.source_node_uuid,
       target: e.target_node_uuid,
+      sourceLabel: e.source_node_name || labelById.get(e.source_node_uuid) || e.source_node_uuid,
+      targetLabel: e.target_node_name || labelById.get(e.target_node_uuid) || e.target_node_uuid,
       predicate,
       color: colorById.get(e.source_node_uuid) || '#94a3b8',
       raw: e,
