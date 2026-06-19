@@ -909,7 +909,7 @@ class SimulationConfigGenerator:
         """基于规则生成单个Agent配置（中国人作息）"""
         entity_type = (entity.get_entity_type() or "Unknown").lower()
         
-        if entity_type in ["university", "governmentagency", "ngo"]:
+        if entity_type in ["university", "governmentagency", "ngo", "高校", "大学", "政府机构", "政府", "组织", "机构"]:
             # 官方机构：工作时间活动，低频率，高影响力
             return {
                 "activity_level": 0.2,
@@ -922,7 +922,7 @@ class SimulationConfigGenerator:
                 "stance": "neutral",
                 "influence_weight": 3.0
             }
-        elif entity_type in ["mediaoutlet"]:
+        elif entity_type in ["mediaoutlet", "媒体", "媒体机构", "自媒体"]:
             # 媒体：全天活动，中等频率，高影响力
             return {
                 "activity_level": 0.5,
@@ -935,7 +935,7 @@ class SimulationConfigGenerator:
                 "stance": "observer",
                 "influence_weight": 2.5
             }
-        elif entity_type in ["professor", "expert", "official"]:
+        elif entity_type in ["professor", "expert", "official", "教授", "专家", "学者", "官员", "文官", "朝臣"]:
             # 专家/教授：工作+晚间活动，中等频率
             return {
                 "activity_level": 0.4,
@@ -948,7 +948,7 @@ class SimulationConfigGenerator:
                 "stance": "neutral",
                 "influence_weight": 2.0
             }
-        elif entity_type in ["student"]:
+        elif entity_type in ["student", "学生", "弟子"]:
             # 学生：晚间为主，高频率
             return {
                 "activity_level": 0.8,
@@ -961,7 +961,7 @@ class SimulationConfigGenerator:
                 "stance": "neutral",
                 "influence_weight": 0.8
             }
-        elif entity_type in ["alumni"]:
+        elif entity_type in ["alumni", "校友"]:
             # 校友：晚间为主
             return {
                 "activity_level": 0.6,
@@ -988,4 +988,3 @@ class SimulationConfigGenerator:
                 "influence_weight": 1.0
             }
     
-

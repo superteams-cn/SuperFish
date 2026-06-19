@@ -169,13 +169,20 @@ class OasisProfileGenerator:
     # 个人类型实体（需要生成具体人设）
     INDIVIDUAL_ENTITY_TYPES = [
         "student", "alumni", "professor", "person", "publicfigure", 
-        "expert", "faculty", "official", "journalist", "activist"
+        "expert", "faculty", "official", "journalist", "activist",
+        "个人", "学生", "校友", "教授", "学者", "专家", "官员", "记者",
+        "人物", "公众人物", "意见领袖", "律师", "医生", "神佛", "神祇",
+        "妖王", "天将", "弟子", "师父", "百姓", "商人", "武将", "军官",
+        "领袖", "豪杰", "宗室", "朝臣", "宦官"
     ]
     
     # 群体/机构类型实体（需要生成群体代表人设）
     GROUP_ENTITY_TYPES = [
         "university", "governmentagency", "organization", "ngo", 
-        "mediaoutlet", "company", "institution", "group", "community"
+        "mediaoutlet", "company", "institution", "group", "community",
+        "组织", "机构", "高校", "大学", "政府", "政府机构", "媒体",
+        "媒体机构", "公司", "企业", "社群", "群体", "平台", "医院",
+        "学校", "社团"
     ]
     
     def __init__(
@@ -417,11 +424,13 @@ class OasisProfileGenerator:
     
     def _is_individual_entity(self, entity_type: str) -> bool:
         """判断是否是个人类型实体"""
-        return entity_type.lower() in self.INDIVIDUAL_ENTITY_TYPES
+        normalized = entity_type.lower()
+        return normalized in self.INDIVIDUAL_ENTITY_TYPES or any(token in entity_type for token in self.INDIVIDUAL_ENTITY_TYPES if any('\u4e00' <= ch <= '\u9fff' for ch in token))
     
     def _is_group_entity(self, entity_type: str) -> bool:
         """判断是否是群体/机构类型实体"""
-        return entity_type.lower() in self.GROUP_ENTITY_TYPES
+        normalized = entity_type.lower()
+        return normalized in self.GROUP_ENTITY_TYPES or any(token in entity_type for token in self.GROUP_ENTITY_TYPES if any('\u4e00' <= ch <= '\u9fff' for ch in token))
     
     def _generate_profile_with_llm(
         self,

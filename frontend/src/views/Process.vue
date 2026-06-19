@@ -479,12 +479,12 @@ const ontologyEdgeTypes = computed(() => {
   return projectData.value?.ontology?.edge_types || projectData.value?.ontology?.relation_types || []
 })
 
-const displayOntologyName = (item) => item?.display_name || item?.name || ''
+const displayOntologyName = (item) => item?.name || ''
 
 const displayEntityTypeName = (schemaName) => {
   if (!schemaName) return ''
   const entity = projectData.value?.ontology?.entity_types?.find(item => item.name === schemaName)
-  return entity?.display_name || schemaName
+  return entity?.name || schemaName
 }
 
 // 方法

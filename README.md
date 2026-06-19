@@ -95,7 +95,7 @@ Click the image to watch MiroFish's deep prediction of the lost ending based on 
 
 MiroFish now uses a self-hosted Neo4j property graph as the GraphRAG backend:
 
-- The ontology generator creates Chinese display names plus schema-safe type names.
+- The ontology generator creates entity and relationship type names directly in the selected UI language; Chinese projects use Chinese schema names, English projects use English schema names.
 - Graph building uses `LlamaIndex SchemaLLMPathExtractor(strict=True)` to extract only ontology-valid entities and relations.
 - Extracted nodes and edges are stored in Neo4j with `group_id` isolation per project.
 - ReportAgent and simulation setup read/search the same Neo4j graph through local graph search tools.

@@ -9,6 +9,7 @@ import re
 import threading
 import time
 import uuid
+import zlib
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -69,7 +70,7 @@ def _normalize_entity_key(entity_type: str, name: str) -> str:
 
 def _schema_label(name: str) -> str:
     """Normalize ontology names for LlamaIndex strict enum validation."""
-    label = re.sub(r'[^a-zA-Z0-9_]+', '_', name or '').strip('_').upper()
+    label = re.sub(r'[^\w]+', '_', name or '', flags=re.UNICODE).strip('_').upper()
     return label or "ENTITY"
 
 
@@ -82,10 +83,24 @@ def _schema_value(value: Any) -> str:
 def _enum_member_name(value: str) -> str:
     name = re.sub(r'[^a-zA-Z0-9_]+', '_', value or '').strip('_').upper()
     if not name:
-        name = "VALUE"
+        checksum = zlib.crc32((value or "").encode("utf-8")) & 0xFFFFFFFF
+        name = f"VALUE_{checksum:08X}"
     if name[0].isdigit():
         name = f"V_{name}"
     return name
+
+
+def _enum_mapping(values: List[str]) -> Dict[str, str]:
+    mapping: Dict[str, str] = {}
+    used: set[str] = set()
+    for value in values:
+        member = _enum_member_name(value)
+        if member in used:
+            checksum = zlib.crc32(value.encode("utf-8")) & 0xFFFFFFFF
+            member = f"{member}_{checksum:08X}"
+        mapping[member] = value
+        used.add(member)
+    return mapping
 
 
 class MiroFishStructuredLLM(OpenAILike):
@@ -337,7 +352,6 @@ class GraphBuilderService:
             entity_types[label] = {
                 "name": name,
                 "label": label,
-                "display_name": entity.get("display_name") or name,
                 "description": entity.get("description", ""),
                 "attributes": sorted({attr for attr in attrs if attr} | {"summary"}),
             }
@@ -345,7 +359,7 @@ class GraphBuilderService:
         edge_types = {}
         allowed_triples = set()
         for edge in ontology.get("edge_types", []):
-            name = (edge.get("name") or "").upper()
+            name = _schema_label(edge.get("name") or "")
             if not name:
                 continue
             source_targets = []
@@ -358,7 +372,6 @@ class GraphBuilderService:
             if source_targets:
                 edge_types[name] = {
                     "name": name,
-                    "display_name": edge.get("display_name") or name,
                     "description": edge.get("description", ""),
                     "source_targets": source_targets,
                     "attributes": sorted({
@@ -478,7 +491,6 @@ class GraphBuilderService:
                 "attributes": {
                     **attrs,
                     "ontology_type": schema["entity_types"][entity_type]["name"],
-                    "display_type": schema["entity_types"][entity_type]["display_name"],
                 },
             }
             nodes_by_name[name] = record
@@ -507,34 +519,23 @@ class GraphBuilderService:
                 "target": target_id,
                 "type": rel_type,
                 "fact": str(properties.get("fact") or "")[:1000],
-                "attributes": {
-                    **attrs,
-                    "display_type": schema["edge_types"][rel_type]["display_name"],
-                },
+                "attributes": attrs,
             })
 
         return valid_nodes, valid_edges
 
     def _make_schema_extractor(self, schema: Dict[str, Any]) -> SchemaLLMPathExtractor:
-        entity_enum = Enum(
-            "MiroFishEntityType",
-            {
-                _enum_member_name(entity["label"]): entity["label"]
-                for entity in schema["entity_types"].values()
-            },
-        )
-        relation_enum = Enum(
-            "MiroFishRelationType",
-            {
-                _enum_member_name(edge_name): edge_name
-                for edge_name in schema["edge_types"]
-            },
-        )
+        entity_members = _enum_mapping([entity["label"] for entity in schema["entity_types"].values()])
+        relation_members = _enum_mapping(list(schema["edge_types"]))
+        entity_member_by_label = {label: member for member, label in entity_members.items()}
+        relation_member_by_label = {label: member for member, label in relation_members.items()}
+        entity_enum = Enum("MiroFishEntityType", entity_members)
+        relation_enum = Enum("MiroFishRelationType", relation_members)
         validation_schema = [
             (
-                entity_enum[_enum_member_name(source)],
-                relation_enum[_enum_member_name(relation)],
-                entity_enum[_enum_member_name(target)],
+                entity_enum[entity_member_by_label[source]],
+                relation_enum[relation_member_by_label[relation]],
+                entity_enum[entity_member_by_label[target]],
             )
             for source, relation, target in schema["allowed_triples"]
         ]

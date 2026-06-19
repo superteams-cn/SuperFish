@@ -164,7 +164,7 @@ class Neo4jGraphMemoryUpdater:
     """
 
     BATCH_SIZE = 5
-    PLATFORM_DISPLAY_NAMES = {'twitter': '世界1', 'reddit': '世界2'}
+    PLATFORM_LABELS = {'twitter': '世界1', 'reddit': '世界2'}
     SEND_INTERVAL = 0.5
     MAX_RETRIES = 3
     RETRY_DELAY = 2
@@ -191,8 +191,8 @@ class Neo4jGraphMemoryUpdater:
 
         logger.info(f"GraphMemoryUpdater 初始化完成: graph_id={graph_id}, batch_size={self.BATCH_SIZE}")
 
-    def _get_platform_display_name(self, platform: str) -> str:
-        return self.PLATFORM_DISPLAY_NAMES.get(platform.lower(), platform)
+    def _get_platform_label(self, platform: str) -> str:
+        return self.PLATFORM_LABELS.get(platform.lower(), platform)
 
     def start(self):
         if self._running:
@@ -268,7 +268,7 @@ class Neo4jGraphMemoryUpdater:
             return
 
         combined_text = "\n".join(a.to_episode_text() for a in activities)
-        display_name = self._get_platform_display_name(platform)
+        platform_label = self._get_platform_label(platform)
 
         for attempt in range(self.MAX_RETRIES):
             try:
@@ -295,7 +295,7 @@ class Neo4jGraphMemoryUpdater:
                         """,
                         {
                             "uuid": activity_uuid,
-                            "name": f"{display_name}模拟活动",
+                            "name": f"{platform_label}模拟活动",
                             "summary": combined_text,
                             "group_id": self.graph_id,
                             "attributes_json": json.dumps({
@@ -308,7 +308,7 @@ class Neo4jGraphMemoryUpdater:
                     )
                 self._total_sent += 1
                 self._total_items_sent += len(activities)
-                logger.info(f"成功写入 {len(activities)} 条{display_name}活动到图谱 {self.graph_id}")
+                logger.info(f"成功写入 {len(activities)} 条{platform_label}活动到图谱 {self.graph_id}")
                 return
 
             except Exception as e:
@@ -332,7 +332,7 @@ class Neo4jGraphMemoryUpdater:
         with self._buffer_lock:
             for platform, buffer in self._platform_buffers.items():
                 if buffer:
-                    logger.info(f"发送{self._get_platform_display_name(platform)}平台剩余的 {len(buffer)} 条活动")
+                    logger.info(f"发送{self._get_platform_label(platform)}平台剩余的 {len(buffer)} 条活动")
                     self._send_batch_activities(buffer, platform)
             for p in self._platform_buffers:
                 self._platform_buffers[p] = []

@@ -33,7 +33,6 @@
                <div class="detail-title-group">
                   <span class="detail-type-badge">{{ selectedOntologyItem.itemType === 'entity' ? $t('step1.badgeEntity') : $t('step1.badgeRelation') }}</span>
                   <span class="detail-name">{{ displayName(selectedOntologyItem) }}</span>
-                  <span v-if="selectedOntologyItem.display_name" class="detail-schema-name">{{ selectedOntologyItem.name }}</span>
                </div>
                <button class="close-btn" @click="selectedOntologyItem = null">×</button>
             </div>
@@ -211,11 +210,11 @@ const selectedOntologyItem = ref(null)
 const logContent = ref(null)
 const creatingSimulation = ref(false)
 
-const displayName = (item) => item?.display_name || item?.name || ''
+const displayName = (item) => item?.name || ''
 
 const entityDisplayName = (schemaName) => {
   const entity = props.projectData?.ontology?.entity_types?.find(item => item.name === schemaName)
-  return entity?.display_name || schemaName
+  return entity?.name || schemaName
 }
 
 // 进入环境搭建 - 创建 simulation 并跳转
