@@ -1,9 +1,159 @@
 <template>
-  <div class="home-container">
+  <!-- ===================== Bauhaus 海报版首页 ===================== -->
+  <div class="bh-home" v-if="theme === 'bauhaus'">
+    <!-- 导航：几何 Logo（圆/方/三角） -->
+    <nav class="bh-nav">
+      <div class="bh-logo">
+        <span class="bh-mark circle"></span>
+        <span class="bh-mark square"></span>
+        <span class="bh-mark tri"></span>
+        <span class="bh-brand">MIROFISH</span>
+      </div>
+      <div class="bh-nav-right">
+        <ThemeSwitcher />
+        <LanguageSwitcher />
+        <a href="https://github.com/666ghj/MiroFish" target="_blank" class="bh-github">
+          {{ $t('nav.visitGithub') }} ↗
+        </a>
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="bh-hero">
+      <div class="bh-hero-left">
+        <div class="bh-tags">
+          <span class="bh-tag">{{ $t('home.tagline') }}</span>
+          <span class="bh-ver">{{ $t('home.version') }}</span>
+        </div>
+        <h1 class="bh-title">
+          {{ $t('home.heroTitle1') }}<br />
+          <span class="bh-title-accent">{{ $t('home.heroTitle2') }}</span>
+        </h1>
+        <p class="bh-desc">
+          <i18n-t keypath="home.heroDesc" tag="span">
+            <template #brand><b>{{ $t('home.heroDescBrand') }}</b></template>
+            <template #agentScale><span class="bh-hl">{{ $t('home.heroDescAgentScale') }}</span></template>
+            <template #optimalSolution><span class="bh-hl">{{ $t('home.heroDescOptimalSolution') }}</span></template>
+          </i18n-t>
+        </p>
+        <p class="bh-slogan">{{ $t('home.slogan') }}</p>
+      </div>
+
+      <!-- 右侧蓝色色块 + 几何构成 -->
+      <div class="bh-hero-right">
+        <span class="bh-comp-circle"></span>
+        <span class="bh-comp-square"></span>
+        <span class="bh-comp-tri"></span>
+        <img src="../assets/logo/MiroFish_logo_left.jpeg" alt="MiroFish" class="bh-hero-logo no-invert" />
+      </div>
+    </section>
+
+    <!-- 指标条（黄色色块） -->
+    <section class="bh-stats">
+      <div class="bh-stat">
+        <span class="bh-stat-shape circle"></span>
+        <div class="bh-stat-text">
+          <div class="bh-stat-value">{{ $t('home.metricLowCost') }}</div>
+          <div class="bh-stat-label">{{ $t('home.metricLowCostDesc') }}</div>
+        </div>
+      </div>
+      <div class="bh-stat">
+        <span class="bh-stat-shape square"></span>
+        <div class="bh-stat-text">
+          <div class="bh-stat-value">{{ $t('home.metricHighAvail') }}</div>
+          <div class="bh-stat-label">{{ $t('home.metricHighAvailDesc') }}</div>
+        </div>
+      </div>
+      <div class="bh-stat">
+        <span class="bh-stat-shape tri"></span>
+        <div class="bh-stat-text">
+          <div class="bh-stat-value">{{ $t('home.systemReady') }}</div>
+          <div class="bh-stat-label">{{ $t('home.systemStatus') }}</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 工作区：左工作流，右控制台 -->
+    <section class="bh-work">
+      <!-- 工作流序列 -->
+      <div class="bh-flow">
+        <div class="bh-section-head">
+          <span class="bh-mark square sm"></span> {{ $t('home.workflowSequence') }}
+        </div>
+        <div class="bh-flow-list">
+          <div class="bh-flow-item" v-for="n in 5" :key="n">
+            <span class="bh-flow-num">{{ String(n).padStart(2, '0') }}</span>
+            <div>
+              <div class="bh-flow-title">{{ $t('home.step0' + n + 'Title') }}</div>
+              <div class="bh-flow-desc">{{ $t('home.step0' + n + 'Desc') }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 控制台（复用原有上传/输入/启动逻辑） -->
+      <div class="bh-console">
+        <div class="bh-console-head">
+          <span class="bh-console-label">{{ $t('home.realitySeed') }}</span>
+          <span class="bh-console-meta">{{ $t('home.supportedFormats') }}</span>
+        </div>
+
+        <div
+          class="bh-upload"
+          :class="{ 'drag-over': isDragOver, 'has-files': files.length > 0 }"
+          @dragover.prevent="handleDragOver"
+          @dragleave.prevent="handleDragLeave"
+          @drop.prevent="handleDrop"
+          @click="triggerFileInput"
+        >
+          <input
+            ref="fileInput"
+            type="file"
+            multiple
+            accept=".pdf,.md,.txt"
+            @change="handleFileSelect"
+            style="display: none"
+            :disabled="loading"
+          />
+          <div v-if="files.length === 0" class="bh-upload-empty">
+            <div class="bh-upload-icon">↑</div>
+            <div class="bh-upload-title">{{ $t('home.dragToUpload') }}</div>
+            <div class="bh-upload-hint">{{ $t('home.orBrowse') }}</div>
+          </div>
+          <div v-else class="bh-file-list">
+            <div v-for="(file, index) in files" :key="index" class="bh-file">
+              <span class="bh-file-name">{{ file.name }}</span>
+              <button @click.stop="removeFile(index)" class="bh-file-remove">×</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bh-console-label mt">{{ $t('home.simulationPrompt') }}</div>
+        <textarea
+          v-model="formData.simulationRequirement"
+          class="bh-textarea"
+          :placeholder="$t('home.promptPlaceholder')"
+          rows="5"
+          :disabled="loading"
+        ></textarea>
+
+        <button class="bh-start" @click="startSimulation" :disabled="!canSubmit || loading">
+          <span>{{ loading ? $t('home.initializing') : $t('home.startEngine') }}</span>
+          <span>→</span>
+        </button>
+      </div>
+    </section>
+
+    <HistoryDatabase />
+  </div>
+
+  <!-- ===================== 原版首页（浅色/暗色） ===================== -->
+  <div class="home-container" v-else>
     <!-- 顶部导航栏 -->
     <nav class="navbar">
       <div class="nav-brand">MIROFISH</div>
       <div class="nav-links">
+        <ThemeSwitcher />
         <LanguageSwitcher />
         <a href="https://github.com/666ghj/MiroFish" target="_blank" class="github-link">
           {{ $t('nav.visitGithub') }} <span class="arrow">↗</span>
@@ -216,8 +366,11 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import HistoryDatabase from '../components/HistoryDatabase.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
+import ThemeSwitcher from '../components/ThemeSwitcher.vue'
+import { useTheme } from '../store/theme.js'
 
 const router = useRouter()
+const { theme } = useTheme()
 
 // 表单数据
 const formData = ref({
@@ -872,6 +1025,114 @@ const startSimulation = () => {
   0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.2); }
   70% { box-shadow: 0 0 0 6px rgba(0, 0, 0, 0); }
   100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+
+/* ============================================================
+   Bauhaus 海报版首页样式（仅 bh-home 分支使用）
+   三原色 · 4px 黑边 · 硬阴影 · 直角/正圆 · 几何粗体
+   ============================================================ */
+.bh-home {
+  --r: #D02020; --b: #1040C0; --y: #F0C020; --k: #121212; --bg: #F0F0F0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--k);
+  font-family: 'Noto Sans SC', 'Outfit', system-ui, sans-serif;
+}
+
+/* 导航 */
+.bh-nav {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 32px; background: #fff; border-bottom: 4px solid var(--k);
+}
+.bh-logo { display: flex; align-items: center; gap: 10px; }
+.bh-mark { width: 18px; height: 18px; display: inline-block; }
+.bh-mark.circle { border-radius: 50%; background: var(--r); }
+.bh-mark.square { background: var(--b); }
+.bh-mark.tri { width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 18px solid var(--y); }
+.bh-mark.sm { width: 12px; height: 12px; }
+.bh-mark.square.sm { background: var(--r); }
+.bh-brand { font-weight: 900; font-size: 1.3rem; letter-spacing: 1px; margin-left: 6px; text-transform: uppercase; }
+.bh-nav-right { display: flex; align-items: center; gap: 14px; }
+.bh-github {
+  color: var(--k); text-decoration: none; font-weight: 700; text-transform: uppercase;
+  font-size: 0.75rem; border: 2px solid var(--k); padding: 6px 10px; box-shadow: 4px 4px 0 var(--k);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.bh-github:hover { background: var(--y); }
+.bh-github:active { transform: translate(2px, 2px); box-shadow: none; }
+
+/* HERO */
+.bh-hero { display: grid; grid-template-columns: 1.1fr 0.9fr; align-items: stretch; border-bottom: 4px solid var(--k); }
+.bh-hero-left { padding: 64px 48px; }
+.bh-tags { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+.bh-tag { background: var(--r); color: #fff; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 6px 12px; border: 2px solid var(--k); box-shadow: 4px 4px 0 var(--k); font-size: 0.72rem; }
+.bh-ver { font-weight: 700; color: #777; }
+.bh-title { font-size: clamp(2.6rem, 6vw, 5.5rem); line-height: 0.92; font-weight: 900; text-transform: uppercase; letter-spacing: -2px; margin: 0 0 30px; }
+.bh-title-accent { background: var(--y); padding: 0 12px; box-shadow: 6px 6px 0 var(--k); display: inline-block; margin-top: 8px; }
+.bh-desc { font-size: 1.02rem; line-height: 1.8; max-width: 560px; font-weight: 500; margin-bottom: 26px; }
+.bh-desc b { background: var(--k); color: #fff; padding: 0 6px; font-weight: 700; }
+.bh-hl { background: var(--b); color: #fff; font-weight: 700; padding: 0 6px; }
+.bh-slogan { font-weight: 700; text-transform: uppercase; border-left: 8px solid var(--r); padding-left: 14px; letter-spacing: 0.5px; }
+
+.bh-hero-right { background: var(--b); position: relative; overflow: hidden; min-height: 400px; display: flex; align-items: center; justify-content: center; border-left: 4px solid var(--k); }
+.bh-comp-circle { position: absolute; width: 220px; height: 220px; border-radius: 50%; background: var(--y); top: -45px; right: -45px; border: 4px solid var(--k); }
+.bh-comp-square { position: absolute; width: 140px; height: 140px; background: var(--r); bottom: 26px; left: 24px; transform: rotate(45deg); border: 4px solid var(--k); }
+.bh-comp-tri { position: absolute; width: 0; height: 0; border-left: 55px solid transparent; border-right: 55px solid transparent; border-bottom: 100px solid #fff; bottom: 44px; right: 50px; }
+.bh-hero-logo { position: relative; z-index: 2; width: 70%; max-width: 360px; border: 4px solid var(--k); box-shadow: 8px 8px 0 var(--k); background: #fff; display: block; }
+
+/* 指标条 */
+.bh-stats { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--y); border-bottom: 4px solid var(--k); }
+.bh-stat { display: flex; align-items: center; gap: 16px; padding: 28px 32px; border-right: 4px solid var(--k); }
+.bh-stat:last-child { border-right: none; }
+.bh-stat-shape { width: 40px; height: 40px; flex-shrink: 0; border: 3px solid var(--k); }
+.bh-stat-shape.circle { border-radius: 50%; background: var(--r); }
+.bh-stat-shape.square { background: var(--b); }
+.bh-stat-shape.tri { border: none; width: 0; height: 0; border-left: 22px solid transparent; border-right: 22px solid transparent; border-bottom: 40px solid var(--k); }
+.bh-stat-value { font-weight: 900; font-size: 1.45rem; text-transform: uppercase; line-height: 1.1; }
+.bh-stat-label { font-weight: 600; font-size: 0.82rem; }
+
+/* 工作区 */
+.bh-work { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 32px; padding: 48px; align-items: start; }
+.bh-section-head { display: flex; align-items: center; gap: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; }
+.bh-flow-list { display: flex; flex-direction: column; gap: 16px; }
+.bh-flow-item { display: flex; gap: 16px; background: #fff; border: 4px solid var(--k); box-shadow: 6px 6px 0 var(--k); padding: 16px 18px; transition: transform 0.2s, box-shadow 0.2s; }
+.bh-flow-item:hover { transform: translate(-1px, -2px); box-shadow: 8px 8px 0 var(--k); }
+.bh-flow-num { font-weight: 900; font-size: 1.7rem; color: var(--b); line-height: 1; }
+.bh-flow-title { font-weight: 900; text-transform: uppercase; margin-bottom: 4px; }
+.bh-flow-desc { font-size: 0.84rem; color: #333; line-height: 1.5; }
+
+/* 控制台 */
+.bh-console { background: #fff; border: 4px solid var(--k); box-shadow: 8px 8px 0 var(--k); padding: 24px; align-self: start; }
+.bh-console-head { display: flex; justify-content: space-between; font-weight: 700; text-transform: uppercase; font-size: 0.78rem; margin-bottom: 12px; }
+.bh-console-meta { color: #777; }
+.bh-console-label { font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-size: 0.78rem; }
+.bh-console-label.mt { display: block; margin: 22px 0 10px; }
+.bh-upload { border: 2px dashed var(--k); min-height: 160px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--bg); transition: background 0.2s; }
+.bh-upload.drag-over, .bh-upload:hover { background: var(--y); }
+.bh-upload.has-files { align-items: flex-start; }
+.bh-upload-empty { text-align: center; }
+.bh-upload-icon { width: 44px; height: 44px; border: 3px solid var(--k); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 1.2rem; }
+.bh-upload-title { font-weight: 700; text-transform: uppercase; }
+.bh-upload-hint { font-size: 0.8rem; color: #555; }
+.bh-file-list { width: 100%; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.bh-file { display: flex; align-items: center; justify-content: space-between; border: 2px solid var(--k); padding: 8px 12px; background: #fff; font-size: 0.85rem; }
+.bh-file-name { word-break: break-all; }
+.bh-file-remove { border: none; background: none; cursor: pointer; font-size: 1.1rem; line-height: 1; }
+.bh-textarea { width: 100%; border: 2px solid var(--k); padding: 14px; font-family: inherit; font-size: 0.95rem; resize: vertical; min-height: 120px; outline: none; background: #fff; color: var(--k); }
+.bh-textarea:focus { box-shadow: 4px 4px 0 var(--k); }
+.bh-start { margin-top: 22px; width: 100%; background: var(--r); color: #fff; border: 2px solid var(--k); box-shadow: 4px 4px 0 var(--k); padding: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, background 0.15s; font-family: inherit; font-size: 1rem; }
+.bh-start:hover:not(:disabled) { background: var(--b); }
+.bh-start:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
+.bh-start:disabled { background: var(--muted, #E0E0E0); color: #888; cursor: not-allowed; box-shadow: 4px 4px 0 #999; }
+
+@media (max-width: 1024px) {
+  .bh-hero { grid-template-columns: 1fr; }
+  .bh-hero-left { padding: 40px 24px; }
+  .bh-hero-right { border-left: none; border-top: 4px solid var(--k); min-height: 300px; }
+  .bh-stats { grid-template-columns: 1fr; }
+  .bh-stat { border-right: none; border-bottom: 4px solid var(--k); }
+  .bh-stat:last-child { border-bottom: none; }
+  .bh-work { grid-template-columns: 1fr; padding: 28px 24px; }
 }
 
 /* 响应式适配 */

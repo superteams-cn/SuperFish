@@ -14,6 +14,22 @@
   box-sizing: border-box;
 }
 
+/* ===== 明暗主题 =====
+   该应用的颜色大量硬编码在各组件的 scoped 样式中，
+   因此暗色模式采用根节点反相方案：翻转明度、保留色相，
+   再对位图（如 logo）反向反相以保持原貌。 */
+html[data-theme="dark"] {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #ffffff; /* 反相后即为黑色背景 */
+}
+
+/* 位图 / 需要保持原色的元素：二次反相抵消 */
+html[data-theme="dark"] img,
+html[data-theme="dark"] video,
+html[data-theme="dark"] .no-invert {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 #app {
   font-family: 'JetBrains Mono', 'Space Grotesk', 'Noto Sans SC', monospace;
   -webkit-font-smoothing: antialiased;

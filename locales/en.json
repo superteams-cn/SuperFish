@@ -23,7 +23,8 @@
     "minutes": "minutes",
     "rounds": "rounds",
     "items": "items",
-    "files": "files"
+    "files": "files",
+    "systemDashboard": "SYSTEM DASHBOARD"
   },
   "meta": {
     "title": "MiroFish - Predict Everything",
@@ -75,9 +76,16 @@
     "layoutGraph": "Graph",
     "layoutSplit": "Split",
     "layoutWorkbench": "Workbench",
-    "stepNames": ["Graph Build", "Env Setup", "Run Simulation", "Report Generation", "Deep Interaction"],
+    "stepNames": [
+      "Graph Build",
+      "Env Setup",
+      "Run Simulation",
+      "Report Generation",
+      "Deep Interaction"
+    ],
     "noPendingFiles": "No pending files found. Please go back to the home page to re-upload your documents and enter the simulation requirement. (Note: refreshing this page clears the selected files.) Redirecting to home…",
-    "buildInterrupted": "The graph build task was lost and the build may have been interrupted (usually due to a backend restart). Please start a new build from the home page."
+    "buildInterrupted": "The graph build task was lost and the build may have been interrupted (usually due to a backend restart). Please start a new build from the home page.",
+    "stepProgress": "Step {current}/{total}"
   },
   "step1": {
     "ontologyGeneration": "Ontology Generation",
@@ -97,7 +105,14 @@
     "creating": "Creating...",
     "enterEnvSetup": "Enter Environment Setup",
     "createSimulationFailed": "Failed to create simulation: {error}",
-    "createSimulationException": "Simulation creation error: {error}"
+    "createSimulationException": "Simulation creation error: {error}",
+    "badgeEntity": "ENTITY",
+    "badgeRelation": "RELATION",
+    "attributes": "ATTRIBUTES",
+    "examples": "EXAMPLES",
+    "connections": "CONNECTIONS",
+    "generatedEntityTypes": "GENERATED ENTITY TYPES",
+    "generatedRelationTypes": "GENERATED RELATION TYPES"
   },
   "step2": {
     "simInstanceInit": "Simulation Instance Initialization",
@@ -176,7 +191,11 @@
     "genderOther": "Other",
     "yearsOld": "years old",
     "initializing": "Initializing",
-    "generating": "Generating"
+    "generating": "Generating",
+    "projectIdLabel": "Project ID",
+    "graphIdLabel": "Graph ID",
+    "simulationIdLabel": "Simulation ID",
+    "taskIdLabel": "Task ID"
   },
   "step3": {
     "startGenerateReport": "Generate Report",
@@ -207,7 +226,23 @@
     "forceStopSuccess": "Simulation force stopped",
     "forceStopFailed": "Force stop failed: {error}",
     "startGenerateReportBtn": "Generate Report",
-    "generatingReportBtn": "Starting..."
+    "generatingReportBtn": "Starting...",
+    "platformTwitterName": "Info Plaza",
+    "platformRedditName": "Topic Community",
+    "statRound": "ROUND",
+    "statTime": "TIME",
+    "statActs": "ACTS",
+    "availableActions": "Available Actions",
+    "totalEvents": "TOTAL EVENTS",
+    "simulationMonitor": "SIMULATION MONITOR",
+    "repostedFrom": "Reposted from @{name}",
+    "likedPost": "Liked @{name}'s post",
+    "replyToPost": "Reply to post #{id}",
+    "searchQueryLabel": "Search Query:",
+    "followed": "Followed @{name}",
+    "upvotedPost": "Upvoted Post",
+    "downvotedPost": "Downvoted Post",
+    "actionSkipped": "Action Skipped"
   },
   "step4": {
     "generatingSection": "Generating {title}...",
@@ -249,7 +284,16 @@
     "panelRelatedEdges": "Related Edges",
     "panelRelatedNodes": "Related Nodes",
     "world1": "World 1",
-    "world2": "World 2"
+    "world2": "World 2",
+    "predictionReport": "Prediction Report",
+    "metricSections": "Sections",
+    "metricElapsed": "Elapsed",
+    "metricTools": "Tools",
+    "infoSimulation": "Simulation",
+    "infoRequirement": "Requirement",
+    "reportGenComplete": "Report Generation Complete",
+    "waitingForAgentActivity": "Waiting for agent activity...",
+    "consoleOutput": "CONSOLE OUTPUT"
   },
   "step5": {
     "interactiveTools": "Interactive Tools",
@@ -297,7 +341,21 @@
     "graphDataLoading": "Loading graph data...",
     "waitingOntology": "Waiting for ontology generation...",
     "toggleMaximize": "Maximize/Restore",
-    "closeHint": "Close hint"
+    "closeHint": "Close hint",
+    "refresh": "Refresh",
+    "fieldName": "Name",
+    "fieldCreated": "Created",
+    "fieldProperties": "Properties",
+    "fieldSummary": "Summary",
+    "fieldLabels": "Labels",
+    "fieldFact": "Fact",
+    "fieldType": "Type",
+    "fieldLabel": "Label",
+    "fieldEpisodes": "Episodes",
+    "fieldValidFrom": "Valid From",
+    "selfRelations": "Self Relations",
+    "entityTypes": "Entity Types",
+    "showEdgeLabels": "Show Edge Labels"
   },
   "history": {
     "title": "Simulation History",
@@ -318,7 +376,10 @@
     "notStarted": "Not started",
     "roundsProgress": "{current}/{total} rounds",
     "untitledSimulation": "Untitled simulation",
-    "unknownFile": "Unknown file"
+    "unknownFile": "Unknown file",
+    "btnStep1": "Step1",
+    "btnStep2": "Step2",
+    "btnStep4": "Step4"
   },
   "api": {
     "projectNotFound": "Project not found: {id}",
@@ -663,5 +724,11 @@
     "llmSelectAgentFailed": "LLM agent selection failed, using default selection: {error}",
     "generateInterviewQuestionsFailed": "Failed to generate interview questions: {error}",
     "generateInterviewSummaryFailed": "Failed to generate interview summary: {error}"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "bauhaus": "Bauhaus"
   }
 }
