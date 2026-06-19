@@ -594,8 +594,10 @@ class GraphBuilderService:
                     ).strip()[:2000]
                 for k, v in (src.get("attributes") or {}).items():
                     canon_node.setdefault("attributes", {}).setdefault(k, v)
-            if aliases:
-                canon_node.setdefault("attributes", {})["aliases"] = sorted(a for a in aliases if a)
+            # 别名去掉空值与等于规范名本身的项(避免详情面板出现"刘备<=刘备")
+            alias_list = sorted(a for a in aliases if a and a != canon_node.get("name"))
+            if alias_list:
+                canon_node.setdefault("attributes", {})["aliases"] = alias_list
 
         if not merged_away:
             return nodes, edges
