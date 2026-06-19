@@ -5,6 +5,7 @@
   "description": "SuperFish 后端服务（FastAPI + uv），通过 pnpm/turbo 统一编排",
   "scripts": {
     "dev": "uv run python run.py",
+    "worker": "uv run arq app.worker.WorkerSettings",
     "setup": "uv sync",
     "build": "echo \"后端无需构建步骤\"",
     "lint": "uv run ruff check app",

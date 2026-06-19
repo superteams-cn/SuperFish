@@ -8,6 +8,7 @@
     "dev": "turbo run dev",
     "dev:web": "pnpm --filter @superfish/web dev",
     "dev:api": "pnpm --filter @superfish/api dev",
+    "dev:worker": "pnpm --filter @superfish/api worker",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
