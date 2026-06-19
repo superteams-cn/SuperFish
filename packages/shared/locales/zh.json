@@ -603,7 +603,8 @@
     "readingGraphEntities": "读取图谱实体",
     "generatingProfiles": "生成Agent人设",
     "generatingSimConfig": "生成模拟配置",
-    "preparingScripts": "准备模拟脚本"
+    "preparingScripts": "准备模拟脚本",
+    "resolvingEntities": "实体消解:正在合并同一实体的不同称谓..."
   },
   "log": {
     "preparingGoBack": "准备返回 Step 2，正在关闭模拟...",

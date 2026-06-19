@@ -335,12 +335,24 @@ class GraphBuilderService:
                 write_callback=lambda n, e: self.client.write_graph(graph_id, n, e),
             )
 
+            # 实体消解：合并同一实体的不同称谓(刘备/玄德、关羽/关公…)
+            self.task_manager.update_task(
+                task_id,
+                progress=86,
+                message=t("progress.resolvingEntities"),
+            )
+            raw_count = len(nodes)
+            nodes, edges = self._resolve_entities(nodes, edges)
+
             self.task_manager.update_task(
                 task_id,
                 progress=88,
                 message=t("progress.fetchingGraphInfo"),
             )
-            # 末次全量写入，确保最后一块及所有边都已落库。
+            # 若发生过合并,增量写入的别名节点仍在库中,需先清空再写规范集；
+            # 未合并则直接幂等全量写入(保留增量结果)。
+            if len(nodes) != raw_count:
+                delete_group(self.client, graph_id)
             self.client.write_graph(graph_id, nodes, edges)
             graph_info = self._get_graph_info(graph_id)
 
@@ -504,6 +516,108 @@ class GraphBuilderService:
             progress_callback(t("progress.processingComplete", completed=total, total=total), 1.0)
 
         return list(nodes_by_key.values()), list(edges_by_key.values())
+
+    def _resolve_entities(
+        self, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """实体消解：用 LLM 把同一现实实体的不同称谓(本名/字/号/简称/全称)聚类合并。
+
+        分块独立抽取 + 仅字面去重会把「刘备/玄德」「关羽/关公/关」拆成多个节点。
+        本步在全部抽完后,让 LLM 判定别名分组,选规范节点,合并摘要/属性并把边重指向
+        规范 uuid,再交由调用方清空旧图并写入规范集。
+
+        失败或无可合并时原样返回(调用方据节点数变化决定是否需要清库重写)。
+        """
+        # 仅对实体类型节点消解，规模过大时跳过(单次 LLM 调用上限)
+        if len(nodes) < 2 or len(nodes) > 400:
+            return nodes, edges
+
+        listing = []
+        for i, n in enumerate(nodes):
+            labels = n.get("labels") or []
+            ntype = next((label for label in labels if label != "Entity"), "Entity")
+            summary = (n.get("summary") or "").replace("\n", " ")[:50]
+            listing.append(f"{i}. {n.get('name', '')} [{ntype}] — {summary}")
+
+        prompt = (
+            "你在做知识图谱的实体消解。下面是从同一篇文档抽取的实体列表(序号. 名称 [类型] — 简介)。\n"
+            "请把指向【同一个现实实体】的不同称谓归为一组——包括本名/字/号/别称/简称/全称"
+            "(例如「刘备」与「玄德」是同一人;「关羽」「关公」「关」是同一人)。\n"
+            "规则:\n"
+            "- 只合并确实是同一实体的;不确定就不要合并。\n"
+            "- 不同的真实实体即使名字相近也不要合并(如「张飞」「张角」「张让」是不同人)。\n"
+            "- 每组选一个最完整、最常用的作为规范实体 canonical_index。\n"
+            '仅返回 JSON:{"groups":[{"canonical_index":int,"member_indices":[int,...]}]},'
+            '只包含成员数 ≥2 的组,没有可合并时返回 {"groups":[]}。\n\n'
+            "实体列表:\n" + "\n".join(listing)
+        )
+
+        try:
+            result = LLMClient().chat_json(
+                [{"role": "user", "content": prompt}], temperature=0.1, max_tokens=4096
+            )
+        except Exception as exc:
+            logger.warning(f"实体消解 LLM 调用失败,跳过: {exc}")
+            return nodes, edges
+
+        groups = result.get("groups") if isinstance(result, dict) else None
+        if not groups:
+            return nodes, edges
+
+        n_total = len(nodes)
+        remap: dict[str, str] = {}  # 别名 uuid -> 规范 uuid
+        merged_away: set[int] = set()  # 被合并掉的节点下标
+
+        for g in groups:
+            members = [
+                i for i in g.get("member_indices", []) if isinstance(i, int) and 0 <= i < n_total
+            ]
+            members = list(dict.fromkeys(members))  # 去重保序
+            if len(members) < 2:
+                continue
+            canon = g.get("canonical_index")
+            if not isinstance(canon, int) or canon not in members:
+                canon = max(members, key=lambda i: len(nodes[i].get("name", "")))  # 退化:取最长名
+            canon_node = nodes[canon]
+            aliases = set(canon_node.get("attributes", {}).get("aliases", []) or [])
+            for i in members:
+                if i == canon:
+                    continue
+                src = nodes[i]
+                remap[src["uuid"]] = canon_node["uuid"]
+                merged_away.add(i)
+                aliases.add(src.get("name", ""))
+                # 合并摘要与属性
+                if src.get("summary") and src["summary"] not in (canon_node.get("summary") or ""):
+                    canon_node["summary"] = (
+                        canon_node.get("summary", "") + "\n" + src["summary"]
+                    ).strip()[:2000]
+                for k, v in (src.get("attributes") or {}).items():
+                    canon_node.setdefault("attributes", {}).setdefault(k, v)
+            if aliases:
+                canon_node.setdefault("attributes", {})["aliases"] = sorted(a for a in aliases if a)
+
+        if not merged_away:
+            return nodes, edges
+
+        new_nodes = [n for i, n in enumerate(nodes) if i not in merged_away]
+
+        # 边重指向规范 uuid，丢弃因合并产生的自环，按 (源,类型,目标) 再去重
+        new_edges: list[dict[str, Any]] = []
+        seen_edge: set[tuple[str, str, str]] = set()
+        for e in edges:
+            s = remap.get(e["source_node_uuid"], e["source_node_uuid"])
+            tgt = remap.get(e["target_node_uuid"], e["target_node_uuid"])
+            if s == tgt:
+                continue  # 合并后自指,丢弃
+            key = (s, e.get("name", ""), tgt)
+            if key in seen_edge:
+                continue
+            seen_edge.add(key)
+            new_edges.append({**e, "source_node_uuid": s, "target_node_uuid": tgt})
+
+        logger.info(f"实体消解:{n_total} → {len(new_nodes)} 个实体(合并 {len(merged_away)} 个别名)")
+        return new_nodes, new_edges
 
     def _extract_chunk_with_llamaindex(
         self,
