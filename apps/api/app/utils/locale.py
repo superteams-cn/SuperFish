@@ -9,14 +9,6 @@ _current_locale: "contextvars.ContextVar[str | None]" = contextvars.ContextVar(
     'current_locale', default=None
 )
 
-# 过渡期：report/simulation 仍是 Flask 蓝图（经 WSGI 挂载），
-# 这些路由通过 Flask 请求头获取语言。全部迁移到 FastAPI 后可删除此分支。
-try:
-    from flask import request, has_request_context  # type: ignore
-    _HAS_FLASK = True
-except Exception:  # pragma: no cover - flask 卸载后走此分支
-    _HAS_FLASK = False
-
 _locales_dir = os.path.join(
     os.path.dirname(__file__), '..', '..', '..', '..', 'packages', 'shared', 'locales'
 )
@@ -45,10 +37,7 @@ def set_locale(locale: str):
 
 
 def get_locale() -> str:
-    # 优先使用 Flask 请求头（过渡期挂载的旧蓝图）
-    if _HAS_FLASK and has_request_context():
-        return coerce_locale(request.headers.get('Accept-Language', 'zh'))
-    # 否则使用 contextvar（FastAPI 请求 / 后台线程）
+    # 使用 contextvar：FastAPI 请求由 deps.use_locale 设置，后台线程入口处再次设置
     return _current_locale.get() or 'zh'
 
 

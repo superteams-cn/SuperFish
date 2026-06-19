@@ -1,8 +1,7 @@
 """
 SuperFish Backend —— FastAPI 应用入口
 
-迁移策略：graph 已是原生 FastAPI 路由；simulation / report 仍为 Flask 蓝图，
-经 WSGIMiddleware 挂载到根路径，保证迁移过程中整体可用。
+graph / report / simulation 三大业务路由均为原生 FastAPI 实现。
 """
 
 import os
@@ -16,13 +15,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.wsgi import WSGIMiddleware
 
 from .config import Config
 from .utils.logger import setup_logger, get_logger
 from .routers import graph as graph_router
 from .routers import report as report_router
-from .legacy_flask import build_legacy_app
+from .routers import simulation as simulation_router
 
 
 @asynccontextmanager
@@ -61,13 +59,10 @@ def create_app() -> FastAPI:
     def health():
         return {"status": "ok", "service": "SuperFish Backend"}
 
-    # 原生 FastAPI 路由（必须在挂载遗留 WSGI 之前注册，以保证优先匹配）
+    # 业务路由（全部已迁移为原生 FastAPI）
     app.include_router(graph_router.router, prefix="/api/graph", tags=["graph"])
     app.include_router(report_router.router, prefix="/api/report", tags=["report"])
-
-    # 过渡期：将遗留 Flask 蓝图（simulation / report）以 WSGI 形式挂载到根路径。
-    # 上面的 FastAPI 路由先注册，故 /api/graph 与 /health 优先命中，其余交给 Flask。
-    app.mount("/", WSGIMiddleware(build_legacy_app()))
+    app.include_router(simulation_router.router, prefix="/api/simulation", tags=["simulation"])
 
     return app
 

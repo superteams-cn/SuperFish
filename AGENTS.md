@@ -49,8 +49,11 @@ superfish/
 ## 4. 后端约定（apps/api）
 
 - 技术栈：**FastAPI + Pydantic + uv**，钉死版本的重依赖（`camel-oasis`、`camel-ai`）**不得擅自升级**。
-- 所有请求/响应使用 Pydantic 模型做出入参校验。
-- 路由置于 `routers/`，业务逻辑置于 `services/`，配置置于 `core/`。
+- 请求体（JSON/Form）用 Pydantic 模型（置于 `app/schemas/`）。注意：必填项手动在处理器内校验并返回本地化 400，模型字段设为可选，避免 FastAPI 默认的 422 破坏前端契约。
+- 路由置于 `app/routers/`，业务逻辑置于 `app/services/`，配置在 `app/config.py`，入口在 `app/main.py`（含 lifespan）。
+- 响应统一信封 `{"success": bool, "data"/"error": ...}`；错误用 `_error(msg, status, **extra)` 辅助函数。
+- 路由声明顺序敏感：字面量路径必须在动态段 `/{id}` 之前声明。
+- i18n：请求级语言由 `app/deps.py:use_locale` 依赖从 `Accept-Language` 设置；后台线程入口处需 `set_locale(get_locale())` 继承。
 - 涉及 OASIS 模拟的进程/生命周期由 FastAPI `lifespan` 统一管理。
 
 ## 5. 协作纪律
