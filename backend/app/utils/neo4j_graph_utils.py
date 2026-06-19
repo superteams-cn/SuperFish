@@ -245,9 +245,7 @@ def get_neo4j_graph_client() -> Neo4jGraphClient:
     return _neo4j_client
 
 
-# Backward-compatible alias for older imports.
 get_neo4j_client = get_neo4j_graph_client
-get_graphiti_client = get_neo4j_graph_client
 
 
 def fetch_all_nodes(

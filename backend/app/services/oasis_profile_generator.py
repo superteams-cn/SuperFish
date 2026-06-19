@@ -293,7 +293,7 @@ class OasisProfileGenerator:
             return results
 
         entity_name = entity.name
-        query = t('progress.zepSearchQuery', name=entity_name)
+        query = t('progress.graphSearchQuery', name=entity_name)
 
         try:
             all_edges = fetch_all_edges(self._graph_client, self.graph_id)

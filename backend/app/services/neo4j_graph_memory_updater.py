@@ -401,8 +401,3 @@ class Neo4jGraphMemoryManager:
     @classmethod
     def get_all_stats(cls) -> Dict[str, Dict[str, Any]]:
         return {sid: u.get_stats() for sid, u in cls._updaters.items()}
-
-
-# Backward-compatible aliases for older imports.
-ZepGraphMemoryUpdater = Neo4jGraphMemoryUpdater
-ZepGraphMemoryManager = Neo4jGraphMemoryManager

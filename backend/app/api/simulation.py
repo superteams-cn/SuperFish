@@ -60,7 +60,7 @@ def get_graph_entities(graph_id: str):
         if not Config.NEO4J_URI:
             return jsonify({
                 "success": False,
-                "error": t('api.zepApiKeyMissing')
+                "error": t('api.neo4jConfigMissing')
             }), 500
         
         entity_types_str = request.args.get('entity_types', '')
@@ -97,7 +97,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
         if not Config.NEO4J_URI:
             return jsonify({
                 "success": False,
-                "error": t('api.zepApiKeyMissing')
+                "error": t('api.neo4jConfigMissing')
             }), 500
         
         reader = Neo4jEntityReader()
@@ -130,7 +130,7 @@ def get_entities_by_type(graph_id: str, entity_type: str):
         if not Config.NEO4J_URI:
             return jsonify({
                 "success": False,
-                "error": t('api.zepApiKeyMissing')
+                "error": t('api.neo4jConfigMissing')
             }), 500
         
         enrich = request.args.get('enrich', 'true').lower() == 'true'

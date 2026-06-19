@@ -308,7 +308,3 @@ class Neo4jEntityReader:
             enrich_with_edges=enrich_with_edges,
         )
         return result.entities
-
-
-# Backward-compatible alias for older imports.
-ZepEntityReader = Neo4jEntityReader

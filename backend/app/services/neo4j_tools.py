@@ -327,7 +327,7 @@ class Neo4jToolsService:
         # api_key 参数保留以兼容现有调用
         self._client = get_neo4j_graph_client()
         self._llm_client = llm_client
-        logger.info(t("console.zepToolsInitialized"))
+        logger.info(t("console.neo4jToolsInitialized"))
 
     @property
     def llm(self) -> LLMClient:
@@ -386,7 +386,7 @@ class Neo4jToolsService:
             return SearchResult(facts=facts, edges=edges, nodes=[], query=query, total_count=len(facts))
 
         except Exception as e:
-            logger.warning(t("console.zepSearchApiFallback", error=str(e)))
+            logger.warning(t("console.graphSearchFallback", error=str(e)))
             return self._local_search(graph_id, query, limit, scope)
 
     def _local_search(
@@ -1051,7 +1051,3 @@ class Neo4jToolsService:
         except Exception as e:
             logger.warning(t("console.generateInterviewSummaryFailed", error=e))
             return f"共采访了{len(interviews)}位受访者，包括：" + "、".join(i.agent_name for i in interviews)
-
-
-# Backward-compatible alias for older imports.
-ZepToolsService = Neo4jToolsService

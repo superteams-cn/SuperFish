@@ -287,7 +287,7 @@ def build_graph():
         # 检查配置
         errors = []
         if not Config.NEO4J_URI:
-            errors.append(t('api.zepApiKeyMissing'))
+            errors.append(t('api.neo4jConfigMissing'))
         if errors:
             logger.error(f"配置错误: {errors}")
             return jsonify({
@@ -495,7 +495,7 @@ def get_graph_data(graph_id: str):
         if not Config.NEO4J_URI:
             return jsonify({
                 "success": False,
-                "error": t('api.zepApiKeyMissing')
+                "error": t('api.neo4jConfigMissing')
             }), 500
         
         builder = GraphBuilderService(api_key=Config.NEO4J_URI)
@@ -523,7 +523,7 @@ def delete_graph(graph_id: str):
         if not Config.NEO4J_URI:
             return jsonify({
                 "success": False,
-                "error": t('api.zepApiKeyMissing')
+                "error": t('api.neo4jConfigMissing')
             }), 500
         
         builder = GraphBuilderService(api_key=Config.NEO4J_URI)

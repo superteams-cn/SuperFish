@@ -13,8 +13,10 @@ flask-cors>=6.0.0
 # OpenAI SDK（统一使用 OpenAI 格式调用 LLM）
 openai>=1.0.0
 
-# ============= Zep Cloud =============
-zep-cloud==3.13.0
+# ============= Neo4j 知识图谱 / Schema 抽取 =============
+neo4j>=5.0.0
+llama-index-core>=0.14.22
+llama-index-llms-openai-like>=0.7.2
 
 # ============= OASIS 社交媒体模拟 =============
 # OASIS 社交模拟框架
