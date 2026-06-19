@@ -114,3 +114,16 @@ class ReportRow(Base):
     created_at: Mapped[str] = mapped_column(String(40), default="", index=True)
     completed_at: Mapped[str] = mapped_column(String(40), default="")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SimulationRunStateRow(Base):
+    """模拟运行时状态（实时进度/动作计数等），存整份 detail dict 以便任意副本观测。
+
+    运行中的子进程仍绑定在拥有它的进程/节点；本表仅用于跨副本「读」进度。
+    """
+
+    __tablename__ = "simulation_run_states"
+
+    simulation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[str] = mapped_column(String(40), default="")

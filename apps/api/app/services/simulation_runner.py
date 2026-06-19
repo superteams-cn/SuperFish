@@ -17,6 +17,8 @@ from enum import StrEnum
 from queue import Queue
 from typing import Any
 
+from ..db import session_scope
+from ..db_models import SimulationRunStateRow
 from ..utils.locale import get_locale, set_locale
 from ..utils.logger import get_logger
 from .neo4j_graph_memory_updater import Neo4jGraphMemoryManager
@@ -225,27 +227,25 @@ class SimulationRunner:
 
     @classmethod
     def get_run_state(cls, simulation_id: str) -> SimulationRunState | None:
-        """获取运行状态"""
+        """获取运行状态。
+
+        拥有子进程的进程（worker/本进程）持有 `_run_states` 里的实时对象；
+        其他副本（如另一个 API 进程）则从 Postgres 读取最新快照（不缓存，保证新鲜）。
+        """
         if simulation_id in cls._run_states:
             return cls._run_states[simulation_id]
-
-        # 尝试从文件加载
-        state = cls._load_run_state(simulation_id)
-        if state:
-            cls._run_states[simulation_id] = state
-        return state
+        return cls._load_run_state(simulation_id)
 
     @classmethod
     def _load_run_state(cls, simulation_id: str) -> SimulationRunState | None:
-        """从文件加载运行状态"""
-        state_file = os.path.join(cls.RUN_STATE_DIR, simulation_id, "run_state.json")
-        if not os.path.exists(state_file):
+        """从 Postgres 加载运行状态快照。"""
+        with session_scope() as session:
+            row = session.get(SimulationRunStateRow, simulation_id)
+            data = dict(row.data) if row else None
+        if not data:
             return None
 
         try:
-            with open(state_file, encoding="utf-8") as f:
-                data = json.load(f)
-
             state = SimulationRunState(
                 simulation_id=simulation_id,
                 runner_status=RunnerStatus(data.get("runner_status", "idle")),
@@ -295,15 +295,15 @@ class SimulationRunner:
 
     @classmethod
     def _save_run_state(cls, state: SimulationRunState):
-        """保存运行状态到文件"""
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, state.simulation_id)
-        os.makedirs(sim_dir, exist_ok=True)
-        state_file = os.path.join(sim_dir, "run_state.json")
-
+        """保存运行状态到 Postgres（upsert）并更新本进程实时对象缓存。"""
         data = state.to_detail_dict()
-
-        with open(state_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        with session_scope() as session:
+            row = session.get(SimulationRunStateRow, state.simulation_id)
+            if row is None:
+                row = SimulationRunStateRow(simulation_id=state.simulation_id)
+                session.add(row)
+            row.data = data
+            row.updated_at = datetime.now().isoformat()
 
         cls._run_states[state.simulation_id] = state
 
@@ -1121,8 +1121,8 @@ class SimulationRunner:
         """
         清理模拟的运行日志（用于强制重新开始模拟）
 
-        会删除以下文件：
-        - run_state.json
+        会删除以下文件/记录：
+        - 运行状态快照（Postgres）
         - twitter/actions.jsonl
         - reddit/actions.jsonl
         - simulation.log
@@ -1150,7 +1150,6 @@ class SimulationRunner:
 
         # 要删除的文件列表（包括数据库文件）
         files_to_delete = [
-            "run_state.json",
             "simulation.log",
             "stdout.log",
             "stderr.log",
@@ -1187,6 +1186,15 @@ class SimulationRunner:
         # 清理内存中的运行状态
         if simulation_id in cls._run_states:
             del cls._run_states[simulation_id]
+
+        # 清理 Postgres 中的运行状态快照
+        try:
+            with session_scope() as session:
+                row = session.get(SimulationRunStateRow, simulation_id)
+                if row is not None:
+                    session.delete(row)
+        except Exception as e:
+            errors.append(f"清理运行状态(PG)失败: {str(e)}")
 
         logger.info(f"清理模拟日志完成: {simulation_id}, 删除文件: {cleaned_files}")
 
@@ -1246,7 +1254,7 @@ class SimulationRunner:
                         except Exception:
                             process.kill()
 
-                    # 更新 run_state.json
+                    # 更新运行状态（Postgres）
                     state = cls.get_run_state(simulation_id)
                     if state:
                         state.runner_status = RunnerStatus.STOPPED

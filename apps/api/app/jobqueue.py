@@ -22,10 +22,11 @@ logger = get_logger("superfish.jobqueue")
 
 # 作业名 → (arq worker 函数名, 同步业务函数)
 # arq 函数名与 worker.py 中注册的协程名一致。
+# 注：模拟启动未入队 —— 其控制面(stop/interview/IPC)与子进程同进程绑定，
+# 拆到独立 worker 需要跨进程命令路由层，故模拟仍在拥有子进程的进程内执行。
 _JOBS = {
     "graph_build": ("graph_build_job", jobs.run_graph_build),
     "report_generate": ("report_generate_job", jobs.run_report_generate),
-    "simulation_start": ("simulation_start_job", getattr(jobs, "run_simulation_start", None)),
 }
 
 

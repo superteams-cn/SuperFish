@@ -660,7 +660,7 @@ def get_simulation_history(limit: int = 20):
                 sim_dict["total_simulation_hours"] = 0
                 recommended_rounds = 0
 
-            # 获取运行状态（从 run_state.json 读取用户设置的实际轮数）
+            # 获取运行状态（从 Postgres 读取用户设置的实际轮数）
             run_state = SimulationRunner.get_run_state(sim.simulation_id)
             if run_state:
                 sim_dict["current_round"] = run_state.current_round
