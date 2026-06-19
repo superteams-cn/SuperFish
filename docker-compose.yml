@@ -20,9 +20,9 @@ services:
       retries: 10
 
   superfish:
-    image: ghcr.io/666ghj/superfish:latest
+    image: ghcr.io/superteams-cn/superfish:latest
     # 加速镜像（如拉取缓慢可替换上方地址）
-    # image: ghcr.nju.edu.cn/666ghj/superfish:latest
+    # image: ghcr.nju.edu.cn/superteams-cn/superfish:latest
     container_name: superfish
     env_file:
       - .env

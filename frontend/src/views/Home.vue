@@ -12,7 +12,7 @@
       <div class="bh-nav-right">
         <ThemeSwitcher />
         <LanguageSwitcher />
-        <a href="https://github.com/666ghj/SuperFish" target="_blank" class="bh-github">
+        <a href="https://github.com/superteams-cn/SuperFish" target="_blank" class="bh-github">
           {{ $t('nav.visitGithub') }} ↗
         </a>
       </div>
@@ -155,7 +155,7 @@
       <div class="nav-links">
         <ThemeSwitcher />
         <LanguageSwitcher />
-        <a href="https://github.com/666ghj/SuperFish" target="_blank" class="github-link">
+        <a href="https://github.com/superteams-cn/SuperFish" target="_blank" class="github-link">
           {{ $t('nav.visitGithub') }} <span class="arrow">↗</span>
         </a>
       </div>

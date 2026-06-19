@@ -2,19 +2,19 @@
 
 <img src="./static/image/SuperFish_logo_compressed.jpeg" alt="SuperFish Logo" width="75%"/>
 
-<a href="https://trendshift.io/repositories/16144" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16144" alt="666ghj%2FSuperFish | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/16144" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16144" alt="superteams-cn%2FSuperFish | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 简洁通用的群体智能引擎，预测万物
 </br>
 <em>A Simple and Universal Swarm Intelligence Engine, Predicting Anything</em>
 
-<a href="https://www.shanda.com/" target="_blank"><img src="./static/image/shanda_logo.png" alt="666ghj%2FSuperFish | Shanda" height="40"/></a>
+<a href="https://www.shanda.com/" target="_blank"><img src="./static/image/shanda_logo.png" alt="superteams-cn%2FSuperFish | Shanda" height="40"/></a>
 
-[![GitHub Stars](https://img.shields.io/github/stars/666ghj/SuperFish?style=flat-square&color=DAA520)](https://github.com/666ghj/SuperFish/stargazers)
-[![GitHub Watchers](https://img.shields.io/github/watchers/666ghj/SuperFish?style=flat-square)](https://github.com/666ghj/SuperFish/watchers)
-[![GitHub Forks](https://img.shields.io/github/forks/666ghj/SuperFish?style=flat-square)](https://github.com/666ghj/SuperFish/network)
+[![GitHub Stars](https://img.shields.io/github/stars/superteams-cn/SuperFish?style=flat-square&color=DAA520)](https://github.com/superteams-cn/SuperFish/stargazers)
+[![GitHub Watchers](https://img.shields.io/github/watchers/superteams-cn/SuperFish?style=flat-square)](https://github.com/superteams-cn/SuperFish/watchers)
+[![GitHub Forks](https://img.shields.io/github/forks/superteams-cn/SuperFish?style=flat-square)](https://github.com/superteams-cn/SuperFish/network)
 [![Docker](https://img.shields.io/badge/Docker-Build-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/666ghj/SuperFish)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/superteams-cn/SuperFish)
 
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](http://discord.gg/ePf5aPaHnA)
 [![X](https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/superfish_ai)
@@ -217,12 +217,14 @@ SuperFish团队长期招募全职/实习，如果你对多Agent应用感兴趣�
 
 SuperFish 的仿真引擎由 **[OASIS](https://github.com/camel-ai/oasis)** 驱动，我们衷心感谢 CAMEL-AI 团队的开源贡献！
 
+我们同时诚挚感谢原始仓库 **[MiroFish](https://github.com/666ghj/MiroFish)** 及其作者 **[666ghj](https://github.com/666ghj)** 的基础启发与开源贡献，为本项目的发展提供了重要参考。
+
 ## 📈 项目统计
 
-<a href="https://www.star-history.com/#666ghj/SuperFish&type=date&legend=top-left">
+<a href="https://www.star-history.com/#superteams-cn/SuperFish&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=666ghj/SuperFish&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=666ghj/SuperFish&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=666ghj/SuperFish&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=superteams-cn/SuperFish&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=superteams-cn/SuperFish&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=superteams-cn/SuperFish&type=date&legend=top-left" />
  </picture>
 </a>
