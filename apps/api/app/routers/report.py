@@ -10,6 +10,7 @@ Report API 路由（FastAPI 版）
 
 import traceback
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, JSONResponse
@@ -25,7 +26,7 @@ from ..schemas.report import (
     SearchToolRequest,
     StatisticsToolRequest,
 )
-from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
+from ..services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
 from ..services.simulation_manager import SimulationManager
 from ..utils.locale import get_locale, t
 from ..utils.logger import get_logger
@@ -91,6 +92,21 @@ def generate_report(req: GenerateReportRequest):
 
         # 提前生成 report_id，以便立即返回给前端
         report_id = f"report_{uuid.uuid4().hex[:12]}"
+
+        # 先落库一条 PENDING 占位记录：报告生成已迁至独立 worker，
+        # 入队到 worker 写入正式结果之间存在时间窗，期间前端若直接 GET
+        # /api/report/{id} 会因行不存在而 404。占位行让 GET 在生成期间
+        # 返回 status=pending/generating，而不是 404。
+        ReportManager.save_report(
+            Report(
+                report_id=report_id,
+                simulation_id=simulation_id,
+                graph_id=graph_id,
+                simulation_requirement=simulation_requirement,
+                status=ReportStatus.PENDING,
+                created_at=datetime.now().isoformat(),
+            )
+        )
 
         # 创建异步任务
         task_manager = TaskManager()
