@@ -1,0 +1,339 @@
+/* =====================================================================
+   Dopamine 主题 —— 中文优先的高饱和 Maximalism 皮肤层
+   通过 html[data-theme="dopamine"] 覆盖 scoped 样式。
+   设计语言：深色宇宙底 · 五色高亮 · 粗描边 · 发光阴影 · 图案叠层。
+   ===================================================================== */
+
+html[data-theme="dopamine"] {
+  --dp-bg: #0D0D1A;
+  --dp-fg: #FFFFFF;
+  --dp-muted: #2D1B4E;
+  --dp-magenta: #FF3AF2;
+  --dp-cyan: #00F5D4;
+  --dp-yellow: #FFE600;
+  --dp-orange: #FF6B35;
+  --dp-purple: #7B2FFF;
+  --dp-panel: rgba(45, 27, 78, 0.88);
+  --dp-font: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Source Han Sans SC', 'Outfit', system-ui, sans-serif;
+  --dp-mono: 'JetBrains Mono', 'Noto Sans SC', 'PingFang SC', monospace;
+  --dp-shadow-hard: 8px 8px 0 var(--dp-yellow), 16px 16px 0 var(--dp-magenta);
+  --dp-glow: 0 0 24px rgba(255, 58, 242, 0.55), 0 0 48px rgba(0, 245, 212, 0.28);
+
+  background:
+    radial-gradient(ellipse at 15% 18%, rgba(255, 58, 242, 0.22) 0%, transparent 36%),
+    radial-gradient(ellipse at 88% 24%, rgba(0, 245, 212, 0.18) 0%, transparent 35%),
+    radial-gradient(ellipse at 50% 88%, rgba(123, 47, 255, 0.2) 0%, transparent 42%),
+    var(--dp-bg);
+  color: var(--dp-fg);
+}
+
+html[data-theme="dopamine"] body,
+html[data-theme="dopamine"] #app {
+  min-height: 100%;
+  background:
+    radial-gradient(circle, rgba(255, 58, 242, 0.18) 1px, transparent 1px) 0 0 / 24px 24px,
+    repeating-linear-gradient(45deg, transparent 0 12px, rgba(255, 230, 0, 0.07) 12px 20px),
+    var(--dp-bg) !important;
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+}
+
+html[data-theme="dopamine"] ::selection {
+  background: var(--dp-yellow);
+  color: #111;
+}
+
+html[data-theme="dopamine"] ::-webkit-scrollbar-track { background: #150A2E; }
+html[data-theme="dopamine"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--dp-magenta), var(--dp-cyan));
+  border: 2px solid var(--dp-yellow);
+  border-radius: 999px;
+}
+
+html[data-theme="dopamine"] .home-container,
+html[data-theme="dopamine"] .main-view,
+html[data-theme="dopamine"] .content-area,
+html[data-theme="dopamine"] .workbench-layout,
+html[data-theme="dopamine"] .graph-area {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 58, 242, 0.16), transparent 32%),
+    radial-gradient(circle at 85% 65%, rgba(0, 245, 212, 0.12), transparent 34%),
+    linear-gradient(135deg, #0D0D1A 0%, #180833 52%, #0D0D1A 100%) !important;
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+}
+
+html[data-theme="dopamine"] .app-header {
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 230, 0, 0.12) 0 10px, transparent 10px 20px),
+    linear-gradient(90deg, #19072E, #321263) !important;
+  border-bottom: 4px solid var(--dp-magenta) !important;
+  box-shadow: 0 0 32px rgba(255, 58, 242, 0.45) !important;
+  color: var(--dp-fg) !important;
+}
+
+html[data-theme="dopamine"] .brand,
+html[data-theme="dopamine"] .nav-brand,
+html[data-theme="dopamine"] .app-header .brand,
+html[data-theme="dopamine"] .app-header .step-name,
+html[data-theme="dopamine"] .app-header .step-num {
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+  font-weight: 900 !important;
+  text-shadow: 2px 2px 0 var(--dp-purple), 4px 4px 0 var(--dp-magenta), 6px 6px 0 var(--dp-cyan);
+}
+
+html[data-theme="dopamine"] h1,
+html[data-theme="dopamine"] h2,
+html[data-theme="dopamine"] h3,
+html[data-theme="dopamine"] .section-title,
+html[data-theme="dopamine"] .main-title,
+html[data-theme="dopamine"] .step-title,
+html[data-theme="dopamine"] .card-title {
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+  text-shadow: 2px 2px 0 var(--dp-purple), 4px 4px 0 var(--dp-magenta), 6px 6px 0 var(--dp-cyan);
+}
+
+html[data-theme="dopamine"] .panel-title,
+html[data-theme="dopamine"] .log-title,
+html[data-theme="dopamine"] .config-block-title,
+html[data-theme="dopamine"] .preview-title,
+html[data-theme="dopamine"] .section-label,
+html[data-theme="dopamine"] .tag-label,
+html[data-theme="dopamine"] .metric-label,
+html[data-theme="dopamine"] .api-note {
+  color: var(--dp-yellow) !important;
+  font-family: var(--dp-font) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+  text-shadow: 2px 2px 0 var(--dp-purple);
+}
+
+html[data-theme="dopamine"] .step-card,
+html[data-theme="dopamine"] .metric-card,
+html[data-theme="dopamine"] .steps-container,
+html[data-theme="dopamine"] .stat-card,
+html[data-theme="dopamine"] .config-item,
+html[data-theme="dopamine"] .agent-card,
+html[data-theme="dopamine"] .platform-card,
+html[data-theme="dopamine"] .profile-card,
+html[data-theme="dopamine"] .info-card,
+html[data-theme="dopamine"] .detail-panel,
+html[data-theme="dopamine"] .report-section-item,
+html[data-theme="dopamine"] .tools-card,
+html[data-theme="dopamine"] .reasoning-item,
+html[data-theme="dopamine"] .dimension-card,
+html[data-theme="dopamine"] .auto-info-card,
+html[data-theme="dopamine"] .profile-modal,
+html[data-theme="dopamine"] .survey-result-card,
+html[data-theme="dopamine"] .history-card,
+html[data-theme="dopamine"] .project-card,
+html[data-theme="dopamine"] .db-card {
+  background:
+    linear-gradient(135deg, rgba(45, 27, 78, 0.94), rgba(23, 8, 50, 0.92)),
+    radial-gradient(circle at 18% 20%, rgba(255, 58, 242, 0.2), transparent 36%) !important;
+  border: 4px solid var(--dp-magenta) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--dp-glow), var(--dp-shadow-hard) !important;
+  color: var(--dp-fg) !important;
+}
+
+html[data-theme="dopamine"] .step-card:nth-of-type(2n),
+html[data-theme="dopamine"] .metric-card:nth-of-type(2n),
+html[data-theme="dopamine"] .stat-card:nth-of-type(2n),
+html[data-theme="dopamine"] .agent-card:nth-of-type(2n),
+html[data-theme="dopamine"] .profile-card:nth-of-type(2n) {
+  border-color: var(--dp-cyan) !important;
+  box-shadow: 0 0 24px rgba(0, 245, 212, 0.45), 8px 8px 0 var(--dp-orange), 16px 16px 0 var(--dp-purple) !important;
+}
+
+html[data-theme="dopamine"] .step-card:nth-of-type(3n),
+html[data-theme="dopamine"] .metric-card:nth-of-type(3n),
+html[data-theme="dopamine"] .stat-card:nth-of-type(3n),
+html[data-theme="dopamine"] .agent-card:nth-of-type(3n),
+html[data-theme="dopamine"] .profile-card:nth-of-type(3n) {
+  border-color: var(--dp-yellow) !important;
+}
+
+html[data-theme="dopamine"] .step-card:hover,
+html[data-theme="dopamine"] .metric-card:hover,
+html[data-theme="dopamine"] .stat-card:hover,
+html[data-theme="dopamine"] .agent-card:hover,
+html[data-theme="dopamine"] .profile-card:hover,
+html[data-theme="dopamine"] .tools-card:hover {
+  transform: translate(-2px, -3px) scale(1.01);
+  box-shadow: 0 0 34px rgba(255, 58, 242, 0.68), 10px 10px 0 var(--dp-yellow), 20px 20px 0 var(--dp-magenta) !important;
+}
+
+html[data-theme="dopamine"] .badge,
+html[data-theme="dopamine"] .config-block-badge,
+html[data-theme="dopamine"] .agent-type,
+html[data-theme="dopamine"] .topic-tag,
+html[data-theme="dopamine"] .hot-topic-tag,
+html[data-theme="dopamine"] .entity-tag,
+html[data-theme="dopamine"] .label-tag,
+html[data-theme="dopamine"] .report-tag,
+html[data-theme="dopamine"] .detail-type-badge,
+html[data-theme="dopamine"] .tooltip-action {
+  background: var(--dp-yellow) !important;
+  border: 3px solid var(--dp-cyan) !important;
+  border-radius: 999px !important;
+  color: #141018 !important;
+  font-family: var(--dp-font) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+  box-shadow: 4px 4px 0 var(--dp-magenta) !important;
+}
+
+html[data-theme="dopamine"] .badge.success { background: var(--dp-cyan) !important; color: #071114 !important; }
+html[data-theme="dopamine"] .badge.processing,
+html[data-theme="dopamine"] .badge.accent { background: var(--dp-magenta) !important; color: var(--dp-fg) !important; }
+html[data-theme="dopamine"] .badge.pending { background: var(--dp-purple) !important; color: var(--dp-fg) !important; }
+
+html[data-theme="dopamine"] .action-btn,
+html[data-theme="dopamine"] .next-step-btn,
+html[data-theme="dopamine"] .start-engine-btn,
+html[data-theme="dopamine"] .modal-btn,
+html[data-theme="dopamine"] .submit-btn,
+html[data-theme="dopamine"] .send-btn {
+  background: linear-gradient(90deg, var(--dp-magenta), var(--dp-purple), var(--dp-cyan)) !important;
+  background-size: 220% 100% !important;
+  border: 4px solid var(--dp-yellow) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 22px rgba(255, 58, 242, 0.56), 6px 6px 0 var(--dp-cyan), 12px 12px 0 var(--dp-magenta) !important;
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-position 0.25s ease;
+}
+
+html[data-theme="dopamine"] .action-btn:hover:not(:disabled),
+html[data-theme="dopamine"] .next-step-btn:hover:not(:disabled),
+html[data-theme="dopamine"] .start-engine-btn:hover:not(:disabled),
+html[data-theme="dopamine"] .submit-btn:hover:not(:disabled),
+html[data-theme="dopamine"] .send-btn:hover:not(:disabled) {
+  background-position: 100% 0 !important;
+  transform: translate(-1px, -2px) scale(1.04);
+  box-shadow: 0 0 34px rgba(0, 245, 212, 0.68), 8px 8px 0 var(--dp-yellow), 16px 16px 0 var(--dp-magenta) !important;
+}
+
+html[data-theme="dopamine"] .tool-btn,
+html[data-theme="dopamine"] .scroll-down-btn,
+html[data-theme="dopamine"] .hint-close-btn,
+html[data-theme="dopamine"] .theme-switcher .switcher-trigger,
+html[data-theme="dopamine"] .language-switcher .switcher-trigger {
+  background: #19072E !important;
+  border: 3px solid var(--dp-cyan) !important;
+  border-radius: 999px !important;
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0 18px rgba(0, 245, 212, 0.42), 4px 4px 0 var(--dp-magenta) !important;
+}
+
+html[data-theme="dopamine"] .switcher-dropdown {
+  background: #19072E !important;
+  border: 3px solid var(--dp-magenta) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 0 24px rgba(255, 58, 242, 0.52), 6px 6px 0 var(--dp-yellow) !important;
+}
+
+html[data-theme="dopamine"] .switcher-option {
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+}
+
+html[data-theme="dopamine"] .switcher-option:hover,
+html[data-theme="dopamine"] .switcher-option.active {
+  background: var(--dp-yellow) !important;
+  color: #111 !important;
+}
+
+html[data-theme="dopamine"] .view-switcher {
+  background: #19072E !important;
+  border: 3px solid var(--dp-yellow) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 20px rgba(255, 230, 0, 0.28) !important;
+}
+
+html[data-theme="dopamine"] .switch-btn {
+  color: var(--dp-fg) !important;
+  border-radius: 999px !important;
+  font-family: var(--dp-font) !important;
+  font-weight: 900 !important;
+}
+
+html[data-theme="dopamine"] .switch-btn.active {
+  background: linear-gradient(90deg, var(--dp-magenta), var(--dp-cyan)) !important;
+  color: #fff !important;
+}
+
+html[data-theme="dopamine"] .code-input,
+html[data-theme="dopamine"] .input-wrapper,
+html[data-theme="dopamine"] .upload-zone,
+html[data-theme="dopamine"] textarea,
+html[data-theme="dopamine"] input[type="text"],
+html[data-theme="dopamine"] input[type="search"],
+html[data-theme="dopamine"] .chat-input,
+html[data-theme="dopamine"] .survey-input {
+  background: rgba(13, 13, 26, 0.82) !important;
+  border: 3px solid var(--dp-cyan) !important;
+  border-radius: 16px !important;
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-font) !important;
+  box-shadow: inset 0 0 18px rgba(0, 245, 212, 0.13) !important;
+}
+
+html[data-theme="dopamine"] .console-box,
+html[data-theme="dopamine"] .system-logs,
+html[data-theme="dopamine"] .console-logs {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(0, 245, 212, 0.12), transparent 30%),
+    #070712 !important;
+  border-color: var(--dp-cyan) !important;
+  color: var(--dp-fg) !important;
+  font-family: var(--dp-mono) !important;
+}
+
+html[data-theme="dopamine"] .log-entry,
+html[data-theme="dopamine"] .console-line,
+html[data-theme="dopamine"] .api-note,
+html[data-theme="dopamine"] .code-input,
+html[data-theme="dopamine"] code,
+html[data-theme="dopamine"] pre {
+  font-family: var(--dp-mono) !important;
+}
+
+html[data-theme="dopamine"] svg,
+html[data-theme="dopamine"] .icon {
+  filter: drop-shadow(0 0 6px rgba(255, 58, 242, 0.45));
+}
+
+html[data-theme="dopamine"] .description,
+html[data-theme="dopamine"] .detail-desc,
+html[data-theme="dopamine"] .summary,
+html[data-theme="dopamine"] .report-content,
+html[data-theme="dopamine"] p {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+html[data-theme="dopamine"] .graph-container,
+html[data-theme="dopamine"] .graph-canvas,
+html[data-theme="dopamine"] svg.graph-svg {
+  background:
+    radial-gradient(circle, rgba(255, 230, 0, 0.18) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(135deg, #080812, #150A2E) !important;
+}
+
+@media (max-width: 768px) {
+  html[data-theme="dopamine"] .step-card,
+  html[data-theme="dopamine"] .metric-card,
+  html[data-theme="dopamine"] .stat-card,
+  html[data-theme="dopamine"] .agent-card {
+    box-shadow: 5px 5px 0 var(--dp-yellow), 10px 10px 0 var(--dp-magenta) !important;
+  }
+}

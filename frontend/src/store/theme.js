@@ -2,8 +2,8 @@ import { ref } from 'vue'
 
 const STORAGE_KEY = 'theme'
 
-// 可用主题：浅色 / 暗色 / 包豪斯
-export const THEMES = ['light', 'dark', 'bauhaus']
+// 可用主题：浅色 / 暗色 / 包豪斯 / 多巴胺
+export const THEMES = ['light', 'dark', 'bauhaus', 'dopamine']
 
 // 全局主题状态
 const theme = ref('light')

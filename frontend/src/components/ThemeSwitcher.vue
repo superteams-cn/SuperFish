@@ -48,6 +48,12 @@ const icons = {
     h('circle', { cx: 6, cy: 8, r: 3.2 }),
     h('rect', { x: 13, y: 4.8, width: 6.5, height: 6.5 }),
     h('path', { d: 'M12 14 L17 21 L7 21 Z' })
+  ]),
+  // 多巴胺：星星 + 闪光
+  dopamine: () => svg([
+    h('path', { d: 'M12 2.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 15.8 6.8 18.6l1-5.8-4.3-4.1 5.9-.9L12 2.5z' }),
+    h('path', { d: 'M20 3v4' }),
+    h('path', { d: 'M18 5h4' })
   ])
 }
 const iconFor = (t) => icons[t] || icons.light
