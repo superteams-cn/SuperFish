@@ -269,10 +269,11 @@ def build_graph(req: BuildGraphRequest):
             project.graph_build_task_id = None
             project.error = None
 
-        # 获取配置
+        # 获取配置：优先显式入参，否则用当前默认(env 可配)。
+        # 不再回退到 project 中创建时冻结的旧值，使改默认后重建即生效。
         graph_name = req.graph_name or project.name or "SuperFish Graph"
-        chunk_size = req.chunk_size or project.chunk_size or Config.DEFAULT_CHUNK_SIZE
-        chunk_overlap = req.chunk_overlap or project.chunk_overlap or Config.DEFAULT_CHUNK_OVERLAP
+        chunk_size = req.chunk_size or Config.DEFAULT_CHUNK_SIZE
+        chunk_overlap = req.chunk_overlap or Config.DEFAULT_CHUNK_OVERLAP
 
         # 更新项目配置
         project.chunk_size = chunk_size
