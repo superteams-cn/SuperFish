@@ -17,10 +17,11 @@ WEB_PAT="apps/web/node_modules/.bin/.*vite|vite --host"
 
 stop() {
   echo "停止开发进程..."
-  pkill -f "$WORKER_PAT" 2>/dev/null && echo "  ✓ worker 已停" || echo "  · worker 未在运行"
-  pkill -f "uvicorn app.main:app" 2>/dev/null && echo "  ✓ API(uvicorn) 已停" || true
-  pkill -f "run.py" 2>/dev/null && echo "  ✓ API(run.py) 已停" || true
-  pkill -f "$WEB_PAT" 2>/dev/null && echo "  ✓ web(vite) 已停" || echo "  · web 未在运行"
+  # 用 SIGKILL：arq worker 收到 SIGTERM 会先跑完手上的任务才退出，导致残留
+  pkill -9 -f "$WORKER_PAT" 2>/dev/null && echo "  ✓ worker 已停" || echo "  · worker 未在运行"
+  pkill -9 -f "uvicorn app.main:app" 2>/dev/null && echo "  ✓ API(uvicorn) 已停" || true
+  pkill -9 -f "run.py" 2>/dev/null && echo "  ✓ API(run.py) 已停" || true
+  pkill -9 -f "$WEB_PAT" 2>/dev/null && echo "  ✓ web(vite) 已停" || echo "  · web 未在运行"
   # 端口兜底（排除浏览器等非服务进程的占用由调用者自理）
   for p in "$API_PORT" "$WEB_PORT"; do
     pids="$(lsof -ti:"$p" 2>/dev/null || true)"
