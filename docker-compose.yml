@@ -34,7 +34,7 @@ services:
       neo4j:
         condition: service_healthy
     volumes:
-      - ./backend/uploads:/app/backend/uploads
+      - ./apps/api/uploads:/app/apps/api/uploads
 
 volumes:
   neo4j_data:

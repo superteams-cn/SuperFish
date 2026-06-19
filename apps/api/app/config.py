@@ -7,8 +7,8 @@ import os
 from dotenv import load_dotenv
 
 # 加载项目根目录的 .env 文件
-# 路径: SuperFish/.env (相对于 backend/app/config.py)
-project_root_env = os.path.join(os.path.dirname(__file__), '../../.env')
+# 路径: SuperFish/.env (相对于 apps/api/app/config.py，需上溯三级到仓库根)
+project_root_env = os.path.join(os.path.dirname(__file__), '../../../.env')
 
 if os.path.exists(project_root_env):
     load_dotenv(project_root_env, override=True)

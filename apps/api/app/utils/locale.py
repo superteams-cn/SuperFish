@@ -1,11 +1,25 @@
 import json
 import os
-import threading
-from flask import request, has_request_context
+import contextvars
 
-_thread_local = threading.local()
+# 当前请求/线程的语言。使用 contextvars 以同时兼容：
+# 1) FastAPI 异步请求（由依赖项在请求开始时 set_locale）
+# 2) 后台线程（线程入口处显式 set_locale 传入捕获的语言）
+_current_locale: "contextvars.ContextVar[str | None]" = contextvars.ContextVar(
+    'current_locale', default=None
+)
 
-_locales_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'locales')
+# 过渡期：report/simulation 仍是 Flask 蓝图（经 WSGI 挂载），
+# 这些路由通过 Flask 请求头获取语言。全部迁移到 FastAPI 后可删除此分支。
+try:
+    from flask import request, has_request_context  # type: ignore
+    _HAS_FLASK = True
+except Exception:  # pragma: no cover - flask 卸载后走此分支
+    _HAS_FLASK = False
+
+_locales_dir = os.path.join(
+    os.path.dirname(__file__), '..', '..', '..', '..', 'packages', 'shared', 'locales'
+)
 
 # Load language registry
 with open(os.path.join(_locales_dir, 'languages.json'), 'r', encoding='utf-8') as f:
@@ -20,16 +34,22 @@ for filename in os.listdir(_locales_dir):
             _translations[locale_name] = json.load(f)
 
 
+def coerce_locale(raw: str | None) -> str:
+    """把任意输入归一化为受支持的语言，缺省回退中文。"""
+    return raw if raw in _translations else 'zh'
+
+
 def set_locale(locale: str):
-    """Set locale for current thread. Call at the start of background threads."""
-    _thread_local.locale = locale
+    """设置当前上下文的语言。在后台线程入口处调用以继承请求语言。"""
+    _current_locale.set(locale)
 
 
 def get_locale() -> str:
-    if has_request_context():
-        raw = request.headers.get('Accept-Language', 'zh')
-        return raw if raw in _translations else 'zh'
-    return getattr(_thread_local, 'locale', 'zh')
+    # 优先使用 Flask 请求头（过渡期挂载的旧蓝图）
+    if _HAS_FLASK and has_request_context():
+        return coerce_locale(request.headers.get('Accept-Language', 'zh'))
+    # 否则使用 contextvar（FastAPI 请求 / 后台线程）
+    return _current_locale.get() or 'zh'
 
 
 def t(key: str, **kwargs) -> str:

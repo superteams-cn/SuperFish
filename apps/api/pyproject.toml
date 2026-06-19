@@ -9,7 +9,12 @@ authors = [
 ]
 
 dependencies = [
-    # 核心框架
+    # 核心框架（FastAPI）
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    # 过渡期遗留框架：simulation / report 仍为 Flask 蓝图，经 WSGI 挂载，
+    # 待全部迁移到 FastAPI 后移除这两项依赖。
     "flask>=3.0.0",
     "flask-cors>=6.0.0",
     # LLM 相关

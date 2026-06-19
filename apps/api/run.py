@@ -1,5 +1,5 @@
 """
-SuperFish Backend 启动入口
+SuperFish Backend 启动入口（FastAPI + uvicorn）
 """
 
 import os
@@ -15,10 +15,11 @@ if sys.platform == 'win32':
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# 添加项目根目录到路径
+# 添加 apps/api 目录到路径，确保可导入 app 包
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app import create_app
+import uvicorn
+
 from app.config import Config
 
 
@@ -32,19 +33,20 @@ def main():
             print(f"  - {err}")
         print("\n请检查 .env 文件中的配置")
         sys.exit(1)
-    
-    # 创建应用
-    app = create_app()
-    
-    # 获取运行配置
+
+    # 获取运行配置（兼容历史 FLASK_* 环境变量名）
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 5001))
     debug = Config.DEBUG
-    
-    # 启动服务
-    app.run(host=host, port=port, debug=debug, threaded=True)
+
+    # 启动服务。debug 时开启热重载（需以导入字符串方式传入 app）
+    uvicorn.run(
+        "app.main:app",
+        host=host,
+        port=port,
+        reload=debug,
+    )
 
 
 if __name__ == '__main__':
     main()
-

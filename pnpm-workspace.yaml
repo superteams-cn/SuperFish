@@ -1,0 +1,4 @@
+# pnpm 工作区：声明 monorepo 中的子包位置
+packages:
+  - "apps/*"
+  - "packages/*"

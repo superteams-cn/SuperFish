@@ -1,0 +1,11 @@
+{
+  "name": "@superfish/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SuperFish 后端服务（FastAPI + uv），通过 pnpm/turbo 统一编排",
+  "scripts": {
+    "dev": "uv run python run.py",
+    "setup": "uv sync",
+    "build": "echo \"后端无需构建步骤\""
+  }
+}
