@@ -8,7 +8,9 @@ import { EmptyState } from '@/components/common/EmptyState'
 
 // ===== 图谱数据类型（与后端 /api/graph/data 返回结构一致）=====
 export interface GraphNode {
-  id: string
+  // 后端实际返回 uuid，旧数据可能用 id，两者择一
+  uuid?: string
+  id?: string
   name?: string
   labels?: string[]
   [key: string]: unknown
@@ -91,7 +93,7 @@ export function GraphPanel({ graphData, loading, onRefresh, onToggleMaximize }: 
     if (nodesData.length === 0) return
 
     const nodes: SimNode[] = nodesData.map((n) => ({
-      id: n.id,
+      id: n.uuid ?? n.id ?? '',
       name: n.name || 'Unnamed',
       type: nodeType(n),
     }))
@@ -106,12 +108,13 @@ export function GraphPanel({ graphData, loading, onRefresh, onToggleMaximize }: 
 
     const root = svg.append('g')
 
-    // 缩放/平移
+    // 缩放/平移：放缓滚轮步进，避免触控板/滚轮跳变；禁用双击缩放（与拖拽冲突）
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 4])
+      .wheelDelta((event) => -event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.0015))
       .on('zoom', (event) => root.attr('transform', event.transform))
-    svg.call(zoom)
+    svg.call(zoom).on('dblclick.zoom', null)
 
     const simulation = d3
       .forceSimulation<SimNode>(nodes)
