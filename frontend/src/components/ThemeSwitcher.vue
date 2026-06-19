@@ -54,6 +54,19 @@ const icons = {
     h('path', { d: 'M12 2.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 15.8 6.8 18.6l1-5.8-4.3-4.1 5.9-.9L12 2.5z' }),
     h('path', { d: 'M20 3v4' }),
     h('path', { d: 'M18 5h4' })
+  ]),
+  // 数字黄金暗域：金币与精密刻线
+  digitalGold: () => svg([
+    h('circle', { cx: 12, cy: 12, r: 8.5 }),
+    h('path', { d: 'M10 7h3.2a2.1 2.1 0 0 1 0 4.2H10z' }),
+    h('path', { d: 'M10 11.2h3.8a2.4 2.4 0 0 1 0 4.8H10z' }),
+    h('path', { d: 'M10 7v10' }),
+    h('path', { d: 'M8.5 7h2' }),
+    h('path', { d: 'M8.5 17h2' }),
+    h('path', { d: 'M11.5 5.5v2' }),
+    h('path', { d: 'M13.5 5.5v2' }),
+    h('path', { d: 'M11.5 16.5v2' }),
+    h('path', { d: 'M13.5 16.5v2' })
   ])
 }
 const iconFor = (t) => icons[t] || icons.light
