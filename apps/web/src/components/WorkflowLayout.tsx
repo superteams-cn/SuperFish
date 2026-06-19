@@ -22,6 +22,8 @@ interface WorkflowLayoutProps {
   graphData: GraphData | null
   graphLoading?: boolean
   onRefreshGraph?: () => void
+  /** 初始布局模式，默认 split */
+  initialViewMode?: ViewMode
   /** 右侧工作区内容 */
   children: ReactNode
 }
@@ -38,11 +40,12 @@ export function WorkflowLayout({
   graphData,
   graphLoading,
   onRefreshGraph,
+  initialViewMode = 'split',
   children,
 }: WorkflowLayoutProps) {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const [viewMode, setViewMode] = useState<ViewMode>('split')
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode)
 
   const toggleMaximize = (target: ViewMode) => setViewMode((v) => (v === target ? 'split' : target))
 
