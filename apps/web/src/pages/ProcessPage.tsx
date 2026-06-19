@@ -44,6 +44,8 @@ export default function ProcessPage() {
   const graphPollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const initedRef = useRef(false)
   const buildMsgRef = useRef<string | undefined>(undefined)
+  // 上次图谱数据签名（节点:边），用于跳过无变化的刷新，避免无谓重渲染
+  const lastGraphSigRef = useRef<string>('')
   // 通过 ref 引用 startBuildGraph，打破 handleMissingTask ↔ startBuildGraph 的循环依赖
   const startBuildGraphRef = useRef<((force?: boolean) => Promise<void>) | null>(null)
 
@@ -106,10 +108,15 @@ export default function ProcessPage() {
       if (projRes.success && projRes.data.graph_id) {
         const gRes = await getGraphData(projRes.data.graph_id)
         if (gRes.success) {
-          setGraphData(gRes.data)
           const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0
           const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0
-          addLog(t('log.graphDataRefreshed', { nodes: nodeCount, edges: edgeCount }))
+          const sig = `${nodeCount}:${edgeCount}`
+          // 数据无变化则跳过：不更新 state、不打日志，避免 GraphPanel 重跑布局/重置缩放
+          if (sig !== lastGraphSigRef.current) {
+            lastGraphSigRef.current = sig
+            setGraphData(gRes.data)
+            addLog(t('log.graphDataRefreshed', { nodes: nodeCount, edges: edgeCount }))
+          }
         }
       }
     } catch (e) {

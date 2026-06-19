@@ -24,6 +24,8 @@ export default function SimulationRunPage() {
   const initedRef = useRef(false)
   const graphRefreshTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const projectRef = useRef<ProjectData | null>(null)
+  // 上次图谱签名（节点:边），无变化则跳过刷新，避免重渲染
+  const lastGraphSigRef = useRef<string>('')
 
   const isSimulating = status === 'processing'
 
@@ -50,8 +52,17 @@ export default function SimulationRunPage() {
       try {
         const res = await getGraphData(graphId)
         if (res.success) {
-          setGraphData(res.data)
-          if (!silent) addLog(t('log.graphDataLoadSuccess'))
+          const nodeCount = res.data.node_count || res.data.nodes?.length || 0
+          const edgeCount = res.data.edge_count || res.data.edges?.length || 0
+          const sig = `${nodeCount}:${edgeCount}`
+          // 数据无变化则跳过更新，避免无谓重渲染（静默刷新尤其重要）
+          if (sig !== lastGraphSigRef.current) {
+            lastGraphSigRef.current = sig
+            setGraphData(res.data)
+            if (!silent) addLog(t('log.graphDataLoadSuccess'))
+          } else if (!silent) {
+            addLog(t('log.graphDataLoadSuccess'))
+          }
         }
       } catch (err) {
         addLog(t('log.graphLoadFailed', { error: (err as Error).message }))
