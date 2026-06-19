@@ -64,7 +64,7 @@ export function SurveyPanel({
               )}
             >
               <div className="truncate font-medium">{p.username || `Agent ${idx}`}</div>
-              <div className="truncate text-[10px] text-muted-foreground">{p.profession}</div>
+              <div className="text-muted-foreground truncate text-[10px]">{p.profession}</div>
             </button>
           ))}
         </div>
@@ -76,7 +76,9 @@ export function SurveyPanel({
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           rows={3}
-          placeholder={t('step5.surveyPlaceholder', { defaultValue: '输入要向所选 Agent 提出的问题' })}
+          placeholder={t('step5.surveyPlaceholder', {
+            defaultValue: '输入要向所选 Agent 提出的问题',
+          })}
           className="resize-none"
         />
         <Button
@@ -101,7 +103,7 @@ export function SurveyPanel({
               <div className="mb-1 flex items-baseline gap-2">
                 <span className="text-sm font-semibold">{r.agent_name}</span>
                 {r.profession && (
-                  <span className="text-[10px] text-muted-foreground">{r.profession}</span>
+                  <span className="text-muted-foreground text-[10px]">{r.profession}</span>
                 )}
               </div>
               <Markdown content={r.answer} className="text-[13px]" />

@@ -33,30 +33,37 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
   const toggle = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
 
   return (
-    <div className="space-y-2 border-l border-muted pl-4">
+    <div className="border-muted space-y-2 border-l pl-4">
       {logs.map((log, idx) => {
         const key = log.timestamp || String(idx)
         const isMilestone = log.action === 'section_complete' || log.action === 'report_complete'
         const detail = log.details || {}
         const expandable =
-          log.action === 'tool_call' || log.action === 'tool_result' || log.action === 'llm_response'
+          log.action === 'tool_call' ||
+          log.action === 'tool_result' ||
+          log.action === 'llm_response'
         const isOpen = expanded.has(key)
 
         return (
           <div key={key} className="relative">
             <span
               className={cn(
-                'absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background',
-                isMilestone ? 'bg-green-500' : log.action === 'tool_call' ? 'bg-purple-500' : 'bg-[#FF5722]',
+                'border-background absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2',
+                isMilestone
+                  ? 'bg-green-500'
+                  : log.action === 'tool_call'
+                    ? 'bg-purple-500'
+                    : 'bg-[#FF5722]',
               )}
             />
-            <div className="rounded-md border bg-card p-2.5">
+            <div className="bg-card rounded-md border p-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold">
                   {ACTION_LABELS[log.action] || log.action}
@@ -67,7 +74,7 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
                   )}
                 </span>
                 {typeof log.elapsed_seconds === 'number' && (
-                  <span className="font-mono text-[10px] text-muted-foreground">
+                  <span className="text-muted-foreground font-mono text-[10px]">
                     {log.elapsed_seconds.toFixed(1)}s
                   </span>
                 )}
@@ -75,15 +82,15 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
 
               {/* 概要文案 */}
               {detail.message && (
-                <p className="mt-1 text-[11px] text-muted-foreground">{detail.message}</p>
+                <p className="text-muted-foreground mt-1 text-[11px]">{detail.message}</p>
               )}
               {log.action === 'planning_complete' && detail.outline && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-[11px]">
                   {detail.outline.sections?.length || 0} sections planned
                 </p>
               )}
               {log.action === 'section_start' && log.section_title && (
-                <p className="mt-1 text-[11px] text-muted-foreground">{log.section_title}</p>
+                <p className="text-muted-foreground mt-1 text-[11px]">{log.section_title}</p>
               )}
 
               {/* 可展开详情 */}
@@ -98,7 +105,7 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
                     {isOpen ? '收起' : '展开详情'}
                   </Button>
                   {isOpen && (
-                    <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-[10px] leading-relaxed">
+                    <pre className="bg-muted mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded p-2 text-[10px] leading-relaxed">
                       {detail.response ||
                         (detail.parameters ? JSON.stringify(detail.parameters, null, 2) : '') ||
                         (detail.result ? JSON.stringify(detail.result, null, 2) : '')}

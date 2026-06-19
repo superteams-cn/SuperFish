@@ -23,7 +23,18 @@ interface Step3Props {
 }
 
 const TWITTER_ACTIONS = ['POST', 'LIKE', 'REPOST', 'QUOTE', 'FOLLOW', 'IDLE']
-const REDDIT_ACTIONS = ['POST', 'COMMENT', 'LIKE', 'DISLIKE', 'SEARCH', 'TREND', 'FOLLOW', 'MUTE', 'REFRESH', 'IDLE']
+const REDDIT_ACTIONS = [
+  'POST',
+  'COMMENT',
+  'LIKE',
+  'DISLIKE',
+  'SEARCH',
+  'TREND',
+  'FOLLOW',
+  'MUTE',
+  'REFRESH',
+  'IDLE',
+]
 
 /** 步骤三：模拟运行（双平台进度 + 实时动作时间线 + 生成报告）。 */
 export function Step3Simulation({
@@ -58,8 +69,14 @@ export function Step3Simulation({
     [minutesPerRound],
   )
 
-  const twitterCount = useMemo(() => actions.filter((a) => a.platform === 'twitter').length, [actions])
-  const redditCount = useMemo(() => actions.filter((a) => a.platform === 'reddit').length, [actions])
+  const twitterCount = useMemo(
+    () => actions.filter((a) => a.platform === 'twitter').length,
+    [actions],
+  )
+  const redditCount = useMemo(
+    () => actions.filter((a) => a.platform === 'reddit').length,
+    [actions],
+  )
 
   const stopPolling = useCallback(() => {
     if (statusTimer.current) clearInterval(statusTimer.current)
@@ -182,7 +199,16 @@ export function Step3Simulation({
       addLog(t('log.startException', { error: (err as Error).message }))
       onUpdateStatus('error')
     }
-  }, [addLog, fetchRunStatus, fetchRunStatusDetail, maxRounds, onUpdateStatus, simulationId, stopPolling, t])
+  }, [
+    addLog,
+    fetchRunStatus,
+    fetchRunStatusDetail,
+    maxRounds,
+    onUpdateStatus,
+    simulationId,
+    stopPolling,
+    t,
+  ])
 
   useEffect(() => {
     if (initedRef.current) return
@@ -216,9 +242,9 @@ export function Step3Simulation({
   const totalRounds = runStatus.total_rounds || maxRounds || '-'
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/30">
+    <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
       {/* 顶部控制栏 */}
-      <div className="flex items-center gap-3 border-b bg-card p-3">
+      <div className="bg-card flex items-center gap-3 border-b p-3">
         <div className="flex flex-1 gap-3">
           <PlatformStatusCard
             name={t('step3.platformTwitterName')}
@@ -251,7 +277,7 @@ export function Step3Simulation({
       {/* 动作时间线 */}
       <div className="flex-1 overflow-y-auto p-4">
         {actions.length > 0 && (
-          <div className="mb-3 flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="text-muted-foreground mb-3 flex items-center gap-3 text-xs">
             <span>
               {t('step3.totalEvents')}: <span className="font-mono">{actions.length}</span>
             </span>
@@ -261,13 +287,13 @@ export function Step3Simulation({
             </span>
           </div>
         )}
-        <div className="space-y-2 border-l border-muted pl-1">
+        <div className="border-muted space-y-2 border-l pl-1">
           {actions.map((action) => (
             <ActionCard key={action._uniqueId || action.id} action={action} />
           ))}
         </div>
         {actions.length === 0 && (
-          <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 text-sm">
             <span className="h-3 w-3 animate-ping rounded-full bg-[#FF5722]" />
             {t('step3.waitingForActions')}
           </div>

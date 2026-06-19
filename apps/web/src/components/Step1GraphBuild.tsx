@@ -29,9 +29,13 @@ export function Step1GraphBuild({
   systemLogs,
 }: Step1Props) {
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/30">
+    <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
-        <OntologyCard phase={currentPhase} projectData={projectData} ontologyProgress={ontologyProgress} />
+        <OntologyCard
+          phase={currentPhase}
+          projectData={projectData}
+          ontologyProgress={ontologyProgress}
+        />
         <GraphBuildCard
           phase={currentPhase}
           projectData={projectData}

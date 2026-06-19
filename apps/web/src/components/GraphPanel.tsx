@@ -49,8 +49,16 @@ function nodeType(node: GraphNode): string {
 }
 
 const COLORS = [
-  '#FF5722', '#2196F3', '#4CAF50', '#9C27B0', '#FF9800',
-  '#00BCD4', '#E91E63', '#3F51B5', '#8BC34A', '#795548',
+  '#FF5722',
+  '#2196F3',
+  '#4CAF50',
+  '#9C27B0',
+  '#FF9800',
+  '#00BCD4',
+  '#E91E63',
+  '#3F51B5',
+  '#8BC34A',
+  '#795548',
 ]
 
 /** 知识图谱可视化面板（d3 力导向图）。 */
@@ -88,9 +96,7 @@ export function GraphPanel({ graphData, loading, onRefresh, onToggleMaximize }: 
     }))
     const nodeIds = new Set(nodes.map((n) => n.id))
     const links: SimLink[] = edgesData
-      .filter(
-        (e) => nodeIds.has(e.source_node_uuid) && nodeIds.has(e.target_node_uuid),
-      )
+      .filter((e) => nodeIds.has(e.source_node_uuid) && nodeIds.has(e.target_node_uuid))
       .map((e) => ({
         source: e.source_node_uuid,
         target: e.target_node_uuid,
@@ -110,7 +116,10 @@ export function GraphPanel({ graphData, loading, onRefresh, onToggleMaximize }: 
       .forceSimulation<SimNode>(nodes)
       .force(
         'link',
-        d3.forceLink<SimNode, SimLink>(links).id((d) => d.id).distance(120),
+        d3
+          .forceLink<SimNode, SimLink>(links)
+          .id((d) => d.id)
+          .distance(120),
       )
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2))
@@ -183,7 +192,7 @@ export function GraphPanel({ graphData, loading, onRefresh, onToggleMaximize }: 
   const hasData = (graphData?.nodes?.length ?? 0) > 0
 
   return (
-    <div ref={containerRef} className="relative h-full w-full bg-muted/30">
+    <div ref={containerRef} className="bg-muted/30 relative h-full w-full">
       {/* 工具栏 */}
       <div className="absolute right-3 top-3 z-10 flex gap-2">
         <Button
@@ -209,7 +218,7 @@ export function GraphPanel({ graphData, loading, onRefresh, onToggleMaximize }: 
 
       {/* 图例 */}
       {hasData && typeColors.size > 0 && (
-        <div className="absolute left-3 top-3 z-10 max-w-[200px] rounded-md border bg-background/90 p-2 text-xs shadow-sm">
+        <div className="bg-background/90 absolute left-3 top-3 z-10 max-w-[200px] rounded-md border p-2 text-xs shadow-sm">
           {Array.from(typeColors.entries()).map(([type, color]) => (
             <div key={type} className="flex items-center gap-2 py-0.5">
               <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
@@ -219,25 +228,28 @@ export function GraphPanel({ graphData, loading, onRefresh, onToggleMaximize }: 
         </div>
       )}
 
-      <svg ref={svgRef} className="h-full w-full text-foreground" />
+      <svg ref={svgRef} className="text-foreground h-full w-full" />
 
       {/* 空状态 */}
       {!hasData && !loading && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+        <div className="text-muted-foreground absolute inset-0 flex items-center justify-center text-sm">
           {t('graph.noData', { defaultValue: '暂无图谱数据' })}
         </div>
       )}
 
       {/* 节点详情 */}
       {selected && (
-        <div className="absolute bottom-3 left-3 z-10 w-64 rounded-md border bg-background p-3 shadow-md">
+        <div className="bg-background absolute bottom-3 left-3 z-10 w-64 rounded-md border p-3 shadow-md">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold">{selected.name}</span>
-            <button onClick={() => setSelected(null)} className="text-muted-foreground hover:text-foreground">
+            <button
+              onClick={() => setSelected(null)}
+              className="text-muted-foreground hover:text-foreground"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex items-center gap-2 text-xs">
             <span
               className="h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: typeColors.get(selected.type) || '#999' }}

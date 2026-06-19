@@ -57,7 +57,7 @@ export function WorkflowLayout({
     viewMode === 'workbench' ? 'w-full' : viewMode === 'graph' ? 'w-0 opacity-0' : 'w-1/2'
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="bg-background flex h-screen flex-col overflow-hidden">
       {/* 头部 */}
       <header className="relative z-10 flex h-[60px] items-center justify-between border-b px-6">
         <Brand />
@@ -78,11 +78,11 @@ export function WorkflowLayout({
           <LanguageSwitcher />
           <Separator orientation="vertical" className="h-3.5" />
           <div className="flex items-center gap-2 text-sm">
-            <span className="font-mono font-bold text-muted-foreground">Step {step}/5</span>
+            <span className="text-muted-foreground font-mono font-bold">Step {step}/5</span>
             {stepName && <span className="font-bold">{stepName}</span>}
           </div>
           <Separator orientation="vertical" className="h-3.5" />
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="text-muted-foreground flex items-center gap-2 text-xs">
             <StatusDot variant={statusVariant} />
             {statusText}
           </span>
@@ -91,7 +91,9 @@ export function WorkflowLayout({
 
       {/* 内容区 */}
       <main className="relative flex flex-1 overflow-hidden">
-        <div className={cn('h-full overflow-hidden border-r transition-all duration-300', leftWidth)}>
+        <div
+          className={cn('h-full overflow-hidden border-r transition-all duration-300', leftWidth)}
+        >
           <GraphPanel
             graphData={graphData}
             loading={graphLoading}

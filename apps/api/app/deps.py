@@ -4,7 +4,7 @@ FastAPI 公共依赖项
 
 from fastapi import Header
 
-from .utils.locale import set_locale, coerce_locale
+from .utils.locale import coerce_locale, set_locale
 
 
 async def use_locale(accept_language: str | None = Header(default=None)):

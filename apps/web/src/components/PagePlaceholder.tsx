@@ -23,7 +23,7 @@ export function PagePlaceholder({ title, detail }: PagePlaceholderProps) {
           <CardDescription>该页面正在从 Vue 迁移到 React，敬请期待。</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
+          {detail && <p className="text-muted-foreground text-sm">{detail}</p>}
           <Button asChild variant="outline">
             <Link to="/">
               <ArrowLeft className="h-4 w-4" />

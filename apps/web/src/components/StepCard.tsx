@@ -38,13 +38,13 @@ export function StepCard({
   return (
     <div
       className={cn(
-        'relative rounded-lg border bg-card p-5 shadow-sm transition',
+        'bg-card relative rounded-lg border p-5 shadow-sm transition',
         active && 'border-[#FF5722] shadow-md',
       )}
     >
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-xl font-bold text-muted-foreground">{num}</span>
+          <span className="text-muted-foreground font-mono text-xl font-bold">{num}</span>
           <span className="text-sm font-semibold">{title}</span>
         </div>
         {statusText && (
@@ -53,9 +53,9 @@ export function StepCard({
           </span>
         )}
       </div>
-      {apiNote && <p className="mb-2 font-mono text-[10px] text-muted-foreground">{apiNote}</p>}
+      {apiNote && <p className="text-muted-foreground mb-2 font-mono text-[10px]">{apiNote}</p>}
       {description && (
-        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">{description}</p>
+        <p className="text-muted-foreground mb-4 text-xs leading-relaxed">{description}</p>
       )}
       {children}
     </div>

@@ -19,7 +19,11 @@ interface Props {
 function formatTime(ts?: string) {
   if (!ts) return ''
   try {
-    return new Date(ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
+    return new Date(ts).toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   } catch {
     return ''
   }
@@ -46,21 +50,24 @@ export function ChatPanel({ title, subtitle, messages, isSending, onSend }: Prop
     <div className="flex h-full flex-col">
       <div className="border-b px-4 py-3">
         <h3 className="text-sm font-semibold">{title}</h3>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+        {subtitle && <p className="text-muted-foreground text-xs">{subtitle}</p>}
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {messages.length === 0 && (
-          <p className="mt-8 text-center text-sm text-muted-foreground">
+          <p className="text-muted-foreground mt-8 text-center text-sm">
             {t('step5.startConversation', { defaultValue: '开始对话吧' })}
           </p>
         )}
         {messages.map((msg, idx) => (
-          <div key={idx} className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+          <div
+            key={idx}
+            className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
+          >
             <div
               className={cn(
                 'max-w-[80%] rounded-lg px-3 py-2 text-sm',
-                msg.role === 'user' ? 'bg-[#FF5722] text-white' : 'border bg-card',
+                msg.role === 'user' ? 'bg-[#FF5722] text-white' : 'bg-card border',
               )}
             >
               {msg.role === 'assistant' ? (
@@ -81,7 +88,7 @@ export function ChatPanel({ title, subtitle, messages, isSending, onSend }: Prop
         ))}
         {isSending && (
           <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground">
+            <div className="bg-card text-muted-foreground flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
               {t('common.processing')}
             </div>
@@ -105,7 +112,12 @@ export function ChatPanel({ title, subtitle, messages, isSending, onSend }: Prop
             placeholder={t('step5.inputPlaceholder', { defaultValue: '输入消息，回车发送' })}
             className="flex-1 resize-none"
           />
-          <Button size="icon" className="h-auto" onClick={send} disabled={isSending || !input.trim()}>
+          <Button
+            size="icon"
+            className="h-auto"
+            onClick={send}
+            disabled={isSending || !input.trim()}
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>

@@ -80,7 +80,7 @@ export function HistoryDatabase() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
         <Loader2 className="h-4 w-4 animate-spin" />
         {t('history.loadingText')}
       </div>
@@ -93,7 +93,7 @@ export function HistoryDatabase() {
     <section className="mt-12">
       <div className="mb-4 flex items-center gap-3">
         <Separator className="flex-1" />
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
           {t('history.title')}
         </span>
         <Separator className="flex-1" />
@@ -104,25 +104,29 @@ export function HistoryDatabase() {
           <button
             key={p.simulation_id}
             onClick={() => setSelected(p)}
-            className="rounded-lg border bg-card p-4 text-left transition hover:border-[#FF5722] hover:shadow-md"
+            className="bg-card rounded-lg border p-4 text-left transition hover:border-[#FF5722] hover:shadow-md"
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-xs font-bold text-muted-foreground">
+              <span className="text-muted-foreground font-mono text-xs font-bold">
                 {formatSimId(p.simulation_id)}
               </span>
               <div className="flex gap-1 text-xs">
-                <span className={p.project_id ? 'text-[#FF5722]' : 'text-muted-foreground/40'}>◇</span>
+                <span className={p.project_id ? 'text-[#FF5722]' : 'text-muted-foreground/40'}>
+                  ◇
+                </span>
                 <span className="text-[#FF5722]">◈</span>
-                <span className={p.report_id ? 'text-[#FF5722]' : 'text-muted-foreground/40'}>◆</span>
+                <span className={p.report_id ? 'text-[#FF5722]' : 'text-muted-foreground/40'}>
+                  ◆
+                </span>
               </div>
             </div>
             <h3 className="mb-1 truncate text-sm font-semibold">
               {truncate(p.simulation_requirement, 20) || t('history.untitledSimulation')}
             </h3>
-            <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+            <p className="text-muted-foreground mb-3 line-clamp-2 text-xs">
               {truncate(p.simulation_requirement, 55)}
             </p>
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <div className="text-muted-foreground flex items-center justify-between text-[10px]">
               <span>{formatDateTime(p.created_at)}</span>
               <span>{rounds(p)}</span>
             </div>
@@ -136,18 +140,20 @@ export function HistoryDatabase() {
           {selected && (
             <>
               <DialogHeader>
-                <DialogTitle className="font-mono text-sm">{formatSimId(selected.simulation_id)}</DialogTitle>
+                <DialogTitle className="font-mono text-sm">
+                  {formatSimId(selected.simulation_id)}
+                </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                  <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
                     {t('history.simRequirement')}
                   </div>
                   <p className="text-sm">{selected.simulation_requirement || t('common.none')}</p>
                 </div>
                 {!!selected.files?.length && (
                   <div>
-                    <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                    <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase">
                       {t('history.relatedFiles')}
                     </div>
                     <div className="space-y-1">

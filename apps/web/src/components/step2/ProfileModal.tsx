@@ -27,20 +27,30 @@ export function ProfileModal({ profile, onClose }: Props) {
             <DialogHeader>
               <DialogTitle className="flex items-baseline gap-2">
                 {profile.username}
-                <span className="font-mono text-xs font-normal text-muted-foreground">@{profile.name}</span>
+                <span className="text-muted-foreground font-mono text-xs font-normal">
+                  @{profile.name}
+                </span>
               </DialogTitle>
-              <span className="text-xs text-muted-foreground">{profile.profession}</span>
+              <span className="text-muted-foreground text-xs">{profile.profession}</span>
             </DialogHeader>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Info label={t('step2.profileModalAge')} value={`${profile.age ?? '-'} ${t('step2.yearsOld')}`} />
-              <Info label={t('step2.profileModalGender')} value={genderMap[profile.gender ?? ''] || profile.gender || '-'} />
+              <Info
+                label={t('step2.profileModalAge')}
+                value={`${profile.age ?? '-'} ${t('step2.yearsOld')}`}
+              />
+              <Info
+                label={t('step2.profileModalGender')}
+                value={genderMap[profile.gender ?? ''] || profile.gender || '-'}
+              />
               <Info label={t('step2.profileModalCountry')} value={profile.country || '-'} />
               <Info label={t('step2.profileModalMbti')} value={profile.mbti || '-'} />
             </div>
 
             <Section label={t('step2.profileModalBio')}>
-              <p className="text-xs leading-relaxed text-foreground/80">{profile.bio || t('step2.noBio')}</p>
+              <p className="text-foreground/80 text-xs leading-relaxed">
+                {profile.bio || t('step2.noBio')}
+              </p>
             </Section>
 
             {!!profile.interested_topics?.length && (
@@ -57,7 +67,7 @@ export function ProfileModal({ profile, onClose }: Props) {
 
             {profile.persona && (
               <Section label={t('step2.profileModalPersona')}>
-                <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-[11px] leading-relaxed text-foreground/80">
+                <p className="bg-muted/50 text-foreground/80 whitespace-pre-wrap rounded-md p-3 text-[11px] leading-relaxed">
                   {profile.persona}
                 </p>
               </Section>
@@ -72,7 +82,7 @@ export function ProfileModal({ profile, onClose }: Props) {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="block text-[10px] text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground block text-[10px]">{label}</span>
       <span className="text-sm font-medium">{value}</span>
     </div>
   )
@@ -81,7 +91,7 @@ function Info({ label, value }: { label: string; value: string }) {
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <span className="mb-2 block text-[10px] font-semibold text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground mb-2 block text-[10px] font-semibold">{label}</span>
       {children}
     </div>
   )

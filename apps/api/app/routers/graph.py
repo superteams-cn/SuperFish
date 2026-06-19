@@ -6,29 +6,29 @@
 """
 
 import os
-import traceback
 import threading
+import traceback
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
 from ..config import Config
 from ..deps import use_locale
+from ..models.project import ProjectManager, ProjectStatus
+from ..models.task import TaskManager, TaskStatus
 from ..schemas.graph import BuildGraphRequest
-from ..services.ontology_generator import OntologyGenerator
 from ..services.graph_builder import GraphBuilderService
+from ..services.ontology_generator import OntologyGenerator
 from ..services.text_processor import TextProcessor
 from ..utils.file_parser import FileParser
+from ..utils.locale import get_locale, set_locale, t
 from ..utils.logger import get_logger
-from ..utils.locale import t, get_locale, set_locale
-from ..models.task import TaskManager, TaskStatus
-from ..models.project import ProjectManager, ProjectStatus
 
 # 整个图谱路由统一在请求开始时解析语言
 router = APIRouter(dependencies=[Depends(use_locale)])
 
 # 获取日志器
-logger = get_logger('superfish.api')
+logger = get_logger("superfish.api")
 
 
 def _error(message: str, status: int, **extra) -> JSONResponse:
@@ -40,17 +40,18 @@ def _error(message: str, status: int, **extra) -> JSONResponse:
 
 def allowed_file(filename: str) -> bool:
     """检查文件扩展名是否允许"""
-    if not filename or '.' not in filename:
+    if not filename or "." not in filename:
         return False
-    ext = os.path.splitext(filename)[1].lower().lstrip('.')
+    ext = os.path.splitext(filename)[1].lower().lstrip(".")
     return ext in Config.ALLOWED_EXTENSIONS
 
 
 # ============== 项目管理接口 ==============
 
+
 # 注意：/project/list 必须声明在 /project/{project_id} 之前，
 # 否则 "list" 会被当作 project_id 捕获。
-@router.get('/project/list')
+@router.get("/project/list")
 def list_projects(limit: int = 50):
     """列出所有项目"""
     projects = ProjectManager.list_projects(limit=limit)
@@ -61,30 +62,30 @@ def list_projects(limit: int = 50):
     }
 
 
-@router.get('/project/{project_id}')
+@router.get("/project/{project_id}")
 def get_project(project_id: str):
     """获取项目详情"""
     project = ProjectManager.get_project(project_id)
     if not project:
-        return _error(t('api.projectNotFound', id=project_id), 404)
+        return _error(t("api.projectNotFound", id=project_id), 404)
     return {"success": True, "data": project.to_dict()}
 
 
-@router.delete('/project/{project_id}')
+@router.delete("/project/{project_id}")
 def delete_project(project_id: str):
     """删除项目"""
     success = ProjectManager.delete_project(project_id)
     if not success:
-        return _error(t('api.projectDeleteFailed', id=project_id), 404)
-    return {"success": True, "message": t('api.projectDeleted', id=project_id)}
+        return _error(t("api.projectDeleteFailed", id=project_id), 404)
+    return {"success": True, "message": t("api.projectDeleted", id=project_id)}
 
 
-@router.post('/project/{project_id}/reset')
+@router.post("/project/{project_id}/reset")
 def reset_project(project_id: str):
     """重置项目状态（用于重新构建图谱）"""
     project = ProjectManager.get_project(project_id)
     if not project:
-        return _error(t('api.projectNotFound', id=project_id), 404)
+        return _error(t("api.projectNotFound", id=project_id), 404)
 
     # 重置到本体已生成状态
     if project.ontology:
@@ -99,19 +100,20 @@ def reset_project(project_id: str):
 
     return {
         "success": True,
-        "message": t('api.projectReset', id=project_id),
+        "message": t("api.projectReset", id=project_id),
         "data": project.to_dict(),
     }
 
 
 # ============== 接口1：上传文件并生成本体 ==============
 
-@router.post('/ontology/generate')
+
+@router.post("/ontology/generate")
 async def generate_ontology(
     files: list[UploadFile] = File(default=[]),
-    simulation_requirement: str = Form(default=''),
-    project_name: str = Form(default='Unnamed Project'),
-    additional_context: str = Form(default=''),
+    simulation_requirement: str = Form(default=""),
+    project_name: str = Form(default="Unnamed Project"),
+    additional_context: str = Form(default=""),
 ):
     """接口1：上传文件（PDF/MD/TXT），分析生成本体定义。
 
@@ -123,11 +125,11 @@ async def generate_ontology(
         logger.debug(f"模拟需求: {simulation_requirement[:100]}...")
 
         if not simulation_requirement:
-            return _error(t('api.requireSimulationRequirement'), 400)
+            return _error(t("api.requireSimulationRequirement"), 400)
 
         # 校验上传文件
         if not files or all(not f.filename for f in files):
-            return _error(t('api.requireFileUpload'), 400)
+            return _error(t("api.requireFileUpload"), 400)
 
         # 创建项目
         project = ProjectManager.create_project(name=project_name)
@@ -147,10 +149,12 @@ async def generate_ontology(
                     file_bytes,
                     file.filename,
                 )
-                project.files.append({
-                    "filename": file_info["original_filename"],
-                    "size": file_info["size"],
-                })
+                project.files.append(
+                    {
+                        "filename": file_info["original_filename"],
+                        "size": file_info["size"],
+                    }
+                )
 
                 # 提取文本
                 text = FileParser.extract_text(file_info["path"])
@@ -160,7 +164,7 @@ async def generate_ontology(
 
         if not document_texts:
             ProjectManager.delete_project(project.project_id)
-            return _error(t('api.noDocProcessed'), 400)
+            return _error(t("api.noDocProcessed"), 400)
 
         # 保存提取的文本
         project.total_text_length = len(all_text)
@@ -209,7 +213,8 @@ async def generate_ontology(
 
 # ============== 接口2：构建图谱 ==============
 
-@router.post('/build')
+
+@router.post("/build")
 def build_graph(req: BuildGraphRequest):
     """接口2：根据 project_id 构建图谱（后台异步执行）。"""
     try:
@@ -218,31 +223,27 @@ def build_graph(req: BuildGraphRequest):
         # 检查配置
         if not Config.NEO4J_URI:
             logger.error("配置错误: 缺少 NEO4J 配置")
-            return _error(
-                t('api.configError', details=t('api.neo4jConfigMissing')), 500
-            )
+            return _error(t("api.configError", details=t("api.neo4jConfigMissing")), 500)
 
         project_id = req.project_id
         logger.debug(f"请求参数: project_id={project_id}")
 
         if not project_id:
-            return _error(t('api.requireProjectId'), 400)
+            return _error(t("api.requireProjectId"), 400)
 
         # 获取项目
         project = ProjectManager.get_project(project_id)
         if not project:
-            return _error(t('api.projectNotFound', id=project_id), 404)
+            return _error(t("api.projectNotFound", id=project_id), 404)
 
         # 检查项目状态
         force = req.force
 
         if project.status == ProjectStatus.CREATED:
-            return _error(t('api.ontologyNotGenerated'), 400)
+            return _error(t("api.ontologyNotGenerated"), 400)
 
         if project.status == ProjectStatus.GRAPH_BUILDING and not force:
-            return _error(
-                t('api.graphBuilding'), 400, task_id=project.graph_build_task_id
-            )
+            return _error(t("api.graphBuilding"), 400, task_id=project.graph_build_task_id)
 
         # 如果强制重建，重置状态
         if force and project.status in [
@@ -256,11 +257,9 @@ def build_graph(req: BuildGraphRequest):
             project.error = None
 
         # 获取配置
-        graph_name = req.graph_name or project.name or 'SuperFish Graph'
+        graph_name = req.graph_name or project.name or "SuperFish Graph"
         chunk_size = req.chunk_size or project.chunk_size or Config.DEFAULT_CHUNK_SIZE
-        chunk_overlap = (
-            req.chunk_overlap or project.chunk_overlap or Config.DEFAULT_CHUNK_OVERLAP
-        )
+        chunk_overlap = req.chunk_overlap or project.chunk_overlap or Config.DEFAULT_CHUNK_OVERLAP
 
         # 更新项目配置
         project.chunk_size = chunk_size
@@ -269,12 +268,12 @@ def build_graph(req: BuildGraphRequest):
         # 获取提取的文本
         text = ProjectManager.get_extracted_text(project_id)
         if not text:
-            return _error(t('api.textNotFound'), 400)
+            return _error(t("api.textNotFound"), 400)
 
         # 获取本体
         ontology = project.ontology
         if not ontology:
-            return _error(t('api.ontologyNotFound'), 400)
+            return _error(t("api.ontologyNotFound"), 400)
 
         # 创建异步任务
         task_manager = TaskManager()
@@ -292,7 +291,7 @@ def build_graph(req: BuildGraphRequest):
         # 启动后台任务
         def build_task():
             set_locale(current_locale)
-            build_logger = get_logger('superfish.build')
+            build_logger = get_logger("superfish.build")
             try:
                 build_logger.info(f"[{task_id}] 开始构建图谱...")
                 builder = GraphBuilderService(api_key=Config.NEO4J_URI)
@@ -338,7 +337,7 @@ def build_graph(req: BuildGraphRequest):
                 task_manager.update_task(
                     task_id,
                     status=TaskStatus.FAILED,
-                    message=t('progress.buildFailed', error=str(e)),
+                    message=t("progress.buildFailed", error=str(e)),
                     error=traceback.format_exc(),
                 )
 
@@ -351,7 +350,7 @@ def build_graph(req: BuildGraphRequest):
             "data": {
                 "project_id": project_id,
                 "task_id": task_id,
-                "message": t('api.graphBuildStarted', taskId=task_id),
+                "message": t("api.graphBuildStarted", taskId=task_id),
             },
         }
 
@@ -361,16 +360,17 @@ def build_graph(req: BuildGraphRequest):
 
 # ============== 任务查询接口 ==============
 
-@router.get('/task/{task_id}')
+
+@router.get("/task/{task_id}")
 def get_task(task_id: str):
     """查询任务状态"""
     task = TaskManager().get_task(task_id)
     if not task:
-        return _error(t('api.taskNotFound', id=task_id), 404)
+        return _error(t("api.taskNotFound", id=task_id), 404)
     return {"success": True, "data": task.to_dict()}
 
 
-@router.get('/tasks')
+@router.get("/tasks")
 def list_tasks():
     """列出所有任务"""
     tasks = TaskManager().list_tasks()
@@ -383,12 +383,13 @@ def list_tasks():
 
 # ============== 图谱数据接口 ==============
 
-@router.get('/data/{graph_id}')
+
+@router.get("/data/{graph_id}")
 def get_graph_data(graph_id: str):
     """获取图谱数据（节点和边）"""
     try:
         if not Config.NEO4J_URI:
-            return _error(t('api.neo4jConfigMissing'), 500)
+            return _error(t("api.neo4jConfigMissing"), 500)
 
         builder = GraphBuilderService(api_key=Config.NEO4J_URI)
         graph_data = builder.get_graph_data(graph_id)
@@ -398,16 +399,16 @@ def get_graph_data(graph_id: str):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.delete('/delete/{graph_id}')
+@router.delete("/delete/{graph_id}")
 def delete_graph(graph_id: str):
     """删除 Neo4j 图谱"""
     try:
         if not Config.NEO4J_URI:
-            return _error(t('api.neo4jConfigMissing'), 500)
+            return _error(t("api.neo4jConfigMissing"), 500)
 
         builder = GraphBuilderService(api_key=Config.NEO4J_URI)
         builder.delete_graph(graph_id)
-        return {"success": True, "message": t('api.graphDeleted', id=graph_id)}
+        return {"success": True, "message": t("api.graphDeleted", id=graph_id)}
 
     except Exception as e:
         return _error(str(e), 500, traceback=traceback.format_exc())

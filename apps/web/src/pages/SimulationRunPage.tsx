@@ -30,7 +30,12 @@ export default function SimulationRunPage() {
   const addLog = useCallback((msg: string) => {
     const now = new Date()
     const time =
-      now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+      now.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) +
       '.' +
       now.getMilliseconds().toString().padStart(3, '0')
     setSystemLogs((prev) => {

@@ -39,7 +39,7 @@ export function AgentPersonaCard({
     >
       {profiles.length > 0 && (
         <>
-          <div className="mb-4 grid grid-cols-3 gap-3 rounded-md bg-muted/50 p-4">
+          <div className="bg-muted/50 mb-4 grid grid-cols-3 gap-3 rounded-md p-4">
             {[
               { v: profiles.length, l: t('step2.currentAgentCount') },
               { v: expectedTotal || '-', l: t('step2.expectedAgentTotal') },
@@ -47,48 +47,49 @@ export function AgentPersonaCard({
             ].map((s, i) => (
               <div key={i} className="text-center">
                 <span className="block font-mono text-xl font-bold">{s.v}</span>
-                <span className="mt-1 block text-[9px] uppercase text-muted-foreground">{s.l}</span>
+                <span className="text-muted-foreground mt-1 block text-[9px] uppercase">{s.l}</span>
               </div>
             ))}
           </div>
 
-          <div className="mb-2 text-[10px] font-semibold text-muted-foreground">
+          <div className="text-muted-foreground mb-2 text-[10px] font-semibold">
             {t('step2.generatedAgentPersonas')}
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {profiles.map((profile, idx) => (
-              <div
+              <button
                 key={idx}
+                type="button"
                 onClick={() => onSelectProfile(profile)}
-                className="cursor-pointer rounded-md border bg-card p-3 transition hover:border-[#FF5722]"
+                className="bg-card cursor-pointer rounded-md border p-3 text-left transition hover:border-[#FF5722]"
               >
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm font-semibold">{profile.username || 'Unknown'}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">
+                  <span className="text-muted-foreground font-mono text-[10px]">
                     @{profile.name || `agent_${idx}`}
                   </span>
                 </div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                <div className="text-muted-foreground mt-0.5 text-[11px]">
                   {profile.profession || t('step2.unknownProfession')}
                 </div>
-                <p className="mt-1 line-clamp-2 text-[11px] text-foreground/70">
+                <p className="text-foreground/70 mt-1 line-clamp-2 text-[11px]">
                   {profile.bio || t('step2.noBio')}
                 </p>
                 {!!profile.interested_topics?.length && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {profile.interested_topics.slice(0, 3).map((topic) => (
-                      <span key={topic} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                      <span key={topic} className="bg-muted rounded px-1.5 py-0.5 text-[10px]">
                         {topic}
                       </span>
                     ))}
                     {profile.interested_topics.length > 3 && (
-                      <span className="px-1 text-[10px] text-muted-foreground">
+                      <span className="text-muted-foreground px-1 text-[10px]">
                         +{profile.interested_topics.length - 3}
                       </span>
                     )}
                   </div>
                 )}
-              </div>
+              </button>
             ))}
           </div>
         </>

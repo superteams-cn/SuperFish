@@ -50,11 +50,11 @@ export default function HomePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             SuperFish
-            <span className="ml-2 align-middle text-sm font-normal text-muted-foreground">
+            <span className="text-muted-foreground ml-2 align-middle text-sm font-normal">
               {t('home.version')}
             </span>
           </h1>
-          <p className="text-sm text-muted-foreground">{t('home.tagline')}</p>
+          <p className="text-muted-foreground text-sm">{t('home.tagline')}</p>
         </div>
         <LanguageSwitcher />
       </header>
@@ -66,7 +66,7 @@ export default function HomePage() {
           <br />
           {t('home.heroTitle2')}
         </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">{t('home.slogan')}</p>
+        <p className="text-muted-foreground mx-auto mt-4 max-w-2xl">{t('home.slogan')}</p>
       </section>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -77,7 +77,16 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div
+              role="button"
+              tabIndex={0}
+              aria-label={t('home.dragToUpload')}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  fileInputRef.current?.click()
+                }
+              }}
               onDragOver={(e) => {
                 e.preventDefault()
                 setDragOver(true)
@@ -92,10 +101,10 @@ export default function HomePage() {
                 dragOver ? 'border-primary bg-accent' : 'border-input hover:bg-accent/50'
               }`}
             >
-              <Upload className="h-8 w-8 text-muted-foreground" />
+              <Upload className="text-muted-foreground h-8 w-8" />
               <p className="font-medium">{t('home.dragToUpload')}</p>
-              <p className="text-xs text-muted-foreground">{t('home.orBrowse')}</p>
-              <p className="text-xs text-muted-foreground">{t('home.supportedFormats')}</p>
+              <p className="text-muted-foreground text-xs">{t('home.orBrowse')}</p>
+              <p className="text-muted-foreground text-xs">{t('home.supportedFormats')}</p>
             </div>
             <input
               ref={fileInputRef}
@@ -114,7 +123,7 @@ export default function HomePage() {
                     className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
                   >
                     <span className="flex items-center gap-2 truncate">
-                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
                       <span className="truncate">{file.name}</span>
                     </span>
                     <button

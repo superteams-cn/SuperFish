@@ -1,0 +1,7 @@
+node_modules
+dist
+.turbo
+pnpm-lock.yaml
+apps/api
+packages/shared/locales
+*.md

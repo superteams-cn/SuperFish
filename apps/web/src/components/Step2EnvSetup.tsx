@@ -137,7 +137,8 @@ export function Step2EnvSetup({
       const data = res.data
       if (data.generation_stage && data.generation_stage !== lastConfigStage.current) {
         lastConfigStage.current = data.generation_stage
-        if (data.generation_stage === 'generating_profiles') addLog(t('log.generatingAgentProfileConfig'))
+        if (data.generation_stage === 'generating_profiles')
+          addLog(t('log.generatingAgentProfileConfig'))
         else if (data.generation_stage === 'generating_config') addLog(t('log.generatingLLMConfig'))
       }
       if (data.config_generated && data.config) {
@@ -204,7 +205,10 @@ export function Step2EnvSetup({
   const pollPrepareStatus = useCallback(async () => {
     if (!taskIdRef.current && !simulationId) return
     try {
-      const res = await getPrepareStatus({ task_id: taskIdRef.current, simulation_id: simulationId })
+      const res = await getPrepareStatus({
+        task_id: taskIdRef.current,
+        simulation_id: simulationId,
+      })
       if (!res.success || !res.data) return
       const data = res.data
       setPrepareProgress(data.progress || 0)
@@ -291,7 +295,15 @@ export function Step2EnvSetup({
       addLog(t('log.prepareException', { error: (err as Error).message }))
       onUpdateStatus('error')
     }
-  }, [addLog, fetchProfilesRealtime, loadPreparedData, onUpdateStatus, pollPrepareStatus, simulationId, t])
+  }, [
+    addLog,
+    fetchProfilesRealtime,
+    loadPreparedData,
+    onUpdateStatus,
+    pollPrepareStatus,
+    simulationId,
+    t,
+  ])
 
   // 阶段切换：进入配置生成阶段时启动配置轮询
   useEffect(() => {
@@ -330,9 +342,14 @@ export function Step2EnvSetup({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/30">
+    <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-6">
-        <SimInstanceCard phase={phase} projectData={projectData} simulationId={simulationId} taskId={taskId} />
+        <SimInstanceCard
+          phase={phase}
+          projectData={projectData}
+          simulationId={simulationId}
+          taskId={taskId}
+        />
         <AgentPersonaCard
           phase={phase}
           profiles={profiles}
@@ -341,7 +358,11 @@ export function Step2EnvSetup({
           onSelectProfile={setSelectedProfile}
         />
         <PlatformConfigCard phase={phase} config={simulationConfig} />
-        <ActivationCard phase={phase} config={simulationConfig} getAgentUsername={getAgentUsername} />
+        <ActivationCard
+          phase={phase}
+          config={simulationConfig}
+          getAgentUsername={getAgentUsername}
+        />
         <SetupCompleteCard
           phase={phase}
           hasConfig={!!simulationConfig}

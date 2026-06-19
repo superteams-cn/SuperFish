@@ -9,10 +9,22 @@
     "dev:web": "pnpm --filter @superfish/web dev",
     "dev:api": "pnpm --filter @superfish/api dev",
     "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"apps/web/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"apps/web/**/*.{ts,tsx}\"",
     "setup": "pnpm install && pnpm setup:api",
-    "setup:api": "pnpm --filter @superfish/api setup"
+    "setup:api": "pnpm --filter @superfish/api setup",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
     "turbo": "^2.3.3"
   },
   "engines": {

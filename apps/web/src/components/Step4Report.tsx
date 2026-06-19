@@ -111,13 +111,15 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
   const consoleAsLogs: SystemLog[] = consoleLogs.map((line) => ({ time: '', msg: line }))
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/30">
+    <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
       <Tabs defaultValue="report" className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b bg-card px-4 py-2">
+        <div className="bg-card flex items-center justify-between border-b px-4 py-2">
           <TabsList>
             <TabsTrigger value="report">{t('step4.predictionReport')}</TabsTrigger>
             <TabsTrigger value="log">Agent Log</TabsTrigger>
-            <TabsTrigger value="console">{t('console.title', { defaultValue: '控制台' })}</TabsTrigger>
+            <TabsTrigger value="console">
+              {t('console.title', { defaultValue: '控制台' })}
+            </TabsTrigger>
           </TabsList>
           <Button
             size="sm"
@@ -142,7 +144,7 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
           {agentLogs.length > 0 ? (
             <AgentLogTimeline logs={agentLogs} />
           ) : (
-            <p className="text-sm text-muted-foreground">等待 Agent 执行…</p>
+            <p className="text-muted-foreground text-sm">等待 Agent 执行…</p>
           )}
         </TabsContent>
 
@@ -159,7 +161,10 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
       </Tabs>
 
       {/* 应用级日志（加载/状态） */}
-      <SystemLogTerminal logs={systemLogs.length ? systemLogs : consoleAsLogs.slice(-1)} badge={reportId || 'NO_REPORT'} />
+      <SystemLogTerminal
+        logs={systemLogs.length ? systemLogs : consoleAsLogs.slice(-1)}
+        badge={reportId || 'NO_REPORT'}
+      />
     </div>
   )
 }

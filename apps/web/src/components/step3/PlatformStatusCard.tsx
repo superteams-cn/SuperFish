@@ -49,7 +49,7 @@ export function PlatformStatusCard({
       {/* 可用动作提示 */}
       <div className="mt-2 hidden flex-wrap gap-1 group-hover:flex">
         {availableActions.map((a) => (
-          <span key={a} className="rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
+          <span key={a} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[9px]">
             {a}
           </span>
         ))}
@@ -61,7 +61,7 @@ export function PlatformStatusCard({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="block text-[9px] uppercase text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground block text-[9px] uppercase">{label}</span>
       <span className="font-mono text-sm font-semibold">{value}</span>
     </div>
   )

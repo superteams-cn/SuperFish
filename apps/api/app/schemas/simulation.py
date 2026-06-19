@@ -6,7 +6,7 @@
 避免 FastAPI 默认抛出 422（结构不同的错误体）。
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field
 class CreateSimulationRequest(BaseModel):
     """创建模拟请求体"""
 
-    project_id: Optional[str] = Field(default=None, description="项目ID，必填")
-    graph_id: Optional[str] = Field(default=None, description="图谱ID，可选，缺省从项目获取")
+    project_id: str | None = Field(default=None, description="项目ID，必填")
+    graph_id: str | None = Field(default=None, description="图谱ID，可选，缺省从项目获取")
     enable_twitter: bool = Field(default=True, description="是否启用 Twitter")
     enable_reddit: bool = Field(default=True, description="是否启用 Reddit")
 
@@ -23,8 +23,8 @@ class CreateSimulationRequest(BaseModel):
 class PrepareSimulationRequest(BaseModel):
     """准备模拟环境请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
-    entity_types: Optional[list[str]] = Field(default=None, description="指定实体类型，可选")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
+    entity_types: list[str] | None = Field(default=None, description="指定实体类型，可选")
     use_llm_for_profiles: bool = Field(default=True, description="是否用 LLM 生成人设")
     parallel_profile_count: int = Field(default=5, description="并行生成人设数量")
     force_regenerate: bool = Field(default=False, description="是否强制重新生成")
@@ -33,15 +33,15 @@ class PrepareSimulationRequest(BaseModel):
 class PrepareStatusRequest(BaseModel):
     """查询准备任务进度请求体"""
 
-    task_id: Optional[str] = Field(default=None, description="准备返回的任务ID，可选")
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，可选")
+    task_id: str | None = Field(default=None, description="准备返回的任务ID，可选")
+    simulation_id: str | None = Field(default=None, description="模拟ID，可选")
 
 
 class GenerateProfilesRequest(BaseModel):
     """直接从图谱生成 Agent Profile 请求体（不创建模拟）"""
 
-    graph_id: Optional[str] = Field(default=None, description="图谱ID，必填")
-    entity_types: Optional[list[str]] = Field(default=None, description="指定实体类型，可选")
+    graph_id: str | None = Field(default=None, description="图谱ID，必填")
+    entity_types: list[str] | None = Field(default=None, description="指定实体类型，可选")
     use_llm: bool = Field(default=True, description="是否用 LLM 生成人设")
     platform: str = Field(default="reddit", description="平台类型")
 
@@ -49,9 +49,9 @@ class GenerateProfilesRequest(BaseModel):
 class StartSimulationRequest(BaseModel):
     """开始运行模拟请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
     platform: str = Field(default="parallel", description="平台: twitter / reddit / parallel")
-    max_rounds: Optional[Any] = Field(default=None, description="最大模拟轮数，可选")
+    max_rounds: Any | None = Field(default=None, description="最大模拟轮数，可选")
     enable_graph_memory_update: bool = Field(
         default=False, description="是否将 Agent 活动更新到 Neo4j 图谱记忆"
     )
@@ -61,54 +61,54 @@ class StartSimulationRequest(BaseModel):
 class StopSimulationRequest(BaseModel):
     """停止模拟请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
 
 
 class InterviewAgentRequest(BaseModel):
     """采访单个 Agent 请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
-    agent_id: Optional[Any] = Field(default=None, description="Agent ID，必填")
-    prompt: Optional[str] = Field(default=None, description="采访问题，必填")
-    platform: Optional[str] = Field(default=None, description="指定平台（twitter/reddit），可选")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
+    agent_id: Any | None = Field(default=None, description="Agent ID，必填")
+    prompt: str | None = Field(default=None, description="采访问题，必填")
+    platform: str | None = Field(default=None, description="指定平台（twitter/reddit），可选")
     timeout: int = Field(default=60, description="超时时间（秒）")
 
 
 class InterviewBatchRequest(BaseModel):
     """批量采访多个 Agent 请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
-    interviews: Optional[list[dict[str, Any]]] = Field(default=None, description="采访列表，必填")
-    platform: Optional[str] = Field(default=None, description="默认平台（twitter/reddit），可选")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
+    interviews: list[dict[str, Any]] | None = Field(default=None, description="采访列表，必填")
+    platform: str | None = Field(default=None, description="默认平台（twitter/reddit），可选")
     timeout: int = Field(default=120, description="超时时间（秒）")
 
 
 class InterviewAllRequest(BaseModel):
     """全局采访所有 Agent 请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
-    prompt: Optional[str] = Field(default=None, description="采访问题，必填")
-    platform: Optional[str] = Field(default=None, description="指定平台（twitter/reddit），可选")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
+    prompt: str | None = Field(default=None, description="采访问题，必填")
+    platform: str | None = Field(default=None, description="指定平台（twitter/reddit），可选")
     timeout: int = Field(default=180, description="超时时间（秒）")
 
 
 class InterviewHistoryRequest(BaseModel):
     """获取 Interview 历史记录请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
-    platform: Optional[str] = Field(default=None, description="平台类型（reddit/twitter），可选")
-    agent_id: Optional[Any] = Field(default=None, description="只获取该 Agent 的采访历史，可选")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
+    platform: str | None = Field(default=None, description="平台类型（reddit/twitter），可选")
+    agent_id: Any | None = Field(default=None, description="只获取该 Agent 的采访历史，可选")
     limit: int = Field(default=100, description="返回数量")
 
 
 class EnvStatusRequest(BaseModel):
     """获取模拟环境状态请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
 
 
 class CloseEnvRequest(BaseModel):
     """关闭模拟环境请求体"""
 
-    simulation_id: Optional[str] = Field(default=None, description="模拟ID，必填")
+    simulation_id: str | None = Field(default=None, description="模拟ID，必填")
     timeout: int = Field(default=30, description="超时时间（秒）")

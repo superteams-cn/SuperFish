@@ -4,7 +4,13 @@ import { useTranslation } from 'react-i18next'
 
 import { Step1GraphBuild } from '@/components/Step1GraphBuild'
 import { WorkflowLayout, type WorkflowStatus } from '@/components/WorkflowLayout'
-import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData } from '@/lib/api/graph'
+import {
+  generateOntology,
+  getProject,
+  buildGraph,
+  getTaskStatus,
+  getGraphData,
+} from '@/lib/api/graph'
 import { getPendingUpload, clearPendingUpload } from '@/stores/pendingUpload'
 import type {
   BuildProgress,
@@ -42,7 +48,12 @@ export default function ProcessPage() {
   const addLog = useCallback((msg: string) => {
     const now = new Date()
     const time =
-      now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+      now.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) +
       '.' +
       now.getMilliseconds().toString().padStart(3, '0')
     setSystemLogs((prev) => {
@@ -288,7 +299,11 @@ export default function ProcessPage() {
   }
 
   // —— 状态指示 ——
-  const statusVariant: WorkflowStatus = error ? 'error' : currentPhase >= 2 ? 'completed' : 'processing'
+  const statusVariant: WorkflowStatus = error
+    ? 'error'
+    : currentPhase >= 2
+      ? 'completed'
+      : 'processing'
   const statusText = error
     ? 'Error'
     : currentPhase >= 2

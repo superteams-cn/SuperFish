@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "uv run python run.py",
     "setup": "uv sync",
-    "build": "echo \"后端无需构建步骤\""
+    "build": "echo \"后端无需构建步骤\"",
+    "lint": "uv run ruff check app",
+    "lint:fix": "uv run ruff check app --fix",
+    "format": "uv run ruff format app",
+    "typecheck:mypy": "uv run mypy app",
+    "test": "uv run pytest"
   }
 }

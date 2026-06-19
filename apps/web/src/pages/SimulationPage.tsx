@@ -5,7 +5,12 @@ import { useTranslation } from 'react-i18next'
 import { WorkflowLayout, type WorkflowStatus } from '@/components/WorkflowLayout'
 import { Step2EnvSetup } from '@/components/Step2EnvSetup'
 import { getProject, getGraphData } from '@/lib/api/graph'
-import { getSimulation, stopSimulation, getEnvStatus, closeSimulationEnv } from '@/lib/api/simulation'
+import {
+  getSimulation,
+  stopSimulation,
+  getEnvStatus,
+  closeSimulationEnv,
+} from '@/lib/api/simulation'
 import type { GraphData, ProjectData, SystemLog } from '@/lib/process-types'
 
 export default function SimulationPage() {
@@ -24,7 +29,12 @@ export default function SimulationPage() {
   const addLog = useCallback((msg: string) => {
     const now = new Date()
     const time =
-      now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+      now.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) +
       '.' +
       now.getMilliseconds().toString().padStart(3, '0')
     setSystemLogs((prev) => {
@@ -81,7 +91,11 @@ export default function SimulationPage() {
           if (closeRes.success) {
             addLog(t('log.simEnvClosed'))
           } else {
-            addLog(t('log.closeSimEnvFailedWithError', { error: closeRes.error || t('common.unknownError') }))
+            addLog(
+              t('log.closeSimEnvFailedWithError', {
+                error: closeRes.error || t('common.unknownError'),
+              }),
+            )
             await forceStop()
           }
         } catch (closeErr) {

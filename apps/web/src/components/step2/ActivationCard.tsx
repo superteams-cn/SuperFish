@@ -43,12 +43,12 @@ export function ActivationCard({ phase, config, getAgentUsername }: Props) {
           {/* 热点话题 */}
           {!!ec.hot_topics?.length && (
             <div>
-              <span className="mb-2 block text-[10px] font-semibold text-muted-foreground">
+              <span className="text-muted-foreground mb-2 block text-[10px] font-semibold">
                 {t('step2.initialHotTopics')}
               </span>
               <div className="flex flex-wrap gap-2">
                 {ec.hot_topics.map((topic) => (
-                  <span key={topic} className="rounded-full bg-muted px-2.5 py-0.5 text-[11px]">
+                  <span key={topic} className="bg-muted rounded-full px-2.5 py-0.5 text-[11px]">
                     # {topic}
                   </span>
                 ))}
@@ -59,15 +59,15 @@ export function ActivationCard({ phase, config, getAgentUsername }: Props) {
           {/* 初始帖子流 */}
           {!!ec.initial_posts?.length && (
             <div>
-              <span className="mb-2 block text-[10px] font-semibold text-muted-foreground">
+              <span className="text-muted-foreground mb-2 block text-[10px] font-semibold">
                 {t('step2.initialActivationSeq', { count: ec.initial_posts.length })}
               </span>
-              <div className="space-y-2 border-l-2 border-muted pl-4">
+              <div className="border-muted space-y-2 border-l-2 pl-4">
                 {ec.initial_posts.map((post, idx) => (
                   <div key={idx} className="relative">
                     <span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-[#FF5722]" />
-                    <div className="rounded-md bg-muted/50 p-2.5">
-                      <div className="mb-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <div className="bg-muted/50 rounded-md p-2.5">
+                      <div className="text-muted-foreground mb-1 flex items-center gap-2 text-[10px]">
                         <span className="font-semibold">{post.poster_type}</span>
                         <span className="font-mono">Agent {post.poster_agent_id}</span>
                         <span>@{getAgentUsername(post.poster_agent_id)}</span>

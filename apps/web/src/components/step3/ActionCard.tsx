@@ -59,15 +59,17 @@ export function ActionCard({ action }: { action: ActionItem }) {
     <div className="relative pl-6">
       <span
         className={cn(
-          'absolute left-0 top-2 h-2.5 w-2.5 rounded-full border-2 border-background',
+          'border-background absolute left-0 top-2 h-2.5 w-2.5 rounded-full border-2',
           action.platform === 'twitter' ? 'bg-sky-500' : 'bg-orange-500',
         )}
       />
-      <div className="rounded-md border bg-card p-3">
+      <div className="bg-card rounded-md border p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Avatar className="h-6 w-6">
-              <AvatarFallback className="text-[10px]">{(action.agent_name || 'A')[0]}</AvatarFallback>
+              <AvatarFallback className="text-[10px]">
+                {(action.agent_name || 'A')[0]}
+              </AvatarFallback>
             </Avatar>
             <span className="text-xs font-semibold">{action.agent_name}</span>
           </div>
@@ -83,8 +85,8 @@ export function ActionCard({ action }: { action: ActionItem }) {
             <>
               {args.quote_content && <p>{args.quote_content}</p>}
               {args.original_content && (
-                <div className="rounded border-l-2 border-muted bg-muted/40 p-2">
-                  <span className="text-[10px] text-muted-foreground">
+                <div className="border-muted bg-muted/40 rounded border-l-2 p-2">
+                  <span className="text-muted-foreground text-[10px]">
                     @{args.original_author_name || 'User'}
                   </span>
                   <p>{truncate(args.original_content, 150)}</p>
@@ -99,7 +101,7 @@ export function ActionCard({ action }: { action: ActionItem }) {
                 {t('step3.repostedFrom', { name: args.original_author_name || 'User' })}
               </p>
               {args.original_content && (
-                <p className="rounded bg-muted/40 p-2">{truncate(args.original_content, 200)}</p>
+                <p className="bg-muted/40 rounded p-2">{truncate(args.original_content, 200)}</p>
               )}
             </>
           )}
@@ -117,7 +119,7 @@ export function ActionCard({ action }: { action: ActionItem }) {
             <>
               {args.content && <p>{args.content}</p>}
               {args.post_id && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-muted-foreground text-[10px]">
                   {t('step3.replyToPost', { id: args.post_id })}
                 </p>
               )}
@@ -165,7 +167,7 @@ export function ActionCard({ action }: { action: ActionItem }) {
             args.content && <p>{args.content}</p>}
         </div>
 
-        <div className="mt-2 text-[10px] text-muted-foreground">
+        <div className="text-muted-foreground mt-2 text-[10px]">
           R{action.round_num} • {actionTime(action.timestamp)}
         </div>
       </div>

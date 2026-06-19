@@ -32,7 +32,7 @@ export function SimInstanceCard({ phase, projectData, simulationId, taskId }: Pr
       description={t('step2.simInstanceDesc')}
     >
       {simulationId && (
-        <div className="space-y-2 rounded-md bg-muted/50 p-3">
+        <div className="bg-muted/50 space-y-2 rounded-md p-3">
           {rows.map((r) => (
             <div key={r.label} className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">{r.label}</span>

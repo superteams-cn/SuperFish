@@ -4,17 +4,16 @@
 """
 
 import json
-from typing import Dict, Any, List, Optional, Set
 from dataclasses import dataclass, field
+from typing import Any
 
-from ..config import Config
 from ..utils.logger import get_logger
-from ..utils.neo4j_graph_utils import get_neo4j_graph_client, fetch_all_nodes, fetch_all_edges
+from ..utils.neo4j_graph_utils import fetch_all_edges, fetch_all_nodes, get_neo4j_graph_client
 
-logger = get_logger('superfish.neo4j_entity_reader')
+logger = get_logger("superfish.neo4j_entity_reader")
 
 
-def _parse_attrs(value: Any) -> Dict[str, Any]:
+def _parse_attrs(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     if not value:
@@ -29,15 +28,16 @@ def _parse_attrs(value: Any) -> Dict[str, Any]:
 @dataclass
 class EntityNode:
     """实体节点数据结构"""
+
     uuid: str
     name: str
-    labels: List[str]
+    labels: list[str]
     summary: str
-    attributes: Dict[str, Any]
-    related_edges: List[Dict[str, Any]] = field(default_factory=list)
-    related_nodes: List[Dict[str, Any]] = field(default_factory=list)
+    attributes: dict[str, Any]
+    related_edges: list[dict[str, Any]] = field(default_factory=list)
+    related_nodes: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "uuid": self.uuid,
             "name": self.name,
@@ -48,7 +48,7 @@ class EntityNode:
             "related_nodes": self.related_nodes,
         }
 
-    def get_entity_type(self) -> Optional[str]:
+    def get_entity_type(self) -> str | None:
         for label in self.labels:
             if label not in ("Entity", "Node"):
                 return label
@@ -58,12 +58,13 @@ class EntityNode:
 @dataclass
 class FilteredEntities:
     """过滤后的实体集合"""
-    entities: List[EntityNode]
-    entity_types: Set[str]
+
+    entities: list[EntityNode]
+    entity_types: set[str]
     total_count: int
     filtered_count: int
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "entities": [e.to_dict() for e in self.entities],
             "entity_types": list(self.entity_types),
@@ -79,7 +80,7 @@ class Neo4jEntityReader:
     公共接口与原 旧图谱 版本完全相同，调用方无需修改。
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         # api_key 参数保留以兼容现有调用
         self._client = None
 
@@ -88,21 +89,21 @@ class Neo4jEntityReader:
             self._client = get_neo4j_graph_client()
         return self._client
 
-    def get_all_nodes(self, graph_id: str) -> List[Dict[str, Any]]:
+    def get_all_nodes(self, graph_id: str) -> list[dict[str, Any]]:
         """获取图谱的所有节点"""
         logger.info(f"获取图谱 {graph_id} 的所有节点...")
         nodes = fetch_all_nodes(self._get_client(), graph_id)
         logger.info(f"共获取 {len(nodes)} 个节点")
         return nodes
 
-    def get_all_edges(self, graph_id: str) -> List[Dict[str, Any]]:
+    def get_all_edges(self, graph_id: str) -> list[dict[str, Any]]:
         """获取图谱的所有边"""
         logger.info(f"获取图谱 {graph_id} 的所有边...")
         edges = fetch_all_edges(self._get_client(), graph_id)
         logger.info(f"共获取 {len(edges)} 条边")
         return edges
 
-    def get_node_edges(self, node_uuid: str, graph_id: str = "") -> List[Dict[str, Any]]:
+    def get_node_edges(self, node_uuid: str, graph_id: str = "") -> list[dict[str, Any]]:
         """获取指定节点的所有相关边（graph_id 可选，有 Neo4j 直接查询时更高效）"""
         try:
             # 通过 Cypher 查询该节点相关的边（比全量过滤快）
@@ -137,7 +138,7 @@ class Neo4jEntityReader:
     def filter_defined_entities(
         self,
         graph_id: str,
-        defined_entity_types: Optional[List[str]] = None,
+        defined_entity_types: list[str] | None = None,
         enrich_with_edges: bool = True,
     ) -> FilteredEntities:
         """
@@ -153,8 +154,8 @@ class Neo4jEntityReader:
         all_edges = self.get_all_edges(graph_id) if enrich_with_edges else []
         node_map = {n["uuid"]: n for n in all_nodes}
 
-        filtered_entities: List[EntityNode] = []
-        entity_types_found: Set[str] = set()
+        filtered_entities: list[EntityNode] = []
+        entity_types_found: set[str] = set()
 
         for node in all_nodes:
             labels = node.get("labels", [])
@@ -183,24 +184,28 @@ class Neo4jEntityReader:
 
             if enrich_with_edges:
                 related_edges = []
-                related_node_uuids: Set[str] = set()
+                related_node_uuids: set[str] = set()
 
                 for edge in all_edges:
                     if edge["source_node_uuid"] == node["uuid"]:
-                        related_edges.append({
-                            "direction": "outgoing",
-                            "edge_name": edge["name"],
-                            "fact": edge["fact"],
-                            "target_node_uuid": edge["target_node_uuid"],
-                        })
+                        related_edges.append(
+                            {
+                                "direction": "outgoing",
+                                "edge_name": edge["name"],
+                                "fact": edge["fact"],
+                                "target_node_uuid": edge["target_node_uuid"],
+                            }
+                        )
                         related_node_uuids.add(edge["target_node_uuid"])
                     elif edge["target_node_uuid"] == node["uuid"]:
-                        related_edges.append({
-                            "direction": "incoming",
-                            "edge_name": edge["name"],
-                            "fact": edge["fact"],
-                            "source_node_uuid": edge["source_node_uuid"],
-                        })
+                        related_edges.append(
+                            {
+                                "direction": "incoming",
+                                "edge_name": edge["name"],
+                                "fact": edge["fact"],
+                                "source_node_uuid": edge["source_node_uuid"],
+                            }
+                        )
                         related_node_uuids.add(edge["source_node_uuid"])
 
                 entity.related_edges = related_edges
@@ -232,7 +237,7 @@ class Neo4jEntityReader:
         self,
         graph_id: str,
         entity_uuid: str,
-    ) -> Optional[EntityNode]:
+    ) -> EntityNode | None:
         """获取单个实体及其完整上下文"""
         try:
             client = self._get_client()
@@ -253,23 +258,27 @@ class Neo4jEntityReader:
             node_map = {n["uuid"]: n for n in all_nodes}
 
             related_edges = []
-            related_node_uuids: Set[str] = set()
+            related_node_uuids: set[str] = set()
             for edge in edges:
                 if edge["source_node_uuid"] == entity_uuid:
-                    related_edges.append({
-                        "direction": "outgoing",
-                        "edge_name": edge["name"],
-                        "fact": edge["fact"],
-                        "target_node_uuid": edge["target_node_uuid"],
-                    })
+                    related_edges.append(
+                        {
+                            "direction": "outgoing",
+                            "edge_name": edge["name"],
+                            "fact": edge["fact"],
+                            "target_node_uuid": edge["target_node_uuid"],
+                        }
+                    )
                     related_node_uuids.add(edge["target_node_uuid"])
                 else:
-                    related_edges.append({
-                        "direction": "incoming",
-                        "edge_name": edge["name"],
-                        "fact": edge["fact"],
-                        "source_node_uuid": edge["source_node_uuid"],
-                    })
+                    related_edges.append(
+                        {
+                            "direction": "incoming",
+                            "edge_name": edge["name"],
+                            "fact": edge["fact"],
+                            "source_node_uuid": edge["source_node_uuid"],
+                        }
+                    )
                     related_node_uuids.add(edge["source_node_uuid"])
 
             return EntityNode(
@@ -300,7 +309,7 @@ class Neo4jEntityReader:
         graph_id: str,
         entity_type: str,
         enrich_with_edges: bool = True,
-    ) -> List[EntityNode]:
+    ) -> list[EntityNode]:
         """获取指定类型的所有实体"""
         result = self.filter_defined_entities(
             graph_id=graph_id,

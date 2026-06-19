@@ -16,7 +16,7 @@ export function Markdown({ content, className, stripLeadingH2 }: MarkdownProps) 
   return (
     <div
       className={cn(
-        'prose prose-sm max-w-none text-foreground',
+        'prose prose-sm text-foreground max-w-none',
         'prose-headings:font-semibold prose-headings:text-foreground',
         'prose-p:leading-relaxed prose-li:my-0.5',
         'prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:before:content-none prose-code:after:content-none',

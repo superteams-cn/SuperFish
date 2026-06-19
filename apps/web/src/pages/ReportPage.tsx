@@ -24,7 +24,12 @@ export default function ReportPage() {
   const addLog = useCallback((msg: string) => {
     const now = new Date()
     const time =
-      now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+      now.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) +
       '.' +
       now.getMilliseconds().toString().padStart(3, '0')
     setSystemLogs((prev) => {
@@ -88,7 +93,8 @@ export default function ReportPage() {
     if (projectRef.current?.graph_id) void loadGraph(projectRef.current.graph_id)
   }
 
-  const statusText = status === 'error' ? 'Error' : status === 'completed' ? 'Completed' : 'Generating'
+  const statusText =
+    status === 'error' ? 'Error' : status === 'completed' ? 'Completed' : 'Generating'
 
   return (
     <WorkflowLayout

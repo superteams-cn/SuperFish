@@ -38,7 +38,7 @@ export function GraphBuildCard({ phase, projectData, buildProgress, graphData }:
       apiNote="POST /api/graph/build"
       description={t('step1.graphRagDesc')}
     >
-      <div className="grid grid-cols-3 gap-3 rounded-md bg-muted/50 p-4">
+      <div className="bg-muted/50 grid grid-cols-3 gap-3 rounded-md p-4">
         {[
           { v: stats.nodes, l: t('step1.entityNodes') },
           { v: stats.edges, l: t('step1.relationEdges') },
@@ -46,7 +46,7 @@ export function GraphBuildCard({ phase, projectData, buildProgress, graphData }:
         ].map((s, i) => (
           <div key={i} className="text-center">
             <span className="block font-mono text-xl font-bold">{s.v}</span>
-            <span className="mt-1 block text-[9px] uppercase text-muted-foreground">{s.l}</span>
+            <span className="text-muted-foreground mt-1 block text-[9px] uppercase">{s.l}</span>
           </div>
         ))}
       </div>

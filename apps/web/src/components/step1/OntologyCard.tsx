@@ -32,16 +32,17 @@ export function OntologyCard({ phase, projectData, ontologyProgress }: Props) {
   const tagList = (items: OntologyItem[] | undefined, type: 'entity' | 'relation', label: string) =>
     items && (
       <div className={cn('mt-3 transition', selected && 'pointer-events-none opacity-30')}>
-        <span className="mb-2 block text-[10px] font-semibold text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground mb-2 block text-[10px] font-semibold">{label}</span>
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
-            <span
+            <button
               key={item.name}
+              type="button"
               onClick={() => setSelected({ ...item, itemType: type })}
-              className="cursor-pointer rounded border bg-muted px-2.5 py-1 font-mono text-[11px] hover:bg-accent"
+              className="bg-muted hover:bg-accent cursor-pointer rounded border px-2.5 py-1 font-mono text-[11px]"
             >
               {item.name}
-            </span>
+            </button>
           ))}
         </div>
       </div>

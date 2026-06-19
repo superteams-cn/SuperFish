@@ -4,28 +4,29 @@ Neo4j 图谱记忆更新服务
 """
 
 import json
-import time
 import threading
-from typing import Dict, Any, List, Optional
+import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from queue import Queue, Empty
+from datetime import UTC, datetime
+from queue import Empty, Queue
+from typing import Any
 
+from ..utils.locale import get_locale, set_locale
 from ..utils.logger import get_logger
 from ..utils.neo4j_graph_utils import get_neo4j_graph_client
-from ..utils.locale import get_locale, set_locale
 
-logger = get_logger('superfish.neo4j_graph_memory_updater')
+logger = get_logger("superfish.neo4j_graph_memory_updater")
 
 
 @dataclass
 class AgentActivity:
     """Agent 活动记录"""
+
     platform: str
     agent_id: int
     agent_name: str
     action_type: str
-    action_args: Dict[str, Any]
+    action_args: dict[str, Any]
     round_num: int
     timestamp: str
 
@@ -88,7 +89,9 @@ class AgentActivity:
     def _describe_quote_post(self) -> str:
         original_content = self.action_args.get("original_content", "")
         original_author = self.action_args.get("original_author_name", "")
-        quote_content = self.action_args.get("quote_content", "") or self.action_args.get("content", "")
+        quote_content = self.action_args.get("quote_content", "") or self.action_args.get(
+            "content", ""
+        )
         if original_content and original_author:
             base = f"引用了{original_author}的帖子「{original_content}」"
         elif original_content:
@@ -164,24 +167,24 @@ class Neo4jGraphMemoryUpdater:
     """
 
     BATCH_SIZE = 5
-    PLATFORM_LABELS = {'twitter': '世界1', 'reddit': '世界2'}
+    PLATFORM_LABELS = {"twitter": "世界1", "reddit": "世界2"}
     SEND_INTERVAL = 0.5
     MAX_RETRIES = 3
     RETRY_DELAY = 2
 
-    def __init__(self, graph_id: str, api_key: Optional[str] = None):
+    def __init__(self, graph_id: str, api_key: str | None = None):
         # api_key 参数保留以兼容现有调用
         self.graph_id = graph_id
         self._client = get_neo4j_graph_client()
 
         self._activity_queue: Queue = Queue()
-        self._platform_buffers: Dict[str, List[AgentActivity]] = {
-            'twitter': [],
-            'reddit': [],
+        self._platform_buffers: dict[str, list[AgentActivity]] = {
+            "twitter": [],
+            "reddit": [],
         }
         self._buffer_lock = threading.Lock()
         self._running = False
-        self._worker_thread: Optional[threading.Thread] = None
+        self._worker_thread: threading.Thread | None = None
 
         self._total_activities = 0
         self._total_sent = 0
@@ -189,7 +192,9 @@ class Neo4jGraphMemoryUpdater:
         self._failed_count = 0
         self._skipped_count = 0
 
-        logger.info(f"GraphMemoryUpdater 初始化完成: graph_id={graph_id}, batch_size={self.BATCH_SIZE}")
+        logger.info(
+            f"GraphMemoryUpdater 初始化完成: graph_id={graph_id}, batch_size={self.BATCH_SIZE}"
+        )
 
     def _get_platform_label(self, platform: str) -> str:
         return self.PLATFORM_LABELS.get(platform.lower(), platform)
@@ -227,7 +232,7 @@ class Neo4jGraphMemoryUpdater:
         self._total_activities += 1
         logger.debug(f"添加活动到队列: {activity.agent_name} - {activity.action_type}")
 
-    def add_activity_from_dict(self, data: Dict[str, Any], platform: str):
+    def add_activity_from_dict(self, data: dict[str, Any], platform: str):
         if "event_type" in data:
             return
         activity = AgentActivity(
@@ -241,7 +246,7 @@ class Neo4jGraphMemoryUpdater:
         )
         self.add_activity(activity)
 
-    def _worker_loop(self, locale: str = 'zh'):
+    def _worker_loop(self, locale: str = "zh"):
         set_locale(locale)
         while self._running or not self._activity_queue.empty():
             try:
@@ -253,8 +258,10 @@ class Neo4jGraphMemoryUpdater:
                             self._platform_buffers[platform] = []
                         self._platform_buffers[platform].append(activity)
                         if len(self._platform_buffers[platform]) >= self.BATCH_SIZE:
-                            batch = self._platform_buffers[platform][:self.BATCH_SIZE]
-                            self._platform_buffers[platform] = self._platform_buffers[platform][self.BATCH_SIZE:]
+                            batch = self._platform_buffers[platform][: self.BATCH_SIZE]
+                            self._platform_buffers[platform] = self._platform_buffers[platform][
+                                self.BATCH_SIZE :
+                            ]
                             self._send_batch_activities(batch, platform)
                             time.sleep(self.SEND_INTERVAL)
                 except Empty:
@@ -263,7 +270,7 @@ class Neo4jGraphMemoryUpdater:
                 logger.error(f"工作循环异常: {e}")
                 time.sleep(1)
 
-    def _send_batch_activities(self, activities: List[AgentActivity], platform: str):
+    def _send_batch_activities(self, activities: list[AgentActivity], platform: str):
         if not activities:
             return
 
@@ -272,7 +279,9 @@ class Neo4jGraphMemoryUpdater:
 
         for attempt in range(self.MAX_RETRIES):
             try:
-                activity_uuid = f"activity_{platform}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+                activity_uuid = (
+                    f"activity_{platform}_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}"
+                )
                 with self._client.driver.session() as session:
                     session.run(
                         """
@@ -298,17 +307,22 @@ class Neo4jGraphMemoryUpdater:
                             "name": f"{platform_label}模拟活动",
                             "summary": combined_text,
                             "group_id": self.graph_id,
-                            "attributes_json": json.dumps({
-                                "platform": platform,
-                                "activity_count": len(activities),
-                            }, ensure_ascii=False),
-                            "created_at": datetime.now(timezone.utc).isoformat(),
+                            "attributes_json": json.dumps(
+                                {
+                                    "platform": platform,
+                                    "activity_count": len(activities),
+                                },
+                                ensure_ascii=False,
+                            ),
+                            "created_at": datetime.now(UTC).isoformat(),
                             "agent_names": list({a.agent_name for a in activities if a.agent_name}),
                         },
                     )
                 self._total_sent += 1
                 self._total_items_sent += len(activities)
-                logger.info(f"成功写入 {len(activities)} 条{platform_label}活动到图谱 {self.graph_id}")
+                logger.info(
+                    f"成功写入 {len(activities)} 条{platform_label}活动到图谱 {self.graph_id}"
+                )
                 return
 
             except Exception as e:
@@ -332,12 +346,14 @@ class Neo4jGraphMemoryUpdater:
         with self._buffer_lock:
             for platform, buffer in self._platform_buffers.items():
                 if buffer:
-                    logger.info(f"发送{self._get_platform_label(platform)}平台剩余的 {len(buffer)} 条活动")
+                    logger.info(
+                        f"发送{self._get_platform_label(platform)}平台剩余的 {len(buffer)} 条活动"
+                    )
                     self._send_batch_activities(buffer, platform)
             for p in self._platform_buffers:
                 self._platform_buffers[p] = []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._buffer_lock:
             buffer_sizes = {p: len(b) for p, b in self._platform_buffers.items()}
         return {
@@ -357,7 +373,7 @@ class Neo4jGraphMemoryUpdater:
 class Neo4jGraphMemoryManager:
     """管理多个模拟的图谱记忆更新器（接口与原版完全兼容）"""
 
-    _updaters: Dict[str, Neo4jGraphMemoryUpdater] = {}
+    _updaters: dict[str, Neo4jGraphMemoryUpdater] = {}
     _lock = threading.Lock()
     _stop_all_done = False
 
@@ -373,7 +389,7 @@ class Neo4jGraphMemoryManager:
             return updater
 
     @classmethod
-    def get_updater(cls, simulation_id: str) -> Optional[Neo4jGraphMemoryUpdater]:
+    def get_updater(cls, simulation_id: str) -> Neo4jGraphMemoryUpdater | None:
         return cls._updaters.get(simulation_id)
 
     @classmethod
@@ -399,5 +415,5 @@ class Neo4jGraphMemoryManager:
             logger.info("已停止所有图谱记忆更新器")
 
     @classmethod
-    def get_all_stats(cls) -> Dict[str, Dict[str, Any]]:
+    def get_all_stats(cls) -> dict[str, dict[str, Any]]:
         return {sid: u.get_stats() for sid, u in cls._updaters.items()}

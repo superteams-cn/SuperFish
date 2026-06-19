@@ -3,11 +3,11 @@
 接口1：分析文本内容，生成适合社会模拟的实体和关系类型定义
 """
 
-import json
 import logging
 import re
 import zlib
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from ..config import Config
 from ..utils.llm_client import LLMClient
 from ..utils.locale import get_language_instruction, get_locale
@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_python_class_name(name: str, prefix: str) -> str:
-    parts = re.split(r'[^a-zA-Z0-9]+', name or '')
+    parts = re.split(r"[^a-zA-Z0-9]+", name or "")
     words = []
     for part in parts:
-        words.extend(re.sub(r'([a-z])([A-Z])', r'\1_\2', part).split('_'))
-    class_name = ''.join(word.capitalize() for word in words if word)
+        words.extend(re.sub(r"([a-z])([A-Z])", r"\1_\2", part).split("_"))
+    class_name = "".join(word.capitalize() for word in words if word)
     if not class_name or class_name[0].isdigit():
         checksum = zlib.crc32((name or prefix).encode("utf-8")) & 0xFFFFFFFF
         class_name = f"{prefix}{checksum:08X}"
@@ -179,75 +179,68 @@ class OntologyGenerator:
     本体生成器
     分析文本内容，生成实体和关系类型定义
     """
-    
-    def __init__(self, llm_client: Optional[LLMClient] = None):
+
+    def __init__(self, llm_client: LLMClient | None = None):
         self.llm_client = llm_client or LLMClient()
-    
+
     def generate(
         self,
-        document_texts: List[str],
+        document_texts: list[str],
         simulation_requirement: str,
-        additional_context: Optional[str] = None
-    ) -> Dict[str, Any]:
+        additional_context: str | None = None,
+    ) -> dict[str, Any]:
         """
         生成本体定义
-        
+
         Args:
             document_texts: 文档文本列表
             simulation_requirement: 模拟需求描述
             additional_context: 额外上下文
-            
+
         Returns:
             本体定义（entity_types, edge_types等）
         """
         # 构建用户消息
         user_message = self._build_user_message(
-            document_texts, 
-            simulation_requirement,
-            additional_context
+            document_texts, simulation_requirement, additional_context
         )
-        
+
         lang_instruction = get_language_instruction()
         system_prompt = f"{ONTOLOGY_SYSTEM_PROMPT}\n\n{lang_instruction}\nIMPORTANT: Entity type names and relationship type names MUST use the specified language above. For Chinese output, use concise Chinese schema names directly (e.g., '人物', '组织', '支持', '反对'). For English output, use concise English schema names. Do NOT output any separate display-name fields. Attribute names MUST remain English snake_case. Descriptions, examples, attribute descriptions, and analysis_summary fields MUST use the specified language above."
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": user_message},
         ]
-        
+
         # 调用LLM
         # 注意：推理类模型（如 deepseek-v4-pro）的思考过程也计入 max_tokens，
         # 复杂的本体生成任务需要更大的输出预算，否则 JSON 会被截断导致解析失败。
         result = self.llm_client.chat_json(
-            messages=messages,
-            temperature=0.3,
-            max_tokens=Config.ONTOLOGY_MAX_TOKENS
+            messages=messages, temperature=0.3, max_tokens=Config.ONTOLOGY_MAX_TOKENS
         )
-        
+
         # 验证和后处理
         result = self._validate_and_process(result)
-        
+
         return result
-    
+
     # 传给 LLM 的文本最大长度（5万字）
     MAX_TEXT_LENGTH_FOR_LLM = 50000
-    
+
     def _build_user_message(
-        self,
-        document_texts: List[str],
-        simulation_requirement: str,
-        additional_context: Optional[str]
+        self, document_texts: list[str], simulation_requirement: str, additional_context: str | None
     ) -> str:
         """构建用户消息"""
-        
+
         # 合并文本
         combined_text = "\n\n---\n\n".join(document_texts)
         original_length = len(combined_text)
-        
+
         # 如果文本超过5万字，截断（仅影响传给LLM的内容，不影响图谱构建）
         if len(combined_text) > self.MAX_TEXT_LENGTH_FOR_LLM:
-            combined_text = combined_text[:self.MAX_TEXT_LENGTH_FOR_LLM]
+            combined_text = combined_text[: self.MAX_TEXT_LENGTH_FOR_LLM]
             combined_text += f"\n\n...(原文共{original_length}字，已截取前{self.MAX_TEXT_LENGTH_FOR_LLM}字用于本体分析)..."
-        
+
         message = f"""## 模拟需求
 
 {simulation_requirement}
@@ -256,14 +249,14 @@ class OntologyGenerator:
 
 {combined_text}
 """
-        
+
         if additional_context:
             message += f"""
 ## 额外说明
 
 {additional_context}
 """
-        
+
         message += """
 请根据以上内容，设计适合社会舆论模拟的实体类型和关系类型。
 
@@ -275,12 +268,12 @@ class OntologyGenerator:
 5. 属性名不能使用 name、uuid、group_id 等保留字，用 full_name、org_name 等替代
 6. 不要输出单独的展示名字段；name 就是最终展示和 schema 使用的类型名，必须与当前语言一致
 """
-        
+
         return message
-    
-    def _validate_and_process(self, result: Dict[str, Any]) -> Dict[str, Any]:
+
+    def _validate_and_process(self, result: dict[str, Any]) -> dict[str, Any]:
         """验证和后处理结果"""
-        
+
         # 确保必要字段存在
         if "entity_types" not in result:
             result["entity_types"] = []
@@ -288,7 +281,7 @@ class OntologyGenerator:
             result["edge_types"] = []
         if "analysis_summary" not in result:
             result["analysis_summary"] = ""
-        
+
         # 验证实体类型
         # 记录原始名称到最终名称的映射，用于后续修正 edge 的 source_targets 引用
         entity_name_map = {}
@@ -305,7 +298,7 @@ class OntologyGenerator:
             # 确保description不超过100字符
             if len(entity.get("description", "")) > 100:
                 entity["description"] = entity["description"][:97] + "..."
-        
+
         # 验证关系类型
         for edge in result["edge_types"]:
             if "name" in edge:
@@ -324,7 +317,7 @@ class OntologyGenerator:
                 edge["attributes"] = []
             if len(edge.get("description", "")) > 100:
                 edge["description"] = edge["description"][:97] + "..."
-        
+
         # 图谱 schema 限制：最多 10 个自定义实体类型，最多 10 个自定义边类型
         MAX_ENTITY_TYPES = 10
         MAX_EDGE_TYPES = 10
@@ -346,179 +339,203 @@ class OntologyGenerator:
         fallback_text = {
             "person_name": "个人" if locale == "zh" else "Person",
             "person_display": "个人" if locale == "zh" else "Person",
-            "person_description": "不属于其他具体人物类型的自然人个体。" if locale == "zh" else "Any individual person not fitting other specific person types.",
-            "full_name_description": "人物的完整姓名" if locale == "zh" else "Full name of the person",
+            "person_description": "不属于其他具体人物类型的自然人个体。"
+            if locale == "zh"
+            else "Any individual person not fitting other specific person types.",
+            "full_name_description": "人物的完整姓名"
+            if locale == "zh"
+            else "Full name of the person",
             "role_description": "人物的角色或职业" if locale == "zh" else "Role or occupation",
-            "person_examples": ["普通市民", "匿名网友"] if locale == "zh" else ["ordinary citizen", "anonymous netizen"],
+            "person_examples": ["普通市民", "匿名网友"]
+            if locale == "zh"
+            else ["ordinary citizen", "anonymous netizen"],
             "organization_name": "组织" if locale == "zh" else "Organization",
             "organization_display": "组织" if locale == "zh" else "Organization",
-            "organization_description": "不属于其他具体组织类型的机构或团体。" if locale == "zh" else "Any organization not fitting other specific organization types.",
+            "organization_description": "不属于其他具体组织类型的机构或团体。"
+            if locale == "zh"
+            else "Any organization not fitting other specific organization types.",
             "org_name_description": "组织名称" if locale == "zh" else "Name of the organization",
             "org_type_description": "组织类型" if locale == "zh" else "Type of organization",
-            "organization_examples": ["小型企业", "社区团体"] if locale == "zh" else ["small business", "community group"],
+            "organization_examples": ["小型企业", "社区团体"]
+            if locale == "zh"
+            else ["small business", "community group"],
         }
         person_fallback = {
             "name": fallback_text["person_name"],
             "description": fallback_text["person_description"],
             "attributes": [
-                {"name": "full_name", "type": "text", "description": fallback_text["full_name_description"]},
-                {"name": "role", "type": "text", "description": fallback_text["role_description"]}
+                {
+                    "name": "full_name",
+                    "type": "text",
+                    "description": fallback_text["full_name_description"],
+                },
+                {"name": "role", "type": "text", "description": fallback_text["role_description"]},
             ],
-            "examples": fallback_text["person_examples"]
+            "examples": fallback_text["person_examples"],
         }
-        
+
         organization_fallback = {
             "name": fallback_text["organization_name"],
             "description": fallback_text["organization_description"],
             "attributes": [
-                {"name": "org_name", "type": "text", "description": fallback_text["org_name_description"]},
-                {"name": "org_type", "type": "text", "description": fallback_text["org_type_description"]}
+                {
+                    "name": "org_name",
+                    "type": "text",
+                    "description": fallback_text["org_name_description"],
+                },
+                {
+                    "name": "org_type",
+                    "type": "text",
+                    "description": fallback_text["org_type_description"],
+                },
             ],
-            "examples": fallback_text["organization_examples"]
+            "examples": fallback_text["organization_examples"],
         }
-        
+
         # 检查是否已有兜底类型
         entity_names = {e["name"] for e in result["entity_types"]}
         person_aliases = {"Person", "个人"}
         organization_aliases = {"Organization", "组织"}
         has_person = bool(entity_names & person_aliases)
         has_organization = bool(entity_names & organization_aliases)
-        
+
         # 需要添加的兜底类型
         fallbacks_to_add = []
         if not has_person:
             fallbacks_to_add.append(person_fallback)
         if not has_organization:
             fallbacks_to_add.append(organization_fallback)
-        
+
         if fallbacks_to_add:
             current_count = len(result["entity_types"])
             needed_slots = len(fallbacks_to_add)
-            
+
             # 如果添加后会超过 10 个，需要移除一些现有类型
             if current_count + needed_slots > MAX_ENTITY_TYPES:
                 # 计算需要移除多少个
                 to_remove = current_count + needed_slots - MAX_ENTITY_TYPES
                 # 从末尾移除（保留前面更重要的具体类型）
                 result["entity_types"] = result["entity_types"][:-to_remove]
-            
+
             # 添加兜底类型
             result["entity_types"].extend(fallbacks_to_add)
-        
+
         # 最终确保不超过限制（防御性编程）
         if len(result["entity_types"]) > MAX_ENTITY_TYPES:
             result["entity_types"] = result["entity_types"][:MAX_ENTITY_TYPES]
-        
+
         if len(result["edge_types"]) > MAX_EDGE_TYPES:
             result["edge_types"] = result["edge_types"][:MAX_EDGE_TYPES]
-        
+
         return result
-    
-    def generate_python_code(self, ontology: Dict[str, Any]) -> str:
+
+    def generate_python_code(self, ontology: dict[str, Any]) -> str:
         """
         将本体定义转换为Python代码（类似ontology.py）
-        
+
         Args:
             ontology: 本体定义
-            
+
         Returns:
             Python代码字符串
         """
         code_lines = [
             '"""',
-            '自定义实体类型定义',
-            '由SuperFish自动生成，用于社会舆论模拟',
+            "自定义实体类型定义",
+            "由SuperFish自动生成，用于社会舆论模拟",
             '"""',
-            '',
-            'from typing import Optional',
-            'from pydantic import BaseModel, Field',
-            '',
-            '',
-            '# ============== 实体类型定义 ==============',
-            '',
+            "",
+            "from typing import Optional",
+            "from pydantic import BaseModel, Field",
+            "",
+            "",
+            "# ============== 实体类型定义 ==============",
+            "",
         ]
-        
+
         # 生成实体类型
         for entity in ontology.get("entity_types", []):
             name = entity["name"]
             class_name = _safe_python_class_name(name, "EntityType")
             desc = entity.get("description", f"A {name} entity.")
-            
-            code_lines.append(f'class {class_name}(BaseModel):')
+
+            code_lines.append(f"class {class_name}(BaseModel):")
             code_lines.append(f'    """{desc}"""')
-            
+
             attrs = entity.get("attributes", [])
             if attrs:
                 for attr in attrs:
                     attr_name = attr["name"]
                     attr_desc = attr.get("description", attr_name)
-                    code_lines.append(f'    {attr_name}: Optional[str] = Field(')
+                    code_lines.append(f"    {attr_name}: Optional[str] = Field(")
                     code_lines.append(f'        description="{attr_desc}",')
-                    code_lines.append(f'        default=None')
-                    code_lines.append(f'    )')
+                    code_lines.append("        default=None")
+                    code_lines.append("    )")
             else:
-                code_lines.append('    pass')
-            
-            code_lines.append('')
-            code_lines.append('')
-        
-        code_lines.append('# ============== 关系类型定义 ==============')
-        code_lines.append('')
-        
+                code_lines.append("    pass")
+
+            code_lines.append("")
+            code_lines.append("")
+
+        code_lines.append("# ============== 关系类型定义 ==============")
+        code_lines.append("")
+
         # 生成关系类型
         for edge in ontology.get("edge_types", []):
             name = edge["name"]
             # 转换为PascalCase类名
             class_name = _safe_python_class_name(name, "RelationType")
             desc = edge.get("description", f"A {name} relationship.")
-            
-            code_lines.append(f'class {class_name}(BaseModel):')
+
+            code_lines.append(f"class {class_name}(BaseModel):")
             code_lines.append(f'    """{desc}"""')
-            
+
             attrs = edge.get("attributes", [])
             if attrs:
                 for attr in attrs:
                     attr_name = attr["name"]
                     attr_desc = attr.get("description", attr_name)
-                    code_lines.append(f'    {attr_name}: Optional[str] = Field(')
+                    code_lines.append(f"    {attr_name}: Optional[str] = Field(")
                     code_lines.append(f'        description="{attr_desc}",')
-                    code_lines.append(f'        default=None')
-                    code_lines.append(f'    )')
+                    code_lines.append("        default=None")
+                    code_lines.append("    )")
             else:
-                code_lines.append('    pass')
-            
-            code_lines.append('')
-            code_lines.append('')
-        
+                code_lines.append("    pass")
+
+            code_lines.append("")
+            code_lines.append("")
+
         # 生成类型字典
-        code_lines.append('# ============== 类型配置 ==============')
-        code_lines.append('')
-        code_lines.append('ENTITY_TYPES = {')
+        code_lines.append("# ============== 类型配置 ==============")
+        code_lines.append("")
+        code_lines.append("ENTITY_TYPES = {")
         for entity in ontology.get("entity_types", []):
             name = entity["name"]
             class_name = _safe_python_class_name(name, "EntityType")
             code_lines.append(f'    "{name}": {class_name},')
-        code_lines.append('}')
-        code_lines.append('')
-        code_lines.append('EDGE_TYPES = {')
+        code_lines.append("}")
+        code_lines.append("")
+        code_lines.append("EDGE_TYPES = {")
         for edge in ontology.get("edge_types", []):
             name = edge["name"]
             class_name = _safe_python_class_name(name, "RelationType")
             code_lines.append(f'    "{name}": {class_name},')
-        code_lines.append('}')
-        code_lines.append('')
-        
+        code_lines.append("}")
+        code_lines.append("")
+
         # 生成边的source_targets映射
-        code_lines.append('EDGE_SOURCE_TARGETS = {')
+        code_lines.append("EDGE_SOURCE_TARGETS = {")
         for edge in ontology.get("edge_types", []):
             name = edge["name"]
             source_targets = edge.get("source_targets", [])
             if source_targets:
-                st_list = ', '.join([
-                    f'{{"source": "{st.get("source", "Entity")}", "target": "{st.get("target", "Entity")}"}}'
-                    for st in source_targets
-                ])
+                st_list = ", ".join(
+                    [
+                        f'{{"source": "{st.get("source", "Entity")}", "target": "{st.get("target", "Entity")}"}}'
+                        for st in source_targets
+                    ]
+                )
                 code_lines.append(f'    "{name}": [{st_list}],')
-        code_lines.append('}')
-        
-        return '\n'.join(code_lines)
+        code_lines.append("}")
+
+        return "\n".join(code_lines)

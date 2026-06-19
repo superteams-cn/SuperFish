@@ -10,9 +10,10 @@ import threading
 import time
 import uuid
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from llama_index.core.graph_stores.types import KG_NODES_KEY, KG_RELATIONS_KEY
 from llama_index.core.indices.property_graph import SchemaLLMPathExtractor
@@ -23,30 +24,31 @@ from pydantic import PrivateAttr
 from ..config import Config
 from ..models.task import TaskManager, TaskStatus
 from ..utils.llm_client import LLMClient
+from ..utils.locale import get_locale, set_locale, t
+from ..utils.logger import get_logger
 from ..utils.neo4j_graph_utils import (
     delete_group,
     fetch_all_edges,
     fetch_all_nodes,
     get_neo4j_graph_client,
 )
-from ..utils.locale import get_locale, set_locale, t
-from ..utils.logger import get_logger
 from .text_processor import TextProcessor
 
-logger = get_logger('superfish.graph_builder')
+logger = get_logger("superfish.graph_builder")
 
-_RESERVED_ATTRS = {'uuid', 'name', 'group_id', 'name_embedding', 'summary', 'created_at'}
+_RESERVED_ATTRS = {"uuid", "name", "group_id", "name_embedding", "summary", "created_at"}
 
 
 @dataclass
 class GraphInfo:
     """图谱信息"""
+
     graph_id: str
     node_count: int
     edge_count: int
-    entity_types: List[str]
+    entity_types: list[str]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "graph_id": self.graph_id,
             "node_count": self.node_count,
@@ -56,7 +58,7 @@ class GraphInfo:
 
 
 def _clean_attr_name(name: str) -> str:
-    cleaned = re.sub(r'[^a-zA-Z0-9_]+', '_', name or '').strip('_').lower()
+    cleaned = re.sub(r"[^a-zA-Z0-9_]+", "_", name or "").strip("_").lower()
     if not cleaned:
         cleaned = "value"
     if cleaned in _RESERVED_ATTRS:
@@ -70,7 +72,7 @@ def _normalize_entity_key(entity_type: str, name: str) -> str:
 
 def _schema_label(name: str) -> str:
     """Normalize ontology names for LlamaIndex strict enum validation."""
-    label = re.sub(r'[^\w]+', '_', name or '', flags=re.UNICODE).strip('_').upper()
+    label = re.sub(r"[^\w]+", "_", name or "", flags=re.UNICODE).strip("_").upper()
     return label or "ENTITY"
 
 
@@ -81,7 +83,7 @@ def _schema_value(value: Any) -> str:
 
 
 def _enum_member_name(value: str) -> str:
-    name = re.sub(r'[^a-zA-Z0-9_]+', '_', value or '').strip('_').upper()
+    name = re.sub(r"[^a-zA-Z0-9_]+", "_", value or "").strip("_").upper()
     if not name:
         checksum = zlib.crc32((value or "").encode("utf-8")) & 0xFFFFFFFF
         name = f"VALUE_{checksum:08X}"
@@ -90,8 +92,8 @@ def _enum_member_name(value: str) -> str:
     return name
 
 
-def _enum_mapping(values: List[str]) -> Dict[str, str]:
-    mapping: Dict[str, str] = {}
+def _enum_mapping(values: list[str]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
     used: set[str] = set()
     for value in values:
         member = _enum_member_name(value)
@@ -125,7 +127,7 @@ class SuperFishStructuredLLM(OpenAILike):
         self,
         output_cls: Any,
         prompt: Any,
-        llm_kwargs: Optional[Dict[str, Any]] = None,
+        llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> Any:
         prompt_text = prompt.format(**prompt_args) if hasattr(prompt, "format") else str(prompt)
@@ -151,7 +153,7 @@ class SuperFishStructuredLLM(OpenAILike):
                     "- Put a concise Chinese evidence sentence in relation.properties.fact when possible.\n"
                     "- Put a concise Chinese summary in entity.properties.summary when useful.\n"
                     "- Keep the JSON compact and complete.\n"
-                    "- If no valid triplet is present, return {\"triplets\": []}."
+                    '- If no valid triplet is present, return {"triplets": []}.'
                 ),
             },
         ]
@@ -167,7 +169,9 @@ class SuperFishStructuredLLM(OpenAILike):
             except Exception as exc:
                 last_error = exc
                 if attempt == 0:
-                    logger.warning("LlamaIndex schema extraction returned invalid JSON; retrying once")
+                    logger.warning(
+                        "LlamaIndex schema extraction returned invalid JSON; retrying once"
+                    )
                     continue
                 message = str(exc)
                 logger.warning(
@@ -180,7 +184,7 @@ class SuperFishStructuredLLM(OpenAILike):
         self,
         output_cls: Any,
         prompt: Any,
-        llm_kwargs: Optional[Dict[str, Any]] = None,
+        llm_kwargs: dict[str, Any] | None = None,
         **prompt_args: Any,
     ) -> Any:
         return await asyncio.to_thread(
@@ -201,7 +205,7 @@ class GraphBuilderService:
     source/target 组合，再写入 Neo4j。
     """
 
-    def __init__(self, api_key: Optional[str] = None, llm_client: Optional[Any] = None):
+    def __init__(self, api_key: str | None = None, llm_client: Any | None = None):
         # api_key 参数保留以兼容现有调用；Neo4j 配置从 Config 读取。
         self.task_manager = TaskManager()
         self.llm = llm_client or self._make_llamaindex_llm()
@@ -213,7 +217,7 @@ class GraphBuilderService:
     def build_graph_async(
         self,
         text: str,
-        ontology: Dict[str, Any],
+        ontology: dict[str, Any],
         graph_name: str = "SuperFish Graph",
         chunk_size: int = 500,
         chunk_overlap: int = 50,
@@ -230,7 +234,16 @@ class GraphBuilderService:
         current_locale = get_locale()
         thread = threading.Thread(
             target=self._build_graph_worker,
-            args=(task_id, text, ontology, graph_name, chunk_size, chunk_overlap, batch_size, current_locale),
+            args=(
+                task_id,
+                text,
+                ontology,
+                graph_name,
+                chunk_size,
+                chunk_overlap,
+                batch_size,
+                current_locale,
+            ),
             daemon=True,
         )
         thread.start()
@@ -240,12 +253,12 @@ class GraphBuilderService:
         self,
         task_id: str,
         text: str,
-        ontology: Dict[str, Any],
+        ontology: dict[str, Any],
         graph_name: str = "SuperFish Graph",
         chunk_size: int = 500,
         chunk_overlap: int = 50,
         batch_size: int = 3,
-        locale: str = 'zh',
+        locale: str = "zh",
     ):
         """使用已有任务ID同步构建图谱，供 API 层托管项目状态。"""
         self._build_graph_worker(
@@ -263,12 +276,12 @@ class GraphBuilderService:
         self,
         task_id: str,
         text: str,
-        ontology: Dict[str, Any],
+        ontology: dict[str, Any],
         graph_name: str,
         chunk_size: int,
         chunk_overlap: int,
         batch_size: int,
-        locale: str = 'zh',
+        locale: str = "zh",
     ):
         set_locale(locale)
 
@@ -277,7 +290,7 @@ class GraphBuilderService:
                 task_id,
                 status=TaskStatus.PROCESSING,
                 progress=5,
-                message=t('progress.startBuildingGraph'),
+                message=t("progress.startBuildingGraph"),
             )
 
             self.client.build_indices_and_constraints()
@@ -285,14 +298,14 @@ class GraphBuilderService:
             self.task_manager.update_task(
                 task_id,
                 progress=10,
-                message=t('progress.graphCreated', graphId=graph_id),
+                message=t("progress.graphCreated", graphId=graph_id),
             )
 
             schema = self._build_schema(ontology)
             self.task_manager.update_task(
                 task_id,
                 progress=15,
-                message=t('progress.ontologySet'),
+                message=t("progress.ontologySet"),
             )
 
             chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
@@ -300,7 +313,7 @@ class GraphBuilderService:
             self.task_manager.update_task(
                 task_id,
                 progress=20,
-                message=t('progress.textSplit', count=total_chunks),
+                message=t("progress.textSplit", count=total_chunks),
             )
 
             nodes, edges = self._extract_chunks(
@@ -316,21 +329,25 @@ class GraphBuilderService:
             self.task_manager.update_task(
                 task_id,
                 progress=88,
-                message=t('progress.fetchingGraphInfo'),
+                message=t("progress.fetchingGraphInfo"),
             )
             self.client.write_graph(graph_id, nodes, edges)
             graph_info = self._get_graph_info(graph_id)
 
-            self.task_manager.complete_task(task_id, {
-                "graph_id": graph_id,
-                "graph_info": graph_info.to_dict(),
-                "node_count": graph_info.node_count,
-                "edge_count": graph_info.edge_count,
-                "chunks_processed": total_chunks,
-            })
+            self.task_manager.complete_task(
+                task_id,
+                {
+                    "graph_id": graph_id,
+                    "graph_info": graph_info.to_dict(),
+                    "node_count": graph_info.node_count,
+                    "edge_count": graph_info.edge_count,
+                    "chunks_processed": total_chunks,
+                },
+            )
 
         except Exception as e:
             import traceback
+
             error_msg = f"{str(e)}\n{traceback.format_exc()}"
             logger.error(f"图谱构建失败: {error_msg}")
             self.task_manager.fail_task(task_id, error_msg)
@@ -339,7 +356,7 @@ class GraphBuilderService:
         """生成图谱 group_id。"""
         return f"superfish_{uuid.uuid4().hex[:16]}"
 
-    def _build_schema(self, ontology: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_schema(self, ontology: dict[str, Any]) -> dict[str, Any]:
         entity_types = {}
         entity_label_by_name = {}
         for entity in ontology.get("entity_types", []):
@@ -347,7 +364,9 @@ class GraphBuilderService:
             if not name:
                 continue
             label = _schema_label(name)
-            attrs = [_clean_attr_name(attr.get("name", "")) for attr in entity.get("attributes", [])]
+            attrs = [
+                _clean_attr_name(attr.get("name", "")) for attr in entity.get("attributes", [])
+            ]
             entity_label_by_name[name] = label
             entity_types[label] = {
                 "name": name,
@@ -374,11 +393,14 @@ class GraphBuilderService:
                     "name": name,
                     "description": edge.get("description", ""),
                     "source_targets": source_targets,
-                    "attributes": sorted({
-                        _clean_attr_name(attr.get("name", ""))
-                        for attr in edge.get("attributes", [])
-                        if attr.get("name")
-                    } | {"fact"}),
+                    "attributes": sorted(
+                        {
+                            _clean_attr_name(attr.get("name", ""))
+                            for attr in edge.get("attributes", [])
+                            if attr.get("name")
+                        }
+                        | {"fact"}
+                    ),
                 }
 
         if not entity_types:
@@ -395,18 +417,18 @@ class GraphBuilderService:
 
     def _extract_chunks(
         self,
-        chunks: List[str],
-        schema: Dict[str, Any],
-        progress_callback: Optional[Callable[[str, float], None]] = None,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        nodes_by_key: Dict[str, Dict[str, Any]] = {}
-        edges_by_key: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+        chunks: list[str],
+        schema: dict[str, Any],
+        progress_callback: Callable[[str, float], None] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        nodes_by_key: dict[str, dict[str, Any]] = {}
+        edges_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
         total = len(chunks)
 
         for idx, chunk in enumerate(chunks):
             if progress_callback:
                 progress_callback(
-                    t('progress.sendingBatch', current=idx + 1, total=total, chunks=1),
+                    t("progress.sendingBatch", current=idx + 1, total=total, chunks=1),
                     idx / max(total, 1),
                 )
 
@@ -424,9 +446,13 @@ class GraphBuilderService:
                         "attributes": node.get("attributes", {}),
                     }
                 else:
-                    if node.get("summary") and node["summary"] not in nodes_by_key[node_key].get("summary", ""):
+                    if node.get("summary") and node["summary"] not in nodes_by_key[node_key].get(
+                        "summary", ""
+                    ):
                         summary = nodes_by_key[node_key].get("summary", "")
-                        nodes_by_key[node_key]["summary"] = (summary + "\n" + node["summary"]).strip()[:2000]
+                        nodes_by_key[node_key]["summary"] = (
+                            summary + "\n" + node["summary"]
+                        ).strip()[:2000]
                     nodes_by_key[node_key]["attributes"].update(node.get("attributes", {}))
                 local_key_to_uuid[node.get("id") or node["name"]] = nodes_by_key[node_key]["uuid"]
                 local_key_to_uuid[node["name"]] = nodes_by_key[node_key]["uuid"]
@@ -441,7 +467,8 @@ class GraphBuilderService:
                     edges_by_key[edge_key] = {
                         "uuid": str(uuid.uuid4()),
                         "name": edge["type"],
-                        "fact": edge.get("fact") or f"{edge['source']} {edge['type']} {edge['target']}",
+                        "fact": edge.get("fact")
+                        or f"{edge['source']} {edge['type']} {edge['target']}",
                         "source_node_uuid": source_uuid,
                         "target_node_uuid": target_uuid,
                         "attributes": edge.get("attributes", {}),
@@ -451,16 +478,16 @@ class GraphBuilderService:
                 time.sleep(0.2)
 
         if progress_callback:
-            progress_callback(t('progress.processingComplete', completed=total, total=total), 1.0)
+            progress_callback(t("progress.processingComplete", completed=total, total=total), 1.0)
 
         return list(nodes_by_key.values()), list(edges_by_key.values())
 
     def _extract_chunk_with_llamaindex(
         self,
         chunk: str,
-        schema: Dict[str, Any],
+        schema: dict[str, Any],
         chunk_idx: int,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         extractor = self._make_schema_extractor(schema)
         text_node = TextNode(text=chunk, id_=f"chunk_{chunk_idx:04d}")
         extracted_node = extractor([text_node])[0]
@@ -514,18 +541,22 @@ class GraphBuilderService:
                 for k, v in properties.items()
                 if _clean_attr_name(k) in allowed_attrs and k != "fact"
             }
-            valid_edges.append({
-                "source": source_id,
-                "target": target_id,
-                "type": rel_type,
-                "fact": str(properties.get("fact") or "")[:1000],
-                "attributes": attrs,
-            })
+            valid_edges.append(
+                {
+                    "source": source_id,
+                    "target": target_id,
+                    "type": rel_type,
+                    "fact": str(properties.get("fact") or "")[:1000],
+                    "attributes": attrs,
+                }
+            )
 
         return valid_nodes, valid_edges
 
-    def _make_schema_extractor(self, schema: Dict[str, Any]) -> SchemaLLMPathExtractor:
-        entity_members = _enum_mapping([entity["label"] for entity in schema["entity_types"].values()])
+    def _make_schema_extractor(self, schema: dict[str, Any]) -> SchemaLLMPathExtractor:
+        entity_members = _enum_mapping(
+            [entity["label"] for entity in schema["entity_types"].values()]
+        )
         relation_members = _enum_mapping(list(schema["edge_types"]))
         entity_member_by_label = {label: member for member, label in entity_members.items()}
         relation_member_by_label = {label: member for member, label in relation_members.items()}
@@ -539,16 +570,16 @@ class GraphBuilderService:
             )
             for source, relation, target in schema["allowed_triples"]
         ]
-        entity_props = sorted({
-            attr
-            for entity in schema["entity_types"].values()
-            for attr in entity.get("attributes", [])
-        })
-        relation_props = sorted({
-            attr
-            for edge in schema["edge_types"].values()
-            for attr in edge.get("attributes", [])
-        })
+        entity_props = sorted(
+            {
+                attr
+                for entity in schema["entity_types"].values()
+                for attr in entity.get("attributes", [])
+            }
+        )
+        relation_props = sorted(
+            {attr for edge in schema["edge_types"].values() for attr in edge.get("attributes", [])}
+        )
         allowed_triples_text = "\n".join(
             f"- {source} --{relation}--> {target}"
             for source, relation, target in sorted(schema["allowed_triples"])
@@ -592,7 +623,7 @@ class GraphBuilderService:
             entity_types=list(entity_types),
         )
 
-    def get_graph_data(self, graph_id: str) -> Dict[str, Any]:
+    def get_graph_data(self, graph_id: str) -> dict[str, Any]:
         nodes = fetch_all_nodes(self.client, graph_id)
         edges = fetch_all_edges(self.client, graph_id)
         node_map = {n["uuid"]: n["name"] for n in nodes}

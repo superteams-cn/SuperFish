@@ -9,31 +9,31 @@ Report API 路由（FastAPI 版）
 """
 
 import os
-import traceback
 import threading
+import traceback
 import uuid
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from ..deps import use_locale
+from ..models.project import ProjectManager
+from ..models.task import TaskManager, TaskStatus
 from ..schemas.report import (
+    ChatRequest,
     GenerateReportRequest,
     GenerateStatusRequest,
-    ChatRequest,
     SearchToolRequest,
     StatisticsToolRequest,
 )
 from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
 from ..services.simulation_manager import SimulationManager
-from ..models.project import ProjectManager
-from ..models.task import TaskManager, TaskStatus
+from ..utils.locale import get_locale, set_locale, t
 from ..utils.logger import get_logger
-from ..utils.locale import t, get_locale, set_locale
 
 router = APIRouter(dependencies=[Depends(use_locale)])
 
-logger = get_logger('superfish.api.report')
+logger = get_logger("superfish.api.report")
 
 
 def _error(message: str, status: int, **extra) -> JSONResponse:
@@ -45,13 +45,14 @@ def _error(message: str, status: int, **extra) -> JSONResponse:
 
 # ============== 报告生成接口 ==============
 
-@router.post('/generate')
+
+@router.post("/generate")
 def generate_report(req: GenerateReportRequest):
     """生成模拟分析报告（异步任务）。立即返回 task_id，用 /generate/status 查询进度。"""
     try:
         simulation_id = req.simulation_id
         if not simulation_id:
-            return _error(t('api.requireSimulationId'), 400)
+            return _error(t("api.requireSimulationId"), 400)
 
         force_regenerate = req.force_regenerate
 
@@ -59,7 +60,7 @@ def generate_report(req: GenerateReportRequest):
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
         if not state:
-            return _error(t('api.simulationNotFound', id=simulation_id), 404)
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         # 检查是否已有报告
         if not force_regenerate:
@@ -71,7 +72,7 @@ def generate_report(req: GenerateReportRequest):
                         "simulation_id": simulation_id,
                         "report_id": existing_report.report_id,
                         "status": "completed",
-                        "message": t('api.reportAlreadyExists'),
+                        "message": t("api.reportAlreadyExists"),
                         "already_generated": True,
                     },
                 }
@@ -79,15 +80,15 @@ def generate_report(req: GenerateReportRequest):
         # 获取项目信息
         project = ProjectManager.get_project(state.project_id)
         if not project:
-            return _error(t('api.projectNotFound', id=state.project_id), 404)
+            return _error(t("api.projectNotFound", id=state.project_id), 404)
 
         graph_id = state.graph_id or project.graph_id
         if not graph_id:
-            return _error(t('api.missingGraphIdEnsure'), 400)
+            return _error(t("api.missingGraphIdEnsure"), 400)
 
         simulation_requirement = project.simulation_requirement
         if not simulation_requirement:
-            return _error(t('api.missingSimRequirement'), 400)
+            return _error(t("api.missingSimRequirement"), 400)
 
         # 提前生成 report_id，以便立即返回给前端
         report_id = f"report_{uuid.uuid4().hex[:12]}"
@@ -114,7 +115,7 @@ def generate_report(req: GenerateReportRequest):
                     task_id,
                     status=TaskStatus.PROCESSING,
                     progress=0,
-                    message=t('api.initReportAgent'),
+                    message=t("api.initReportAgent"),
                 )
 
                 # 创建 Report Agent
@@ -151,7 +152,7 @@ def generate_report(req: GenerateReportRequest):
                         },
                     )
                 else:
-                    task_manager.fail_task(task_id, report.error or t('api.reportGenerateFailed'))
+                    task_manager.fail_task(task_id, report.error or t("api.reportGenerateFailed"))
 
             except Exception as e:
                 logger.error(f"报告生成失败: {str(e)}")
@@ -168,7 +169,7 @@ def generate_report(req: GenerateReportRequest):
                 "report_id": report_id,
                 "task_id": task_id,
                 "status": "generating",
-                "message": t('api.reportGenerateStarted'),
+                "message": t("api.reportGenerateStarted"),
                 "already_generated": False,
             },
         }
@@ -178,7 +179,7 @@ def generate_report(req: GenerateReportRequest):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.post('/generate/status')
+@router.post("/generate/status")
 def get_generate_status(req: GenerateStatusRequest):
     """查询报告生成任务进度。"""
     try:
@@ -196,18 +197,18 @@ def get_generate_status(req: GenerateStatusRequest):
                         "report_id": existing_report.report_id,
                         "status": "completed",
                         "progress": 100,
-                        "message": t('api.reportGenerated'),
+                        "message": t("api.reportGenerated"),
                         "already_completed": True,
                     },
                 }
 
         if not task_id:
-            return _error(t('api.requireTaskOrSimId'), 400)
+            return _error(t("api.requireTaskOrSimId"), 400)
 
         task_manager = TaskManager()
         task = task_manager.get_task(task_id)
         if not task:
-            return _error(t('api.taskNotFound', id=task_id), 404)
+            return _error(t("api.taskNotFound", id=task_id), 404)
 
         return {"success": True, "data": task.to_dict()}
 
@@ -218,7 +219,8 @@ def get_generate_status(req: GenerateStatusRequest):
 
 # ============== 报告列表 / 按模拟查询（字面量路径，须在 /{report_id} 前）==============
 
-@router.get('/list')
+
+@router.get("/list")
 def list_reports(simulation_id: str | None = None, limit: int = 50):
     """列出所有报告，可按模拟ID过滤。"""
     try:
@@ -233,15 +235,13 @@ def list_reports(simulation_id: str | None = None, limit: int = 50):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.get('/by-simulation/{simulation_id}')
+@router.get("/by-simulation/{simulation_id}")
 def get_report_by_simulation(simulation_id: str):
     """根据模拟ID获取报告。"""
     try:
         report = ReportManager.get_report_by_simulation(simulation_id)
         if not report:
-            return _error(
-                t('api.noReportForSim', id=simulation_id), 404, has_report=False
-            )
+            return _error(t("api.noReportForSim", id=simulation_id), 404, has_report=False)
         return {"success": True, "data": report.to_dict(), "has_report": True}
     except Exception as e:
         logger.error(f"获取报告失败: {str(e)}")
@@ -250,7 +250,8 @@ def get_report_by_simulation(simulation_id: str):
 
 # ============== Report Agent 对话接口 ==============
 
-@router.post('/chat')
+
+@router.post("/chat")
 def chat_with_report_agent(req: ChatRequest):
     """与 Report Agent 对话，Agent 可自主调用检索工具回答问题。"""
     try:
@@ -259,23 +260,23 @@ def chat_with_report_agent(req: ChatRequest):
         chat_history = req.chat_history
 
         if not simulation_id:
-            return _error(t('api.requireSimulationId'), 400)
+            return _error(t("api.requireSimulationId"), 400)
         if not message:
-            return _error(t('api.requireMessage'), 400)
+            return _error(t("api.requireMessage"), 400)
 
         # 获取模拟和项目信息
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
         if not state:
-            return _error(t('api.simulationNotFound', id=simulation_id), 404)
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         project = ProjectManager.get_project(state.project_id)
         if not project:
-            return _error(t('api.projectNotFound', id=state.project_id), 404)
+            return _error(t("api.projectNotFound", id=state.project_id), 404)
 
         graph_id = state.graph_id or project.graph_id
         if not graph_id:
-            return _error(t('api.missingGraphId'), 400)
+            return _error(t("api.missingGraphId"), 400)
 
         simulation_requirement = project.simulation_requirement or ""
 
@@ -296,7 +297,8 @@ def chat_with_report_agent(req: ChatRequest):
 
 # ============== 报告状态检查接口 ==============
 
-@router.get('/check/{simulation_id}')
+
+@router.get("/check/{simulation_id}")
 def check_report_status(simulation_id: str):
     """检查模拟是否有报告及其状态，用于前端判断是否解锁 Interview。"""
     try:
@@ -326,7 +328,8 @@ def check_report_status(simulation_id: str):
 
 # ============== 工具调用接口（供调试使用）==============
 
-@router.post('/tools/search')
+
+@router.post("/tools/search")
 def search_graph_tool(req: SearchToolRequest):
     """图谱搜索工具接口（调试用）。"""
     try:
@@ -335,7 +338,7 @@ def search_graph_tool(req: SearchToolRequest):
         limit = req.limit
 
         if not graph_id or not query:
-            return _error(t('api.requireGraphIdAndQuery'), 400)
+            return _error(t("api.requireGraphIdAndQuery"), 400)
 
         from ..services.neo4j_tools import Neo4jToolsService
 
@@ -348,13 +351,13 @@ def search_graph_tool(req: SearchToolRequest):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.post('/tools/statistics')
+@router.post("/tools/statistics")
 def get_graph_statistics_tool(req: StatisticsToolRequest):
     """图谱统计工具接口（调试用）。"""
     try:
         graph_id = req.graph_id
         if not graph_id:
-            return _error(t('api.requireGraphId'), 400)
+            return _error(t("api.requireGraphId"), 400)
 
         from ..services.neo4j_tools import Neo4jToolsService
 
@@ -369,20 +372,24 @@ def get_graph_statistics_tool(req: StatisticsToolRequest):
 
 # ============== 报告下载 / 进度 / 章节 / 日志（带 report_id 前缀的子路径）==============
 
-@router.get('/{report_id}/download')
+
+@router.get("/{report_id}/download")
 def download_report(report_id: str):
     """下载报告（Markdown 格式）。"""
     try:
         report = ReportManager.get_report(report_id)
         if not report:
-            return _error(t('api.reportNotFound', id=report_id), 404)
+            return _error(t("api.reportNotFound", id=report_id), 404)
 
         md_path = ReportManager._get_report_markdown_path(report_id)
 
         if not os.path.exists(md_path):
             # 如果 MD 文件不存在，生成一个临时文件
             import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".md", delete=False, encoding="utf-8"
+            ) as f:
                 f.write(report.markdown_content)
                 temp_path = f.name
             return FileResponse(temp_path, filename=f"{report_id}.md", media_type="text/markdown")
@@ -394,20 +401,20 @@ def download_report(report_id: str):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.get('/{report_id}/progress')
+@router.get("/{report_id}/progress")
 def get_report_progress(report_id: str):
     """获取报告生成进度（实时）。"""
     try:
         progress = ReportManager.get_progress(report_id)
         if not progress:
-            return _error(t('api.reportProgressNotAvail', id=report_id), 404)
+            return _error(t("api.reportProgressNotAvail", id=report_id), 404)
         return {"success": True, "data": progress}
     except Exception as e:
         logger.error(f"获取报告进度失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.get('/{report_id}/sections')
+@router.get("/{report_id}/sections")
 def get_report_sections(report_id: str):
     """获取已生成的章节列表（分章节输出，前端可轮询）。"""
     try:
@@ -431,16 +438,16 @@ def get_report_sections(report_id: str):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.get('/{report_id}/section/{section_index}')
+@router.get("/{report_id}/section/{section_index}")
 def get_single_section(report_id: str, section_index: int):
     """获取单个章节内容。"""
     try:
         section_path = ReportManager._get_section_path(report_id, section_index)
 
         if not os.path.exists(section_path):
-            return _error(t('api.sectionNotFound', index=f"{section_index:02d}"), 404)
+            return _error(t("api.sectionNotFound", index=f"{section_index:02d}"), 404)
 
-        with open(section_path, 'r', encoding='utf-8') as f:
+        with open(section_path, encoding="utf-8") as f:
             content = f.read()
 
         return {
@@ -458,7 +465,8 @@ def get_single_section(report_id: str, section_index: int):
 
 # ============== Agent 日志接口 ==============
 
-@router.get('/{report_id}/agent-log')
+
+@router.get("/{report_id}/agent-log")
 def get_agent_log(report_id: str, from_line: int = 0):
     """获取 Report Agent 的结构化执行日志（支持从指定行增量获取）。"""
     try:
@@ -469,7 +477,7 @@ def get_agent_log(report_id: str, from_line: int = 0):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.get('/{report_id}/agent-log/stream')
+@router.get("/{report_id}/agent-log/stream")
 def stream_agent_log(report_id: str):
     """一次性获取完整的 Agent 日志。"""
     try:
@@ -482,7 +490,8 @@ def stream_agent_log(report_id: str):
 
 # ============== 控制台日志接口 ==============
 
-@router.get('/{report_id}/console-log')
+
+@router.get("/{report_id}/console-log")
 def get_console_log(report_id: str, from_line: int = 0):
     """获取 Report Agent 的控制台输出日志（纯文本，支持增量获取）。"""
     try:
@@ -493,7 +502,7 @@ def get_console_log(report_id: str, from_line: int = 0):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.get('/{report_id}/console-log/stream')
+@router.get("/{report_id}/console-log/stream")
 def stream_console_log(report_id: str):
     """一次性获取完整的控制台日志。"""
     try:
@@ -506,27 +515,28 @@ def stream_console_log(report_id: str):
 
 # ============== 报告详情 / 删除（单段 /{report_id}，须放在最后）==============
 
-@router.get('/{report_id}')
+
+@router.get("/{report_id}")
 def get_report(report_id: str):
     """获取报告详情。"""
     try:
         report = ReportManager.get_report(report_id)
         if not report:
-            return _error(t('api.reportNotFound', id=report_id), 404)
+            return _error(t("api.reportNotFound", id=report_id), 404)
         return {"success": True, "data": report.to_dict()}
     except Exception as e:
         logger.error(f"获取报告失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
-@router.delete('/{report_id}')
+@router.delete("/{report_id}")
 def delete_report(report_id: str):
     """删除报告。"""
     try:
         success = ReportManager.delete_report(report_id)
         if not success:
-            return _error(t('api.reportNotFound', id=report_id), 404)
-        return {"success": True, "message": t('api.reportDeleted', id=report_id)}
+            return _error(t("api.reportNotFound", id=report_id), 404)
+        return {"success": True, "message": t("api.reportDeleted", id=report_id)}
     except Exception as e:
         logger.error(f"删除报告失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())

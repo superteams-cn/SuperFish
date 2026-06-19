@@ -101,7 +101,9 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         addLog(t('log.reportAgentReplied'))
       } else {
         const idx = selectedAgentIndex as number
-        addLog(t('log.sendToAgent', { name: selectedAgent?.username, message: text.substring(0, 50) }))
+        addLog(
+          t('log.sendToAgent', { name: selectedAgent?.username, message: text.substring(0, 50) }),
+        )
         let prompt = text
         if (prev.length > 0) {
           const ctx = prev
@@ -117,7 +119,8 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         if (!res.success || !res.data) throw new Error(res.error || t('step5.requestFailed'))
         const resultData = res.data.result || res.data
         const dict = resultData.results || resultData
-        const agentResult = dict[`reddit_${idx}`] || dict[`twitter_${idx}`] || Object.values(dict)[0]
+        const agentResult =
+          dict[`reddit_${idx}`] || dict[`twitter_${idx}`] || Object.values(dict)[0]
         answer = (agentResult?.response || agentResult?.answer) ?? t('step5.noResponse')
         addLog(t('log.agentReplied', { name: selectedAgent?.username }))
       }
@@ -139,7 +142,10 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
     setIsSurveying(true)
     addLog(t('log.sendSurvey', { count: selected.size }))
     try {
-      const interviews = Array.from(selected).map((idx) => ({ agent_id: idx, prompt: question.trim() }))
+      const interviews = Array.from(selected).map((idx) => ({
+        agent_id: idx,
+        prompt: question.trim(),
+      }))
       const res = await interviewAgents({ simulation_id: simulationId, interviews })
       if (!res.success || !res.data) throw new Error(res.error || t('step5.requestFailed'))
       const resultData = res.data.result || res.data
@@ -165,9 +171,9 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-muted/30">
+    <div className="bg-muted/30 flex h-full overflow-hidden">
       {/* 左侧目标选择 */}
-      <div className="flex w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r bg-card p-3">
+      <div className="bg-card flex w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r p-3">
         <SidebarItem
           icon={<Bot className="h-4 w-4" />}
           label={t('step5.chatWithReportAgent')}
@@ -177,7 +183,7 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
             setTargetKey('report_agent')
           }}
         />
-        <div className="mt-2 px-2 text-[10px] font-semibold uppercase text-muted-foreground">
+        <div className="text-muted-foreground mt-2 px-2 text-[10px] font-semibold uppercase">
           <Users className="mr-1 inline h-3 w-3" />
           Agents
         </div>
@@ -211,7 +217,8 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
             onToggle={(idx) =>
               setSelected((prev) => {
                 const next = new Set(prev)
-                next.has(idx) ? next.delete(idx) : next.add(idx)
+                if (next.has(idx)) next.delete(idx)
+                else next.add(idx)
                 return next
               })
             }
@@ -269,7 +276,12 @@ function SidebarItem({
       <span className="min-w-0 flex-1">
         <span className="block truncate">{label}</span>
         {sub && (
-          <span className={cn('block truncate text-[10px]', active ? 'text-white/70' : 'text-muted-foreground')}>
+          <span
+            className={cn(
+              'block truncate text-[10px]',
+              active ? 'text-white/70' : 'text-muted-foreground',
+            )}
+          >
             {sub}
           </span>
         )}

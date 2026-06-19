@@ -47,7 +47,39 @@ build-backend = "hatchling.build"
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+# scripts 为独立模拟脚本，迁移期暂不纳入静态检查
+extend-exclude = ["scripts", ".venv"]
+
+[tool.ruff.lint]
+# E/F 基础，I 导入排序，B bugbear，UP 现代化，W 警告
+select = ["E", "F", "I", "B", "UP", "W"]
+# E501 行宽交给 formatter；B008（FastAPI Depends/Query 默认值）需放行；
+# E741(歧义变量名 l)/B007(循环变量未用) 在图算法等遗留代码中价值低，project 级放行
+ignore = ["E501", "B008", "E741", "B007"]
+
+[tool.ruff.lint.per-file-ignores]
+# main.py 需在所有导入前执行 warnings.filterwarnings，故允许导入不在顶部
+"app/main.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true   # 第三方(camel/llama-index 等)无类型存根
+disallow_untyped_defs = false   # 渐进式：先不强制全量注解
+warn_unused_ignores = true
+warn_redundant_casts = true
+exclude = ["scripts/", "\\.venv/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
