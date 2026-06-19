@@ -8,7 +8,6 @@ Report API 路由（FastAPI 版）
 必须声明在 /{report_id} 之前，否则会被动态段捕获。
 """
 
-import threading
 import traceback
 import uuid
 
@@ -16,8 +15,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, JSONResponse
 
 from ..deps import use_locale
+from ..jobqueue import enqueue
 from ..models.project import ProjectManager
-from ..models.task import TaskManager, TaskStatus
+from ..models.task import TaskManager
 from ..schemas.report import (
     ChatRequest,
     GenerateReportRequest,
@@ -27,7 +27,7 @@ from ..schemas.report import (
 )
 from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
 from ..services.simulation_manager import SimulationManager
-from ..utils.locale import get_locale, set_locale, t
+from ..utils.locale import get_locale, t
 from ..utils.logger import get_logger
 
 router = APIRouter(dependencies=[Depends(use_locale)])
@@ -103,63 +103,17 @@ def generate_report(req: GenerateReportRequest):
             },
         )
 
-        # 在派生后台线程前捕获当前语言
+        # 捕获当前语言后投递到队列，由 worker 进程执行（队列不可用则兜底本地线程）
         current_locale = get_locale()
-
-        # 定义后台任务
-        def run_generate():
-            set_locale(current_locale)
-            try:
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    progress=0,
-                    message=t("api.initReportAgent"),
-                )
-
-                # 创建 Report Agent
-                agent = ReportAgent(
-                    graph_id=graph_id,
-                    simulation_id=simulation_id,
-                    simulation_requirement=simulation_requirement,
-                )
-
-                # 进度回调
-                def progress_callback(stage, progress, message):
-                    task_manager.update_task(
-                        task_id,
-                        progress=progress,
-                        message=f"[{stage}] {message}",
-                    )
-
-                # 生成报告（传入预先生成的 report_id）
-                report = agent.generate_report(
-                    progress_callback=progress_callback,
-                    report_id=report_id,
-                )
-
-                # 保存报告
-                ReportManager.save_report(report)
-
-                if report.status == ReportStatus.COMPLETED:
-                    task_manager.complete_task(
-                        task_id,
-                        result={
-                            "report_id": report.report_id,
-                            "simulation_id": simulation_id,
-                            "status": "completed",
-                        },
-                    )
-                else:
-                    task_manager.fail_task(task_id, report.error or t("api.reportGenerateFailed"))
-
-            except Exception as e:
-                logger.error(f"报告生成失败: {str(e)}")
-                task_manager.fail_task(task_id, str(e))
-
-        # 启动后台线程
-        thread = threading.Thread(target=run_generate, daemon=True)
-        thread.start()
+        enqueue(
+            "report_generate",
+            simulation_id=simulation_id,
+            task_id=task_id,
+            report_id=report_id,
+            graph_id=graph_id,
+            simulation_requirement=simulation_requirement,
+            locale=current_locale,
+        )
 
         return {
             "success": True,

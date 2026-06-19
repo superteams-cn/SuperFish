@@ -97,6 +97,34 @@ services:
     volumes:
       - ./apps/api/uploads:/app/apps/api/uploads
 
+  worker:
+    # arq worker：消费 Redis 队列执行长任务（图谱构建/报告生成/模拟）
+    image: ghcr.io/superteams-cn/superfish:latest
+    container_name: superfish-worker
+    command: ["arq", "app.worker.WorkerSettings"]
+    working_dir: /app/apps/api
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://superfish:superfish_pg@postgres:5432/superfish}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://rustfs:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-superfish}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-superfish_secret}
+      S3_BUCKET: ${S3_BUCKET:-superfish}
+    restart: unless-stopped
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+    volumes:
+      - ./apps/api/uploads:/app/apps/api/uploads
+
 volumes:
   neo4j_data:
   neo4j_logs:

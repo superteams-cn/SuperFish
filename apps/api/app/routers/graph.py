@@ -6,7 +6,6 @@
 """
 
 import os
-import threading
 import traceback
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
@@ -14,14 +13,15 @@ from fastapi.responses import JSONResponse
 
 from ..config import Config
 from ..deps import use_locale
+from ..jobqueue import enqueue
 from ..models.project import ProjectManager, ProjectStatus
-from ..models.task import TaskManager, TaskStatus
+from ..models.task import TaskManager
 from ..schemas.graph import BuildGraphRequest
 from ..services.graph_builder import GraphBuilderService
 from ..services.ontology_generator import OntologyGenerator
 from ..services.text_processor import TextProcessor
 from ..utils.file_parser import FileParser
-from ..utils.locale import get_locale, set_locale, t
+from ..utils.locale import get_locale, t
 from ..utils.logger import get_logger
 
 # 整个图谱路由统一在请求开始时解析语言
@@ -303,66 +303,18 @@ def build_graph(req: BuildGraphRequest):
         project.graph_id = graph_id
         ProjectManager.save_project(project)
 
-        # 在派生后台线程前捕获当前语言
+        # 捕获当前语言后投递到队列，由 worker 进程执行（队列不可用则兜底本地线程）
         current_locale = get_locale()
-
-        # 启动后台任务
-        def build_task():
-            set_locale(current_locale)
-            build_logger = get_logger("superfish.build")
-            try:
-                build_logger.info(f"[{task_id}] 开始构建图谱...")
-                builder = GraphBuilderService(api_key=Config.NEO4J_URI)
-
-                builder.build_graph(
-                    task_id=task_id,
-                    text=text,
-                    ontology=ontology,
-                    graph_name=graph_name,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                    batch_size=3,
-                    locale=current_locale,
-                    graph_id=graph_id,
-                )
-
-                task = task_manager.get_task(task_id)
-                if task and task.status == TaskStatus.COMPLETED:
-                    result = task.result or {}
-                    graph_info = result.get("graph_info", {})
-                    project.graph_id = result.get("graph_id") or graph_id
-                    project.status = ProjectStatus.GRAPH_COMPLETED
-                    project.error = None
-                    ProjectManager.save_project(project)
-
-                    build_logger.info(
-                        f"[{task_id}] 图谱构建完成: graph_id={project.graph_id}, "
-                        f"节点={graph_info.get('node_count', 0)}, 边={graph_info.get('edge_count', 0)}"
-                    )
-                elif task and task.status == TaskStatus.FAILED:
-                    project.status = ProjectStatus.FAILED
-                    project.error = task.error
-                    ProjectManager.save_project(project)
-
-            except Exception as e:
-                # 更新项目状态为失败
-                build_logger.error(f"[{task_id}] 图谱构建失败: {str(e)}")
-                build_logger.debug(traceback.format_exc())
-
-                project.status = ProjectStatus.FAILED
-                project.error = str(e)
-                ProjectManager.save_project(project)
-
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.FAILED,
-                    message=t("progress.buildFailed", error=str(e)),
-                    error=traceback.format_exc(),
-                )
-
-        # 启动后台线程
-        thread = threading.Thread(target=build_task, daemon=True)
-        thread.start()
+        enqueue(
+            "graph_build",
+            project_id=project_id,
+            task_id=task_id,
+            graph_id=graph_id,
+            graph_name=graph_name,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            locale=current_locale,
+        )
 
         return {
             "success": True,
