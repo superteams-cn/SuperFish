@@ -144,6 +144,8 @@ export function GraphPanel({
   showEdgeLabelsRef.current = showEdgeLabels
   // 切换标签为显示时刷新一次位置（仿真可能已停止，tick 不再触发）
   const refreshEdgeLabelsRef = useRef<(() => void) | null>(null)
+  // 将图谱缩放平移到适配当前容器（视图切换/容器尺寸变化时调用）
+  const fitViewRef = useRef<((duration?: number) => void) | null>(null)
 
   // 实体类型 → 颜色映射，供图例与节点着色复用
   const typeColors = useMemo(() => {
@@ -504,6 +506,44 @@ export function GraphPanel({
     }
     simulation.on('tick', ticked)
 
+    // 适配视图：按节点包围盒缩放平移，使图谱居中铺满当前容器
+    const fitView = (duration = 400) => {
+      if (!nodes.length) return
+      let minX = Infinity
+      let maxX = -Infinity
+      let minY = Infinity
+      let maxY = -Infinity
+      for (const n of nodes) {
+        const x = n.x ?? 0
+        const y = n.y ?? 0
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+      const w = containerRef.current?.clientWidth || width
+      const h = containerRef.current?.clientHeight || height
+      if (w <= 0 || h <= 0) return
+      const pad = 80
+      const bw = Math.max(maxX - minX, 1)
+      const bh = Math.max(maxY - minY, 1)
+      const scale = Math.min(2, Math.max(0.1, Math.min((w - pad) / bw, (h - pad) / bh)))
+      const cx = (minX + maxX) / 2
+      const cy = (minY + maxY) / 2
+      const transform = d3.zoomIdentity
+        .translate(w / 2 - scale * cx, h / 2 - scale * cy)
+        .scale(scale)
+      svg.transition().duration(duration).call(zoom.transform, transform)
+    }
+    fitViewRef.current = fitView
+    // 仅首次布局收敛后自动适配一次（首屏框图）；拖拽节点引起的再次收敛不重新适配
+    let fitted = false
+    simulation.on('end', () => {
+      if (fitted) return
+      fitted = true
+      fitView(400)
+    })
+
     // 大图：先预热布局再渲染，避免开局抖动
     if (isLarge) {
       const warm = isHuge ? 120 : 60
@@ -525,6 +565,28 @@ export function GraphPanel({
     sel.style('display', showEdgeLabels ? 'block' : 'none')
     if (showEdgeLabels) refreshEdgeLabelsRef.current?.()
   }, [showEdgeLabels])
+
+  // 容器尺寸变化（切换 图谱/双栏/工作台 视图）后自动适配图谱视图
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let first = true
+    const ro = new ResizeObserver(() => {
+      if (first) {
+        first = false // 跳过初次挂载触发
+        return
+      }
+      if (timer) clearTimeout(timer)
+      // 等宽度过渡(~300ms)结束后再 fit，避免过程中反复抖动
+      timer = setTimeout(() => fitViewRef.current?.(400), 360)
+    })
+    ro.observe(el)
+    return () => {
+      if (timer) clearTimeout(timer)
+      ro.disconnect()
+    }
+  }, [])
 
   const hasData = nodeCount > 0
   const hint =
