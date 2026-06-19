@@ -11,7 +11,7 @@
     "dev:worker": "pnpm --filter @superfish/api worker",
     "start": "bash scripts/dev.sh start",
     "stop": "bash scripts/dev.sh stop",
-    "restart": "bash scripts/dev.sh restart",
+    "restart": "echo '↻ restart = stop + start (生命周期自动执行)'",
     "status": "bash scripts/dev.sh status",
     "build": "turbo run build",
     "lint": "turbo run lint",

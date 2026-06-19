@@ -30,6 +30,9 @@ stop() {
 }
 
 start() {
+  # 先停掉已有的同名进程，保证幂等：重复 start 不会累积多份
+  stop >/dev/null 2>&1
+  sleep 1
   echo "启动开发进程(后台,日志在 .dev-logs/)..."
   cd "$ROOT"
   nohup pnpm --filter @superfish/api dev    >"$LOG_DIR/api.log"    2>&1 &
