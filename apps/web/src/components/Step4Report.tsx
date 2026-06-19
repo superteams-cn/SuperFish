@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowRight } from 'lucide-react'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
 import { AgentLogTimeline } from '@/components/step4/AgentLogTimeline'
@@ -118,14 +119,14 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
             <TabsTrigger value="log">Agent Log</TabsTrigger>
             <TabsTrigger value="console">{t('console.title', { defaultValue: '控制台' })}</TabsTrigger>
           </TabsList>
-          <button
+          <Button
+            size="sm"
             onClick={() => reportId && navigate(`/interaction/${reportId}`)}
             disabled={!isComplete}
-            className="flex items-center gap-1.5 rounded bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('step4.enterInteraction', { defaultValue: '进入深度互动' })}
             <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
 
         <TabsContent value="report" className="mt-0 flex-1 overflow-y-auto p-6">

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 
 import { StepCard } from '@/components/StepCard'
+import { Button } from '@/components/ui/button'
 import { createSimulation } from '@/lib/api/simulation'
 import type { ProjectData } from '@/lib/process-types'
 
@@ -50,14 +51,10 @@ export function CompleteCard({ phase, projectData }: Props) {
       apiNote="POST /api/simulation/create"
       description={t('step1.buildCompleteDesc')}
     >
-      <button
-        onClick={handleEnter}
-        disabled={phase < 2 || creating}
-        className="flex w-full items-center justify-center gap-2 rounded bg-foreground py-3.5 text-xs font-semibold text-background transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
-      >
+      <Button className="w-full" onClick={handleEnter} disabled={phase < 2 || creating}>
         {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {creating ? t('step1.creating') : `${t('step1.enterEnvSetup')} ➝`}
-      </button>
+      </Button>
     </StepCard>
   )
 }

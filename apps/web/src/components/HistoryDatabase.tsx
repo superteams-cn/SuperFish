@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, X } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { getSimulationHistory } from '@/lib/api/simulation'
-import { cn } from '@/lib/utils'
 
 interface HistoryProject {
   simulation_id?: string
@@ -89,11 +92,11 @@ export function HistoryDatabase() {
   return (
     <section className="mt-12">
       <div className="mb-4 flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
+        <Separator className="flex-1" />
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('history.title')}
         </span>
-        <div className="h-px flex-1 bg-border" />
+        <Separator className="flex-1" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -128,78 +131,68 @@ export function HistoryDatabase() {
       </div>
 
       {/* 详情模态 */}
-      {selected && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSelected(null)
-          }}
-        >
-          <div className="w-full max-w-lg rounded-lg border bg-background shadow-xl">
-            <div className="flex items-center justify-between border-b px-5 py-4">
-              <span className="font-mono text-sm font-bold">{formatSimId(selected.simulation_id)}</span>
-              <button onClick={() => setSelected(null)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4 p-5">
-              <div>
-                <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
-                  {t('history.simRequirement')}
-                </div>
-                <p className="text-sm">{selected.simulation_requirement || t('common.none')}</p>
-              </div>
-              {!!selected.files?.length && (
+      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent>
+          {selected && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-mono text-sm">{formatSimId(selected.simulation_id)}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div>
                   <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
-                    {t('history.relatedFiles')}
+                    {t('history.simRequirement')}
                   </div>
-                  <div className="space-y-1">
-                    {selected.files.map((f, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{fileExt(f.filename)}</span>
-                        <span className="truncate">{f.filename}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-sm">{selected.simulation_requirement || t('common.none')}</p>
                 </div>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-2 border-t p-4">
-              <ReplayBtn
-                disabled={!selected.project_id}
-                label={t('history.step1Button')}
-                onClick={() => navigate(`/process/${selected.project_id}`)}
-              />
-              <ReplayBtn
-                disabled={!selected.simulation_id}
-                label={t('history.step2Button')}
-                onClick={() => navigate(`/simulation/${selected.simulation_id}`)}
-              />
-              <ReplayBtn
-                disabled={!selected.report_id}
-                label={t('history.step4Button')}
-                onClick={() => navigate(`/report/${selected.report_id}`)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+                {!!selected.files?.length && (
+                  <div>
+                    <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                      {t('history.relatedFiles')}
+                    </div>
+                    <div className="space-y-1">
+                      {selected.files.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {fileExt(f.filename)}
+                          </Badge>
+                          <span className="truncate">{f.filename}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-t pt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!selected.project_id}
+                  onClick={() => navigate(`/process/${selected.project_id}`)}
+                >
+                  {t('history.step1Button')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!selected.simulation_id}
+                  onClick={() => navigate(`/simulation/${selected.simulation_id}`)}
+                >
+                  {t('history.step2Button')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!selected.report_id}
+                  onClick={() => navigate(`/report/${selected.report_id}`)}
+                >
+                  {t('history.step4Button')}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
-  )
-}
-
-function ReplayBtn({ disabled, label, onClick }: { disabled: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'rounded border py-2 text-xs font-medium transition',
-        disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-accent',
-      )}
-    >
-      {label}
-    </button>
   )
 }

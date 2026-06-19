@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AgentLogEntry } from '@/lib/step4-types'
 
@@ -59,9 +61,9 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
                 <span className="text-[11px] font-semibold">
                   {ACTION_LABELS[log.action] || log.action}
                   {detail.tool_name && (
-                    <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                    <Badge variant="secondary" className="ml-1.5 text-[10px] font-normal">
                       {TOOL_NAMES[detail.tool_name] || detail.tool_name}
-                    </span>
+                    </Badge>
                   )}
                 </span>
                 {typeof log.elapsed_seconds === 'number' && (
@@ -87,12 +89,14 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
               {/* 可展开详情 */}
               {expandable && (
                 <>
-                  <button
+                  <Button
+                    variant="link"
+                    size="sm"
                     onClick={() => toggle(key)}
-                    className="mt-1.5 text-[10px] text-[#FF5722] hover:underline"
+                    className="mt-1 h-auto p-0 text-[10px] text-[#FF5722]"
                   >
                     {isOpen ? '收起' : '展开详情'}
-                  </button>
+                  </Button>
                   {isOpen && (
                     <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 text-[10px] leading-relaxed">
                       {detail.response ||

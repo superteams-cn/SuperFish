@@ -42,9 +42,30 @@ superfish/
 ## 3. 前端约定（apps/web）
 
 - 技术栈：**React + TypeScript + Vite + TailwindCSS + shadcn/ui（基于 Radix）**。
-- UI 组件优先使用 shadcn/ui，采用其默认主题 + 单一品牌主色，不再维护多套自定义主题。
-- 多语言用 `react-i18next`，文案来自 `@superfish/shared` 的 locales。
-- 组件按功能域组织于 `src/features/`，通用 UI 放 `src/components/ui/`。
+- 多语言用 `react-i18next`，文案来自 `@superfish/shared` 的 locales（用 `useTranslation` 的 `t`）。
+
+### 3.1 优先使用 shadcn/Radix 原生组件（强制）
+- **禁止手写**已有原生组件能覆盖的交互元素。一律使用 `src/components/ui/` 下的 shadcn 封装（底层 Radix）：
+  - 按钮 → `Button`（不要写 `<button className="...">`）；图标按钮用 `size="icon"`。
+  - 弹窗/模态 → `Dialog`（不要手写 `fixed inset-0` 遮罩）。
+  - 复选 → `Checkbox`；滑块 → `Slider`；分隔线 → `Separator`；下拉 → `DropdownMenu`/`Select`；
+    标签页 → `Tabs`；分段切换 → `ToggleGroup`；头像 → `Avatar`；提示 → `Tooltip`；
+    输入 → `Input`/`Textarea`；进度 → `Progress`；徽标 → `Badge`；卡片 → `Card`。
+- 缺少的 shadcn 组件：按官方实现新增到 `src/components/ui/`（已装好对应 `@radix-ui/*` 依赖），再使用。
+- 采用 shadcn 默认主题（slate）+ 单一品牌主色（橙 `#FF5722` 仅用于强调），不维护多套自定义主题。
+- 颜色用语义化 token（`bg-background`/`text-muted-foreground`/`border` 等），避免硬编码灰阶。
+
+### 3.2 组件化与可维护性
+- **小而专、可复用**：组件单一职责；页面级文件只做编排（数据/轮询/路由），UI 细节下沉到子组件。
+- 目录约定：
+  - `src/pages/`：路由页面（编排器），通过 `router.tsx` **懒加载**（`React.lazy` + `Suspense`）。
+  - `src/components/ui/`：shadcn 原生封装（不写业务逻辑）。
+  - `src/components/common/`：跨页复用的业务无关小件（如 `Brand`、`StatusDot`）。
+  - `src/components/<viewname>/`（如 `step1/`…`step5/`）：某视图专属的聚焦子组件。
+  - `src/components/*.tsx`：跨视图复用的较大业务组件（如 `WorkflowLayout`、`GraphPanel`、`Markdown`）。
+  - `src/lib/api/`：接口封装；`src/lib/*-types.ts`：领域类型。
+- 重复出现 3 次以上的 UI 片段必须抽成组件；公共外壳（如工作流头部）用 `WorkflowLayout` 复用。
+- 控制单文件体量（经验值 < ~300 行）；超出优先按子组件拆分而非堆叠。
 
 ## 4. 后端约定（apps/api）
 

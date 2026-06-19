@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next'
+import { X } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import type { OntologyItem } from '@/lib/process-types'
 
 export type SelectedOntologyItem = (OntologyItem & { itemType: 'entity' | 'relation' }) | null
@@ -19,14 +22,14 @@ export function OntologyDetailOverlay({ item, resolveEntityName, onClose }: Prop
     <div className="absolute inset-x-5 bottom-5 top-16 z-10 flex flex-col overflow-hidden rounded-md border bg-background/95 shadow-lg backdrop-blur">
       <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="rounded bg-foreground px-1.5 py-0.5 text-[9px] font-bold uppercase text-background">
+          <Badge className="text-[9px] uppercase">
             {item.itemType === 'entity' ? t('step1.badgeEntity') : t('step1.badgeRelation')}
-          </span>
+          </Badge>
           <span className="text-sm font-bold">{item.name}</span>
         </div>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-          ×
-        </button>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         <p className="mb-4 border-b border-dashed pb-3 text-xs text-foreground/80">{item.description}</p>

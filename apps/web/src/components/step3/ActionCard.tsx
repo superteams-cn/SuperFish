@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import type { ActionItem } from '@/lib/step3-types'
 
@@ -65,9 +66,9 @@ export function ActionCard({ action }: { action: ActionItem }) {
       <div className="rounded-md border bg-card p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold">
-              {(action.agent_name || 'A')[0]}
-            </div>
+            <Avatar className="h-6 w-6">
+              <AvatarFallback className="text-[10px]">{(action.agent_name || 'A')[0]}</AvatarFallback>
+            </Avatar>
             <span className="text-xs font-semibold">{action.agent_name}</span>
           </div>
           <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold', badgeColor(type))}>

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Send, Loader2 } from 'lucide-react'
 
 import { Markdown } from '@/components/Markdown'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from '@/lib/step5-types'
 
@@ -90,7 +92,7 @@ export function ChatPanel({ title, subtitle, messages, isSending, onSend }: Prop
 
       <div className="border-t p-3">
         <div className="flex gap-2">
-          <textarea
+          <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -101,15 +103,11 @@ export function ChatPanel({ title, subtitle, messages, isSending, onSend }: Prop
             }}
             rows={2}
             placeholder={t('step5.inputPlaceholder', { defaultValue: '输入消息，回车发送' })}
-            className="flex-1 resize-none rounded-md border bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="flex-1 resize-none"
           />
-          <button
-            onClick={send}
-            disabled={isSending || !input.trim()}
-            className="flex items-center justify-center rounded-md bg-foreground px-4 text-background transition hover:opacity-80 disabled:opacity-40"
-          >
+          <Button size="icon" className="h-auto" onClick={send} disabled={isSending || !input.trim()}>
             <Send className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

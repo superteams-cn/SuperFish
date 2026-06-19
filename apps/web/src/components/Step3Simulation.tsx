@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
+import { Button } from '@/components/ui/button'
 import { PlatformStatusCard } from '@/components/step3/PlatformStatusCard'
 import { ActionCard } from '@/components/step3/ActionCard'
 import { startSimulation, getRunStatus, getRunStatusDetail } from '@/lib/api/simulation'
@@ -240,15 +241,11 @@ export function Step3Simulation({
             availableActions={REDDIT_ACTIONS}
           />
         </div>
-        <button
-          onClick={handleGenerateReport}
-          disabled={phase !== 2 || isGeneratingReport}
-          className="flex items-center gap-2 rounded bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
-        >
+        <Button onClick={handleGenerateReport} disabled={phase !== 2 || isGeneratingReport}>
           {isGeneratingReport && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {isGeneratingReport ? t('step3.generatingReportBtn') : t('step3.startGenerateReportBtn')}
           {!isGeneratingReport && <span>→</span>}
-        </button>
+        </Button>
       </div>
 
       {/* 动作时间线 */}

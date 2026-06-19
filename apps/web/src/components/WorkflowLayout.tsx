@@ -1,10 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import { GraphPanel, type GraphData } from '@/components/GraphPanel'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
+import { Brand } from '@/components/common/Brand'
+import { StatusDot } from '@/components/common/StatusDot'
+import { Separator } from '@/components/ui/separator'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
 export type ViewMode = 'graph' | 'split' | 'workbench'
@@ -43,18 +46,10 @@ export function WorkflowLayout({
   initialViewMode = 'split',
   children,
 }: WorkflowLayoutProps) {
-  const navigate = useNavigate()
   const { t } = useTranslation()
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode)
 
   const toggleMaximize = (target: ViewMode) => setViewMode((v) => (v === target ? 'split' : target))
-
-  const statusColor =
-    statusVariant === 'error'
-      ? 'bg-red-500'
-      : statusVariant === 'completed'
-        ? 'bg-green-500'
-        : 'bg-[#FF5722] animate-pulse'
 
   const leftWidth =
     viewMode === 'graph' ? 'w-full' : viewMode === 'workbench' ? 'w-0 opacity-0' : 'w-1/2'
@@ -65,47 +60,30 @@ export function WorkflowLayout({
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/* 头部 */}
       <header className="relative z-10 flex h-[60px] items-center justify-between border-b px-6">
-        <div
-          className="cursor-pointer font-mono text-lg font-extrabold tracking-wide"
-          onClick={() => navigate('/')}
-        >
-          SUPERFISH
-        </div>
+        <Brand />
 
-        <div className="absolute left-1/2 -translate-x-1/2">
-          <div className="flex gap-1 rounded-md bg-muted p-1">
-            {(['graph', 'split', 'workbench'] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={cn(
-                  'rounded px-4 py-1.5 text-xs font-semibold transition',
-                  viewMode === mode ? 'bg-background shadow' : 'text-muted-foreground',
-                )}
-              >
-                {
-                  {
-                    graph: t('main.layoutGraph'),
-                    split: t('main.layoutSplit'),
-                    workbench: t('main.layoutWorkbench'),
-                  }[mode]
-                }
-              </button>
-            ))}
-          </div>
-        </div>
+        <ToggleGroup
+          type="single"
+          value={viewMode}
+          onValueChange={(v) => v && setViewMode(v as ViewMode)}
+          className="absolute left-1/2 -translate-x-1/2"
+        >
+          <ToggleGroupItem value="graph">{t('main.layoutGraph')}</ToggleGroupItem>
+          <ToggleGroupItem value="split">{t('main.layoutSplit')}</ToggleGroupItem>
+          <ToggleGroupItem value="workbench">{t('main.layoutWorkbench')}</ToggleGroupItem>
+        </ToggleGroup>
 
         <div className="flex items-center gap-4">
           <ThemeSwitcher />
           <LanguageSwitcher />
-          <div className="h-3.5 w-px bg-border" />
+          <Separator orientation="vertical" className="h-3.5" />
           <div className="flex items-center gap-2 text-sm">
             <span className="font-mono font-bold text-muted-foreground">Step {step}/5</span>
             {stepName && <span className="font-bold">{stepName}</span>}
           </div>
-          <div className="h-3.5 w-px bg-border" />
+          <Separator orientation="vertical" className="h-3.5" />
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className={cn('h-2 w-2 rounded-full', statusColor)} />
+            <StatusDot variant={statusVariant} />
             {statusText}
           </span>
         </div>
