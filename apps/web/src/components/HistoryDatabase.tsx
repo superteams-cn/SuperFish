@@ -349,7 +349,12 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
                 variant="ghost"
                 size="sm"
                 disabled={!selected.project_id}
-                onClick={() => setPendingDelete(selected)}
+                onClick={() => {
+                  // 先关详情弹窗，避免两个 modal 叠加导致确认弹窗无法交互
+                  const target = selected
+                  setSelected(null)
+                  setPendingDelete(target)
+                }}
                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 w-full gap-1.5"
               >
                 <Trash2 className="h-4 w-4" />
