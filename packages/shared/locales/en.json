@@ -122,7 +122,9 @@
     "examples": "EXAMPLES",
     "connections": "CONNECTIONS",
     "generatedEntityTypes": "GENERATED ENTITY TYPES",
-    "generatedRelationTypes": "GENERATED RELATION TYPES"
+    "generatedRelationTypes": "GENERATED RELATION TYPES",
+    "rebuildGraph": "Rebuild graph",
+    "rebuildGraphHint": "Re-extract and rebuild the graph (recover stuck or unsatisfactory results)"
   },
   "workflowStatus": {
     "ready": "Ready",
@@ -216,7 +218,9 @@
     "taskIdLabel": "Task ID",
     "activityMultiplier": "Activity Multiplier",
     "personaDimFramework": "Persona Dimensions",
-    "personaDimEmpty": "No content for this dimension yet"
+    "personaDimEmpty": "No content for this dimension yet",
+    "regenerateEnv": "Regenerate environment",
+    "regenerateEnvHint": "Regenerate agent profiles and platform config"
   },
   "step3": {
     "startGenerateReport": "Generate Report",
@@ -359,7 +363,9 @@
     "stepPlanning": "Planning / Outline",
     "stepComplete": "Complete",
     "inProgress": "In Progress",
-    "statusWaiting": "Waiting"
+    "statusWaiting": "Waiting",
+    "regenerateReport": "Regenerate report",
+    "regenerateReportHint": "Discard the current report and regenerate"
   },
   "step5": {
     "interactiveTools": "Interactive Tools",
@@ -750,7 +756,9 @@
     "returnToStep": "Returning to Step {step}: {name}",
     "customSimRounds": "Custom simulation rounds: {rounds} rounds",
     "reportDownloaded": "Report downloaded: {reportId}",
-    "reportDownloadFailed": "Report download failed: {error}"
+    "reportDownloadFailed": "Report download failed: {error}",
+    "regeneratingReport": "Regenerating report...",
+    "regenerateReportFailed": "Regenerate report failed: {error}"
   },
   "report": {
     "taskStarted": "Report generation task started",

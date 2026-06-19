@@ -18,8 +18,8 @@ export default function ReportPage() {
   const [graphLoading, setGraphLoading] = useState(false)
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([])
   const [status, setStatus] = useState<WorkflowStatus>('processing')
+  const [simulationId, setSimulationId] = useState<string>('')
   const projectRef = useRef<ProjectData | null>(null)
-  const initedRef = useRef(false)
 
   const addLog = useCallback((msg: string) => {
     const now = new Date()
@@ -63,6 +63,7 @@ export default function ReportPage() {
       if (reportRes.success && reportRes.data) {
         const simId = reportRes.data.simulation_id
         if (simId) {
+          setSimulationId(simId)
           const simRes = await getSimulation(simId)
           if (simRes.success && simRes.data?.project_id) {
             const projRes = await getProject(simRes.data.project_id)
@@ -82,12 +83,13 @@ export default function ReportPage() {
   }, [addLog, loadGraph, reportId, t])
 
   useEffect(() => {
-    if (initedRef.current) return
-    initedRef.current = true
+    setGraphData(null)
+    setSimulationId('')
+    setStatus('processing')
+    projectRef.current = null
     addLog(t('log.reportViewInit'))
     void loadReportData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [addLog, loadReportData, t])
 
   const refreshGraph = () => {
     if (projectRef.current?.graph_id) void loadGraph(projectRef.current.graph_id)
@@ -113,6 +115,7 @@ export default function ReportPage() {
     >
       <Step4Report
         reportId={reportId}
+        simulationId={simulationId}
         systemLogs={systemLogs}
         addLog={addLog}
         onUpdateStatus={setStatus}

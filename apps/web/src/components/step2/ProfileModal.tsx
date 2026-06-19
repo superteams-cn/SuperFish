@@ -53,9 +53,9 @@ export function ProfileModal({ profile, onClose }: Props) {
           <>
             <DialogHeader>
               <DialogTitle className="flex items-baseline gap-2">
-                {profile.username}
+                {profile.name || profile.username}
                 <span className="text-muted-foreground font-mono text-xs font-normal">
-                  @{profile.name}
+                  @{profile.username}
                 </span>
               </DialogTitle>
               <span className="text-muted-foreground text-xs">{profile.profession}</span>

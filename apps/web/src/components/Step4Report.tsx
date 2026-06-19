@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowRight, Download } from 'lucide-react'
+import { ArrowRight, Download, RefreshCw } from 'lucide-react'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -9,13 +9,23 @@ import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
 import { AgentLogTimeline } from '@/components/step4/AgentLogTimeline'
 import { WorkflowProgressPanel } from '@/components/step4/WorkflowProgressPanel'
-import { getAgentLog, getConsoleLog, downloadReport } from '@/lib/api/report'
+import {
+  getAgentLog,
+  getConsoleLog,
+  downloadReport,
+  generateReport,
+  getReport,
+  getReportProgress,
+  getReportSections,
+} from '@/lib/api/report'
 import type { SystemLog } from '@/lib/process-types'
 import type { AgentLogEntry, ReportOutline } from '@/lib/step4-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
 
 interface Step4Props {
   reportId: string
+  /** 所属模拟 id，用于重新生成报告 */
+  simulationId?: string
   systemLogs: SystemLog[]
   addLog: (msg: string) => void
   onUpdateStatus: (s: WorkflowStatus) => void
@@ -41,10 +51,17 @@ function useMediaQuery(query: string): boolean {
  * 宽屏：左报告 / 右(进度 + Agent 日志 + 控制台) 双面板可同时观察；
  * 窄屏：降级为 Tab 串行切换。
  */
-export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: Step4Props) {
+export function Step4Report({
+  reportId,
+  simulationId,
+  systemLogs,
+  addLog,
+  onUpdateStatus,
+}: Step4Props) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const isNarrow = useMediaQuery('(max-width: 1024px)')
+  const [regenerating, setRegenerating] = useState(false)
 
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([])
   const [consoleLogs, setConsoleLogs] = useState<string[]>([])
@@ -58,14 +75,106 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
   const consoleLine = useRef(0)
   const agentTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const consoleTimer = useRef<ReturnType<typeof setInterval> | null>(null)
-  const initedRef = useRef(false)
+  const snapshotTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const fetchingSnapshot = useRef(false)
+  const outlineRef = useRef<ReportOutline | null>(null)
 
   const stopPolling = useCallback(() => {
     if (agentTimer.current) clearInterval(agentTimer.current)
     if (consoleTimer.current) clearInterval(consoleTimer.current)
+    if (snapshotTimer.current) clearInterval(snapshotTimer.current)
     agentTimer.current = null
     consoleTimer.current = null
+    snapshotTimer.current = null
   }, [])
+
+  const mergeSectionContent = useCallback((sectionIndex: number | undefined, content: unknown) => {
+    if (!sectionIndex || typeof content !== 'string' || !content.trim()) return
+    setGeneratedSections((prev) => {
+      if (prev[sectionIndex] === content) return prev
+      return { ...prev, [sectionIndex]: content }
+    })
+  }, [])
+
+  const applyOutline = useCallback((nextOutline: ReportOutline) => {
+    outlineRef.current = nextOutline
+    setOutline(nextOutline)
+  }, [])
+
+  const updateCurrentSectionFromTitle = useCallback((title?: string | null) => {
+    if (!title) {
+      setCurrentSectionIndex(null)
+      return
+    }
+    const idx = outlineRef.current?.sections?.findIndex((section) => section.title === title) ?? -1
+    setCurrentSectionIndex(idx >= 0 ? idx + 1 : null)
+  }, [])
+
+  const fetchReportSnapshot = useCallback(async () => {
+    if (!reportId || fetchingSnapshot.current) return
+    fetchingSnapshot.current = true
+    try {
+      const [reportRes, sectionsRes, progressRes] = await Promise.allSettled([
+        getReport(reportId),
+        getReportSections(reportId),
+        getReportProgress(reportId),
+      ])
+
+      if (reportRes.status === 'fulfilled' && reportRes.value.success && reportRes.value.data) {
+        const report = reportRes.value.data
+        if (report.outline) applyOutline(report.outline)
+        if (report.status === 'completed') {
+          setIsComplete(true)
+          setCurrentSectionIndex(null)
+          onUpdateStatus('completed')
+        }
+      }
+
+      if (
+        sectionsRes.status === 'fulfilled' &&
+        sectionsRes.value.success &&
+        sectionsRes.value.data
+      ) {
+        const snapshotSections = sectionsRes.value.data.sections || []
+        setGeneratedSections((prev) => {
+          const next = { ...prev }
+          let changed = false
+          snapshotSections.forEach((section) => {
+            if (!section.section_index || !section.content) return
+            if (next[section.section_index] !== section.content) {
+              next[section.section_index] = section.content
+              changed = true
+            }
+          })
+          return changed ? next : prev
+        })
+        if (sectionsRes.value.data.is_complete) {
+          setIsComplete(true)
+          setCurrentSectionIndex(null)
+          onUpdateStatus('completed')
+        }
+      }
+
+      if (
+        progressRes.status === 'fulfilled' &&
+        progressRes.value.success &&
+        progressRes.value.data
+      ) {
+        const progress = progressRes.value.data
+        if (progress.stage === 'completed' || progress.status === 'completed') {
+          setIsComplete(true)
+          setCurrentSectionIndex(null)
+          onUpdateStatus('completed')
+        } else if (progress.current_section) {
+          updateCurrentSectionFromTitle(progress.current_section)
+        }
+      }
+    } catch (err) {
+      addLog(t('log.loadException', { error: (err as Error).message }))
+    } finally {
+      fetchingSnapshot.current = false
+    }
+  }, [addLog, applyOutline, onUpdateStatus, reportId, t, updateCurrentSectionFromTitle])
 
   const fetchAgentLog = useCallback(async () => {
     if (!reportId) return
@@ -78,15 +187,16 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
       setAgentLogs((prev) => [...prev, ...newLogs])
       newLogs.forEach((log) => {
         if (log.action === 'planning_complete' && log.details?.outline) {
-          setOutline(log.details.outline)
+          applyOutline(log.details.outline)
         }
         if (log.action === 'section_start') {
           setCurrentSectionIndex(log.section_index ?? null)
         }
+        if (log.action === 'section_content') {
+          mergeSectionContent(log.section_index, log.details?.content)
+        }
         if (log.action === 'section_complete' && log.details?.content && log.section_index) {
-          const sIdx = log.section_index
-          const content = log.details.content
-          setGeneratedSections((prev) => ({ ...prev, [sIdx]: content }))
+          mergeSectionContent(log.section_index, log.details.content)
           setCurrentSectionIndex(null)
         }
         if (log.action === 'report_complete') {
@@ -96,11 +206,11 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
           stopPolling()
         }
       })
-      agentLine.current = res.data.from_line + newLogs.length
+      agentLine.current = res.data.total_lines ?? res.data.from_line + newLogs.length
     } catch (err) {
       addLog(t('log.fetchAgentLogFailed', { error: (err as Error).message }))
     }
-  }, [addLog, onUpdateStatus, reportId, stopPolling, t])
+  }, [addLog, applyOutline, mergeSectionContent, onUpdateStatus, reportId, stopPolling, t])
 
   const fetchConsoleLog = useCallback(async () => {
     if (!reportId) return
@@ -110,25 +220,36 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
       const newLogs: string[] = res.data.logs || []
       if (!newLogs.length) return
       setConsoleLogs((prev) => [...prev, ...newLogs])
-      consoleLine.current = res.data.from_line + newLogs.length
+      consoleLine.current = res.data.total_lines ?? res.data.from_line + newLogs.length
     } catch (err) {
       addLog(t('log.fetchConsoleLogFailed', { error: (err as Error).message }))
     }
   }, [addLog, reportId, t])
 
   useEffect(() => {
-    if (initedRef.current) return
-    initedRef.current = true
+    stopPolling()
+    setAgentLogs([])
+    setConsoleLogs([])
+    setOutline(null)
+    outlineRef.current = null
+    setCurrentSectionIndex(null)
+    setGeneratedSections({})
+    setIsComplete(false)
+    agentLine.current = 0
+    consoleLine.current = 0
+    fetchingSnapshot.current = false
+
     if (reportId) {
       addLog(t('log.reportAgentInitialized', { reportId }))
+      void fetchReportSnapshot()
       void fetchAgentLog()
       void fetchConsoleLog()
+      snapshotTimer.current = setInterval(fetchReportSnapshot, 2500)
       agentTimer.current = setInterval(fetchAgentLog, 2000)
       consoleTimer.current = setInterval(fetchConsoleLog, 1500)
     }
     return () => stopPolling()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [addLog, fetchAgentLog, fetchConsoleLog, fetchReportSnapshot, reportId, stopPolling, t])
 
   const handleDownload = useCallback(async () => {
     if (!reportId || downloading) return
@@ -193,8 +314,74 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
     </div>
   )
 
+  const handleRegenerate = useCallback(async () => {
+    if (!simulationId || regenerating) return
+    setRegenerating(true)
+    stopPolling()
+    // 重置展示状态，准备重新生成
+    setAgentLogs([])
+    setConsoleLogs([])
+    outlineRef.current = null
+    setOutline(null)
+    setCurrentSectionIndex(null)
+    setGeneratedSections({})
+    setIsComplete(false)
+    agentLine.current = 0
+    consoleLine.current = 0
+    fetchingSnapshot.current = false
+    onUpdateStatus('processing')
+    try {
+      const res = await generateReport({ simulation_id: simulationId, force_regenerate: true })
+      if (res.success && res.data) {
+        addLog(t('log.regeneratingReport'))
+        const newId = res.data.report_id
+        if (newId && newId !== reportId) {
+          navigate(`/report/${newId}`, { replace: true })
+          return
+        }
+        void fetchReportSnapshot()
+        snapshotTimer.current = setInterval(fetchReportSnapshot, 2500)
+        agentTimer.current = setInterval(fetchAgentLog, 2000)
+        consoleTimer.current = setInterval(fetchConsoleLog, 1500)
+      } else {
+        addLog(t('log.regenerateReportFailed', { error: res.error || t('common.unknownError') }))
+        onUpdateStatus('error')
+      }
+    } catch (err) {
+      addLog(t('log.regenerateReportFailed', { error: (err as Error).message }))
+      onUpdateStatus('error')
+    } finally {
+      setRegenerating(false)
+    }
+  }, [
+    simulationId,
+    regenerating,
+    stopPolling,
+    onUpdateStatus,
+    addLog,
+    t,
+    reportId,
+    navigate,
+    fetchReportSnapshot,
+    fetchAgentLog,
+    fetchConsoleLog,
+  ])
+
   const actions = (
     <div className="flex items-center gap-2">
+      {simulationId && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleRegenerate}
+          disabled={regenerating || (!isComplete && agentLogs.length > 0)}
+          title={t('step4.regenerateReportHint')}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+          {t('step4.regenerateReport')}
+        </Button>
+      )}
       <Button
         size="sm"
         variant="outline"
@@ -248,10 +435,10 @@ export function Step4Report({ reportId, systemLogs, addLog, onUpdateStatus }: St
           <div className="bg-card flex items-center justify-end border-b px-4 py-2">{actions}</div>
           <div className="flex flex-1 overflow-hidden">
             {/* 左：报告章节流 */}
-            <div className="flex-1 overflow-y-auto p-6">{reportView}</div>
+            <div className="flex-1 overflow-y-auto px-8 py-6 xl:px-12">{reportView}</div>
 
             {/* 右：进度 + 日志 + 控制台（纵向同时可见） */}
-            <div className="bg-card flex w-[40%] min-w-[360px] max-w-[520px] flex-col overflow-hidden border-l">
+            <div className="bg-card flex w-[32%] min-w-[340px] max-w-[460px] flex-col overflow-hidden border-l">
               <div className="border-b p-3">
                 <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
                   {t('step4.workflowProgress')}

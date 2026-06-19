@@ -17,6 +17,8 @@ interface Step1Props {
   buildProgress: BuildProgress | null
   graphData: GraphData | null
   systemLogs: SystemLog[]
+  /** 重新构建图谱（force） */
+  onRebuild?: () => void
 }
 
 /** 步骤一：图谱构建（本体生成 → GraphRAG 构建 → 完成进入环境搭建）。 */
@@ -27,6 +29,7 @@ export function Step1GraphBuild({
   buildProgress,
   graphData,
   systemLogs,
+  onRebuild,
 }: Step1Props) {
   return (
     <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
@@ -41,6 +44,7 @@ export function Step1GraphBuild({
           projectData={projectData}
           buildProgress={buildProgress}
           graphData={graphData}
+          onRebuild={onRebuild}
         />
         <CompleteCard phase={currentPhase} projectData={projectData} />
       </div>

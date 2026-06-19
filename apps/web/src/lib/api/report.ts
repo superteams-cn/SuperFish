@@ -5,7 +5,9 @@ import type {
   ChatData,
   ConsoleLogData,
   GenerateReportData,
+  ReportProgressData,
   ReportData,
+  ReportSectionsData,
   TaskData,
 } from './types'
 
@@ -36,13 +38,27 @@ export const getConsoleLog = (
 export const getReport = (reportId: string): Promise<ApiEnvelope<ReportData>> =>
   http.get<ReportData>(`/api/report/${reportId}`)
 
+/** 获取报告生成进度快照。 */
+export const getReportProgress = (reportId: string): Promise<ApiEnvelope<ReportProgressData>> =>
+  http.get<ReportProgressData>(`/api/report/${reportId}/progress`)
+
+/** 获取已落库章节快照。 */
+export const getReportSections = (reportId: string): Promise<ApiEnvelope<ReportSectionsData>> =>
+  http.get<ReportSectionsData>(`/api/report/${reportId}/sections`)
+
 /** 下载报告（Markdown）。返回 Blob，由调用方触发浏览器下载。 */
 export const downloadReport = async (reportId: string): Promise<Blob> => {
   // 该端点返回文件流而非 JSON 信封，故直接用底层 axios 实例拿 blob。
-  const res = await service.get(`/api/report/${reportId}/download`, {
+  const res = (await service.get(`/api/report/${reportId}/download`, {
     responseType: 'blob',
-  })
-  return res.data as Blob
+  })) as unknown
+  // service 的响应拦截器会把 AxiosResponse 解包成 response.data；
+  // 若未来绕过拦截器，也兼容 AxiosResponse<Blob> 形态。
+  if (res instanceof Blob) return res
+  if (res && typeof res === 'object' && 'data' in res && res.data instanceof Blob) {
+    return res.data
+  }
+  throw new Error('报告下载响应不是有效文件')
 }
 
 /** 与 Report Agent 对话。data: { simulation_id, message, chat_history? } */

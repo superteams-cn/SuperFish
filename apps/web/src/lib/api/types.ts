@@ -136,6 +136,29 @@ export interface ReportData {
   [k: string]: unknown
 }
 
+export interface ReportProgressData {
+  stage?: string
+  progress?: number
+  message?: string
+  current_section?: string | null
+  completed_sections?: string[]
+  status?: string
+  [k: string]: unknown
+}
+
+export interface ReportSectionData {
+  filename?: string
+  section_index?: number
+  content?: string
+}
+
+export interface ReportSectionsData {
+  report_id?: string
+  sections?: ReportSectionData[]
+  total_sections?: number
+  is_complete?: boolean
+}
+
 export interface AgentLogData {
   logs?: AgentLogEntry[]
   from_line: number

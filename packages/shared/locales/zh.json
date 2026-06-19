@@ -122,7 +122,9 @@
     "examples": "示例",
     "connections": "连接关系",
     "generatedEntityTypes": "已生成的实体类型",
-    "generatedRelationTypes": "已生成的关系类型"
+    "generatedRelationTypes": "已生成的关系类型",
+    "rebuildGraph": "重新构建图谱",
+    "rebuildGraphHint": "重新抽取并构建图谱(可恢复卡住或不满意的结果)"
   },
   "workflowStatus": {
     "ready": "就绪",
@@ -216,7 +218,9 @@
     "taskIdLabel": "任务ID",
     "activityMultiplier": "活跃倍率",
     "personaDimFramework": "人设维度框架",
-    "personaDimEmpty": "暂无该维度内容"
+    "personaDimEmpty": "暂无该维度内容",
+    "regenerateEnv": "重新生成环境",
+    "regenerateEnvHint": "重新生成 Agent 人设与平台配置"
   },
   "step3": {
     "startGenerateReport": "开始生成结果报告",
@@ -359,7 +363,9 @@
     "stepPlanning": "规划 / 大纲",
     "stepComplete": "完成",
     "inProgress": "进行中",
-    "statusWaiting": "等待中"
+    "statusWaiting": "等待中",
+    "regenerateReport": "重新生成报告",
+    "regenerateReportHint": "丢弃当前报告并重新生成"
   },
   "step5": {
     "interactiveTools": "互动工具",
@@ -750,7 +756,9 @@
     "returnToStep": "返回 Step {step}: {name}",
     "customSimRounds": "自定义模拟轮数: {rounds} 轮",
     "reportDownloaded": "报告已下载: {reportId}",
-    "reportDownloadFailed": "报告下载失败: {error}"
+    "reportDownloadFailed": "报告下载失败: {error}",
+    "regeneratingReport": "正在重新生成报告...",
+    "regenerateReportFailed": "重新生成报告失败: {error}"
   },
   "report": {
     "taskStarted": "报告生成任务开始",

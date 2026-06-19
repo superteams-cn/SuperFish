@@ -357,6 +357,7 @@ export default function ProcessPage() {
         buildProgress={buildProgress}
         graphData={graphData}
         systemLogs={systemLogs}
+        onRebuild={() => startBuildGraph(true)}
       />
     </WorkflowLayout>
   )

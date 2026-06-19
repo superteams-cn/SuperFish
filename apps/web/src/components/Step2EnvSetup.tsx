@@ -250,60 +250,64 @@ export function Step2EnvSetup({
     }
   }, [addLog, loadPreparedData, simulationId, stopPolling, stopProfilesPolling, t])
 
-  const startPrepare = useCallback(async () => {
-    if (!simulationId) {
-      addLog(t('log.errorMissingSimId'))
-      onUpdateStatus('error')
-      return
-    }
-    setPhase(1)
-    addLog(t('log.simInstanceCreated', { id: simulationId }))
-    addLog(t('log.preparingSimEnv'))
-    onUpdateStatus('processing')
-    try {
-      const res = await prepareSimulation({
-        simulation_id: simulationId,
-        use_llm_for_profiles: true,
-        parallel_profile_count: 5,
-      })
-      if (res.success && res.data) {
-        if (res.data.already_prepared) {
-          addLog(t('log.detectedExistingPrep'))
-          await loadPreparedData()
-          return
-        }
-        taskIdRef.current = res.data.task_id ?? null
-        setTaskId(res.data.task_id ?? null)
-        addLog(t('log.prepareTaskStarted'))
-        addLog(t('log.prepareTaskId', { taskId: res.data.task_id }))
-        if (res.data.expected_entities_count) {
-          expectedRef.current = res.data.expected_entities_count
-          setExpectedTotal(res.data.expected_entities_count)
-          addLog(t('log.graphEntitiesFound', { count: res.data.expected_entities_count }))
-          if (res.data.entity_types?.length) {
-            addLog(t('log.entityTypes', { types: res.data.entity_types.join(', ') }))
+  const startPrepare = useCallback(
+    async (force = false) => {
+      if (!simulationId) {
+        addLog(t('log.errorMissingSimId'))
+        onUpdateStatus('error')
+        return
+      }
+      setPhase(1)
+      addLog(t('log.simInstanceCreated', { id: simulationId }))
+      addLog(t('log.preparingSimEnv'))
+      onUpdateStatus('processing')
+      try {
+        const res = await prepareSimulation({
+          simulation_id: simulationId,
+          use_llm_for_profiles: true,
+          parallel_profile_count: 5,
+          force_regenerate: force,
+        })
+        if (res.success && res.data) {
+          if (res.data.already_prepared) {
+            addLog(t('log.detectedExistingPrep'))
+            await loadPreparedData()
+            return
           }
+          taskIdRef.current = res.data.task_id ?? null
+          setTaskId(res.data.task_id ?? null)
+          addLog(t('log.prepareTaskStarted'))
+          addLog(t('log.prepareTaskId', { taskId: res.data.task_id }))
+          if (res.data.expected_entities_count) {
+            expectedRef.current = res.data.expected_entities_count
+            setExpectedTotal(res.data.expected_entities_count)
+            addLog(t('log.graphEntitiesFound', { count: res.data.expected_entities_count }))
+            if (res.data.entity_types?.length) {
+              addLog(t('log.entityTypes', { types: res.data.entity_types.join(', ') }))
+            }
+          }
+          addLog(t('log.startPollingProgress'))
+          pollTimer.current = setInterval(pollPrepareStatus, 2000)
+          profilesTimer.current = setInterval(fetchProfilesRealtime, 3000)
+        } else {
+          addLog(t('log.prepareFailed', { error: res.error || t('common.unknownError') }))
+          onUpdateStatus('error')
         }
-        addLog(t('log.startPollingProgress'))
-        pollTimer.current = setInterval(pollPrepareStatus, 2000)
-        profilesTimer.current = setInterval(fetchProfilesRealtime, 3000)
-      } else {
-        addLog(t('log.prepareFailed', { error: res.error || t('common.unknownError') }))
+      } catch (err) {
+        addLog(t('log.prepareException', { error: (err as Error).message }))
         onUpdateStatus('error')
       }
-    } catch (err) {
-      addLog(t('log.prepareException', { error: (err as Error).message }))
-      onUpdateStatus('error')
-    }
-  }, [
-    addLog,
-    fetchProfilesRealtime,
-    loadPreparedData,
-    onUpdateStatus,
-    pollPrepareStatus,
-    simulationId,
-    t,
-  ])
+    },
+    [
+      addLog,
+      fetchProfilesRealtime,
+      loadPreparedData,
+      onUpdateStatus,
+      pollPrepareStatus,
+      simulationId,
+      t,
+    ],
+  )
 
   // 阶段切换：进入配置生成阶段时启动配置轮询
   useEffect(() => {
@@ -373,6 +377,7 @@ export function Step2EnvSetup({
           setCustomMaxRounds={setCustomMaxRounds}
           onBack={onGoBack}
           onStart={handleStart}
+          onRegenerate={() => startPrepare(true)}
         />
       </div>
 

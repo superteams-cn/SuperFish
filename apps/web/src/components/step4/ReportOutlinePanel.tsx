@@ -37,7 +37,7 @@ export function ReportOutlinePanel({
   if (!outline) {
     // 大纲未就绪时用骨架屏占位，比单一 spinner 更贴近最终布局
     return (
-      <div className="mx-auto max-w-3xl space-y-4">
+      <div className="mx-auto w-full max-w-6xl space-y-4">
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
           {t('step4.generatingReport')}
@@ -56,7 +56,7 @@ export function ReportOutlinePanel({
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto w-full max-w-6xl">
       {/* 报告头部 */}
       <div className="mb-6 border-b pb-4">
         <div className="text-muted-foreground mb-2 flex items-center gap-3 text-[10px]">

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Clock } from 'lucide-react'
+import { Clock, RefreshCw } from 'lucide-react'
 
 import { StepCard } from '@/components/StepCard'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ interface Props {
   setCustomMaxRounds: (v: number) => void
   onBack: () => void
   onStart: () => void
+  /** 重新生成环境（人设/配置，force_regenerate） */
+  onRegenerate?: () => void
 }
 
 /** 步骤 05：准备完成（模拟轮数配置 + 开始/返回）。 */
@@ -31,6 +33,7 @@ export function SetupCompleteCard({
   setCustomMaxRounds,
   onBack,
   onStart,
+  onRegenerate,
 }: Props) {
   const { t } = useTranslation()
 
@@ -96,6 +99,19 @@ export function SetupCompleteCard({
           {t('step2.startDualWorldSim')} ➝
         </Button>
       </div>
+
+      {phase >= 4 && onRegenerate && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRegenerate}
+          className="text-muted-foreground hover:text-foreground mt-2 w-full gap-1.5"
+          title={t('step2.regenerateEnvHint')}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          {t('step2.regenerateEnv')}
+        </Button>
+      )}
     </StepCard>
   )
 }

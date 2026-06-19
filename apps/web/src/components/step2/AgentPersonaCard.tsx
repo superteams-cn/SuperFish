@@ -64,9 +64,11 @@ export function AgentPersonaCard({
                 className="bg-card hover:border-brand cursor-pointer rounded-md border p-3 text-left transition"
               >
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm font-semibold">{profile.username || 'Unknown'}</span>
+                  <span className="text-sm font-semibold">
+                    {profile.name || profile.username || 'Unknown'}
+                  </span>
                   <span className="text-muted-foreground font-mono text-[10px]">
-                    @{profile.name || `agent_${idx}`}
+                    @{profile.username || `agent_${idx}`}
                   </span>
                 </div>
                 <div className="text-muted-foreground mt-0.5 text-[11px]">
