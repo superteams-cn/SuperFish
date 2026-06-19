@@ -47,9 +47,23 @@ class Config:
     NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "superfish_neo4j")
 
-    # Redis 配置（用于持久化任务状态等，跨进程/重启不丢失）
+    # Redis 配置（缓存/队列等，可选）
     # 源码部署默认 localhost；docker compose 中由 compose 注入 redis://redis:6379/0
     REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+    # Postgres 配置（项目/任务等关系型元数据持久化，跨进程/重启/多副本共享）
+    # 源码部署默认 localhost；docker compose 中由 compose 注入 postgres 服务名
+    DATABASE_URL = os.environ.get(
+        "DATABASE_URL",
+        "postgresql+psycopg://superfish:superfish_pg@localhost:5432/superfish",
+    )
+
+    # S3 兼容对象存储（RustFS）配置（上传文件、提取文本等二进制/大文本持久化）
+    S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "http://localhost:9000")
+    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "superfish")
+    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "superfish_secret")
+    S3_BUCKET = os.environ.get("S3_BUCKET", "superfish")
+    S3_REGION = os.environ.get("S3_REGION", "us-east-1")
 
     # 文件上传配置
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB

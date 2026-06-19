@@ -36,6 +36,22 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: superfish
+          POSTGRES_PASSWORD: superfish_pg
+          POSTGRES_DB: superfish
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U superfish -d superfish"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://superfish:superfish_pg@localhost:5432/superfish
     steps:
       - uses: actions/checkout@v4
       - name: 安装 uv

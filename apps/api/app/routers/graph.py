@@ -153,11 +153,12 @@ async def generate_ontology(
                     {
                         "filename": file_info["original_filename"],
                         "size": file_info["size"],
+                        "s3_key": file_info["s3_key"],
                     }
                 )
 
-                # 提取文本
-                text = FileParser.extract_text(file_info["path"])
+                # 直接从内存字节提取文本（文件本体已存入对象存储）
+                text = FileParser.extract_text_from_bytes(file_bytes, file.filename)
                 text = TextProcessor.preprocess_text(text)
                 document_texts.append(text)
                 all_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"

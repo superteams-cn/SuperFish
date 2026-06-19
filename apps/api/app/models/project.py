@@ -1,18 +1,22 @@
 """
 项目上下文管理
-用于在服务端持久化项目状态，避免前端在接口间传递大量数据
+在服务端持久化项目状态，避免前端在接口间传递大量数据。
+
+存储后端：
+- 元数据 → Postgres（projects 表）；
+- 上传文件与提取文本 → S3 兼容对象存储（RustFS）。
+对外仍保持原有 classmethod 接口，调用方无需改动。
 """
 
-import json
-import os
-import shutil
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from ..config import Config
+from ..db import session_scope
+from ..db_models import ProjectRow
+from ..utils import object_store
 
 
 class ProjectStatus(StrEnum):
@@ -36,7 +40,7 @@ class Project:
     updated_at: str
 
     # 文件信息
-    files: list[dict[str, str]] = field(default_factory=list)  # [{filename, path, size}]
+    files: list[dict[str, Any]] = field(default_factory=list)  # [{filename, size, s3_key}]
     total_text_length: int = 0
 
     # 本体信息（接口1生成后填充）
@@ -101,53 +105,68 @@ class Project:
         )
 
 
+def _row_to_project(row: ProjectRow) -> Project:
+    return Project(
+        project_id=row.project_id,
+        name=row.name,
+        status=ProjectStatus(row.status),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        files=row.files or [],
+        total_text_length=row.total_text_length,
+        ontology=row.ontology,
+        analysis_summary=row.analysis_summary,
+        graph_id=row.graph_id,
+        graph_build_task_id=row.graph_build_task_id,
+        simulation_requirement=row.simulation_requirement,
+        chunk_size=row.chunk_size,
+        chunk_overlap=row.chunk_overlap,
+        error=row.error,
+    )
+
+
+def _apply_project_to_row(project: Project, row: ProjectRow) -> None:
+    status = project.status
+    row.name = project.name
+    row.status = status.value if isinstance(status, ProjectStatus) else status
+    row.created_at = project.created_at
+    row.updated_at = project.updated_at
+    row.files = project.files
+    row.total_text_length = project.total_text_length
+    row.ontology = project.ontology
+    row.analysis_summary = project.analysis_summary
+    row.graph_id = project.graph_id
+    row.graph_build_task_id = project.graph_build_task_id
+    row.simulation_requirement = project.simulation_requirement
+    row.chunk_size = project.chunk_size
+    row.chunk_overlap = project.chunk_overlap
+    row.error = project.error
+
+
 class ProjectManager:
-    """项目管理器 - 负责项目的持久化存储和检索"""
+    """项目管理器 - 负责项目的持久化存储和检索（Postgres + 对象存储）。"""
 
-    # 项目存储根目录
-    PROJECTS_DIR = os.path.join(Config.UPLOAD_FOLDER, "projects")
+    # ============== 对象存储 key 规则 ==============
 
-    @classmethod
-    def _ensure_projects_dir(cls):
-        """确保项目目录存在"""
-        os.makedirs(cls.PROJECTS_DIR, exist_ok=True)
+    @staticmethod
+    def _files_key(project_id: str, saved_filename: str) -> str:
+        return f"projects/{project_id}/files/{saved_filename}"
 
-    @classmethod
-    def _get_project_dir(cls, project_id: str) -> str:
-        """获取项目目录路径"""
-        return os.path.join(cls.PROJECTS_DIR, project_id)
+    @staticmethod
+    def _text_key(project_id: str) -> str:
+        return f"projects/{project_id}/extracted_text.txt"
 
-    @classmethod
-    def _get_project_meta_path(cls, project_id: str) -> str:
-        """获取项目元数据文件路径"""
-        return os.path.join(cls._get_project_dir(project_id), "project.json")
+    @staticmethod
+    def _project_prefix(project_id: str) -> str:
+        return f"projects/{project_id}/"
 
-    @classmethod
-    def _get_project_files_dir(cls, project_id: str) -> str:
-        """获取项目文件存储目录"""
-        return os.path.join(cls._get_project_dir(project_id), "files")
-
-    @classmethod
-    def _get_project_text_path(cls, project_id: str) -> str:
-        """获取项目提取文本存储路径"""
-        return os.path.join(cls._get_project_dir(project_id), "extracted_text.txt")
+    # ============== 元数据 CRUD ==============
 
     @classmethod
     def create_project(cls, name: str = "Unnamed Project") -> Project:
-        """
-        创建新项目
-
-        Args:
-            name: 项目名称
-
-        Returns:
-            新创建的Project对象
-        """
-        cls._ensure_projects_dir()
-
+        """创建新项目并落库。"""
         project_id = f"proj_{uuid.uuid4().hex[:12]}"
         now = datetime.now().isoformat()
-
         project = Project(
             project_id=project_id,
             name=name,
@@ -155,156 +174,87 @@ class ProjectManager:
             created_at=now,
             updated_at=now,
         )
-
-        # 创建项目目录结构
-        project_dir = cls._get_project_dir(project_id)
-        files_dir = cls._get_project_files_dir(project_id)
-        os.makedirs(project_dir, exist_ok=True)
-        os.makedirs(files_dir, exist_ok=True)
-
-        # 保存项目元数据
         cls.save_project(project)
-
         return project
 
     @classmethod
     def save_project(cls, project: Project) -> None:
-        """保存项目元数据"""
+        """保存项目元数据（upsert）。"""
         project.updated_at = datetime.now().isoformat()
-        meta_path = cls._get_project_meta_path(project.project_id)
-
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(project.to_dict(), f, ensure_ascii=False, indent=2)
+        with session_scope() as session:
+            row = session.get(ProjectRow, project.project_id)
+            if row is None:
+                row = ProjectRow(project_id=project.project_id)
+                _apply_project_to_row(project, row)
+                session.add(row)
+            else:
+                _apply_project_to_row(project, row)
 
     @classmethod
     def get_project(cls, project_id: str) -> Project | None:
-        """
-        获取项目
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            Project对象，如果不存在返回None
-        """
-        meta_path = cls._get_project_meta_path(project_id)
-
-        if not os.path.exists(meta_path):
-            return None
-
-        with open(meta_path, encoding="utf-8") as f:
-            data = json.load(f)
-
-        return Project.from_dict(data)
+        """获取项目，不存在返回 None。"""
+        with session_scope() as session:
+            row = session.get(ProjectRow, project_id)
+            return _row_to_project(row) if row else None
 
     @classmethod
     def list_projects(cls, limit: int = 50) -> list[Project]:
-        """
-        列出所有项目
-
-        Args:
-            limit: 返回数量限制
-
-        Returns:
-            项目列表，按创建时间倒序
-        """
-        cls._ensure_projects_dir()
-
-        projects = []
-        for project_id in os.listdir(cls.PROJECTS_DIR):
-            project = cls.get_project(project_id)
-            if project:
-                projects.append(project)
-
-        # 按创建时间倒序排序
-        projects.sort(key=lambda p: p.created_at, reverse=True)
-
-        return projects[:limit]
+        """列出项目，按创建时间倒序。"""
+        with session_scope() as session:
+            rows = (
+                session.query(ProjectRow).order_by(ProjectRow.created_at.desc()).limit(limit).all()
+            )
+            return [_row_to_project(r) for r in rows]
 
     @classmethod
     def delete_project(cls, project_id: str) -> bool:
-        """
-        删除项目及其所有文件
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            是否删除成功
-        """
-        project_dir = cls._get_project_dir(project_id)
-
-        if not os.path.exists(project_dir):
-            return False
-
-        shutil.rmtree(project_dir)
+        """删除项目元数据及其对象存储文件。"""
+        with session_scope() as session:
+            row = session.get(ProjectRow, project_id)
+            if row is None:
+                return False
+            session.delete(row)
+        # 清理对象存储（事务外，失败不影响元数据删除）
+        try:
+            object_store.delete_prefix(cls._project_prefix(project_id))
+        except Exception:
+            pass
         return True
+
+    # ============== 文件 / 文本（对象存储） ==============
 
     @classmethod
     def save_file_to_project(
         cls, project_id: str, file_bytes: bytes, original_filename: str
-    ) -> dict[str, str]:
-        """
-        保存上传的文件到项目目录
+    ) -> dict[str, Any]:
+        """保存上传文件到对象存储，返回文件信息（含 s3_key）。"""
+        import os
 
-        Args:
-            project_id: 项目ID
-            file_bytes: 文件的原始字节内容（框架无关，由路由层从上传对象读出）
-            original_filename: 原始文件名
-
-        Returns:
-            文件信息字典 {filename, path, size}
-        """
-        files_dir = cls._get_project_files_dir(project_id)
-        os.makedirs(files_dir, exist_ok=True)
-
-        # 生成安全的文件名
         ext = os.path.splitext(original_filename)[1].lower()
-        safe_filename = f"{uuid.uuid4().hex[:8]}{ext}"
-        file_path = os.path.join(files_dir, safe_filename)
-
-        # 保存文件
-        with open(file_path, "wb") as f:
-            f.write(file_bytes)
-
-        # 获取文件大小
-        file_size = os.path.getsize(file_path)
-
+        saved_filename = f"{uuid.uuid4().hex[:8]}{ext}"
+        key = cls._files_key(project_id, saved_filename)
+        object_store.put_bytes(key, file_bytes)
         return {
             "original_filename": original_filename,
-            "saved_filename": safe_filename,
-            "path": file_path,
-            "size": file_size,
+            "saved_filename": saved_filename,
+            "s3_key": key,
+            "size": len(file_bytes),
         }
 
     @classmethod
     def save_extracted_text(cls, project_id: str, text: str) -> None:
-        """保存提取的文本"""
-        text_path = cls._get_project_text_path(project_id)
-        with open(text_path, "w", encoding="utf-8") as f:
-            f.write(text)
+        """保存提取文本到对象存储。"""
+        object_store.put_text(cls._text_key(project_id), text)
 
     @classmethod
     def get_extracted_text(cls, project_id: str) -> str | None:
-        """获取提取的文本"""
-        text_path = cls._get_project_text_path(project_id)
-
-        if not os.path.exists(text_path):
-            return None
-
-        with open(text_path, encoding="utf-8") as f:
-            return f.read()
+        """从对象存储读取提取文本。"""
+        return object_store.get_text(cls._text_key(project_id))
 
     @classmethod
     def get_project_files(cls, project_id: str) -> list[str]:
-        """获取项目的所有文件路径"""
-        files_dir = cls._get_project_files_dir(project_id)
-
-        if not os.path.exists(files_dir):
+        """返回项目所有文件的对象存储 key。"""
+        project = cls.get_project(project_id)
+        if not project:
             return []
-
-        return [
-            os.path.join(files_dir, f)
-            for f in os.listdir(files_dir)
-            if os.path.isfile(os.path.join(files_dir, f))
-        ]
+        return [f["s3_key"] for f in project.files if f.get("s3_key")]

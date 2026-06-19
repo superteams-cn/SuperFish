@@ -34,6 +34,38 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: superfish-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-superfish}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-superfish_pg}
+      POSTGRES_DB: ${POSTGRES_DB:-superfish}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-superfish} -d ${POSTGRES_DB:-superfish}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rustfs:
+    # S3 兼容对象存储（RustFS），用于持久化上传文件与提取文本
+    image: rustfs/rustfs:latest
+    container_name: superfish-rustfs
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-superfish}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-superfish_secret}
+      RUSTFS_VOLUMES: /data
+    ports:
+      - "9000:9000"
+    volumes:
+      - rustfs_data:/data
+    restart: unless-stopped
+
   superfish:
     image: ghcr.io/superteams-cn/superfish:latest
     # 加速镜像（如拉取缓慢可替换上方地址）
@@ -42,8 +74,13 @@ services:
     env_file:
       - .env
     environment:
-      # 容器内通过服务名访问 Redis（覆盖 .env 中的 localhost 默认值）
+      # 容器内通过服务名访问中间件（覆盖 .env 中的 localhost 默认值）
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://superfish:superfish_pg@postgres:5432/superfish}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://rustfs:9000}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-superfish}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-superfish_secret}
+      S3_BUCKET: ${S3_BUCKET:-superfish}
     ports:
       - "3000:3000"
       - "5001:5001"
@@ -53,6 +90,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
     volumes:
       - ./apps/api/uploads:/app/apps/api/uploads
 
@@ -60,3 +101,5 @@ volumes:
   neo4j_data:
   neo4j_logs:
   redis_data:
+  postgres_data:
+  rustfs_data:

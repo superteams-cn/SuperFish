@@ -135,6 +135,53 @@ class FileParser:
         return _read_text_with_fallback(file_path)
 
     @classmethod
+    def extract_text_from_bytes(cls, file_bytes: bytes, filename: str) -> str:
+        """从内存字节中提取文本（无需落地本地磁盘，配合对象存储使用）。
+
+        Args:
+            file_bytes: 文件原始字节
+            filename: 原始文件名（仅用于判断扩展名）
+        """
+        suffix = Path(filename).suffix.lower()
+        if suffix not in cls.SUPPORTED_EXTENSIONS:
+            raise ValueError(f"不支持的文件格式: {suffix}")
+
+        if suffix == ".pdf":
+            import fitz  # PyMuPDF
+
+            text_parts = []
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+                for page in doc:
+                    text = page.get_text()
+                    if text.strip():
+                        text_parts.append(text)
+            return "\n\n".join(text_parts)
+
+        # 文本类（md/markdown/txt）：复用编码回退逻辑
+        try:
+            return file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+        encoding = None
+        try:
+            from charset_normalizer import from_bytes
+
+            best = from_bytes(file_bytes).best()
+            if best and best.encoding:
+                encoding = best.encoding
+        except Exception:
+            pass
+        if not encoding:
+            try:
+                import chardet
+
+                result = chardet.detect(file_bytes)
+                encoding = result.get("encoding") if result else None
+            except Exception:
+                pass
+        return file_bytes.decode(encoding or "utf-8", errors="replace")
+
+    @classmethod
     def extract_from_multiple(cls, file_paths: list[str]) -> str:
         """
         从多个文件提取文本并合并
