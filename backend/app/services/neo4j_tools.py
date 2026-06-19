@@ -20,7 +20,7 @@ from ..utils.llm_client import LLMClient
 from ..utils.locale import get_locale, t
 from ..utils.neo4j_graph_utils import get_neo4j_graph_client, run_async, fetch_all_nodes, fetch_all_edges
 
-logger = get_logger('mirofish.neo4j_tools')
+logger = get_logger('superfish.neo4j_tools')
 
 
 def _search_terms(query: str) -> List[str]:

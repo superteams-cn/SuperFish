@@ -23,7 +23,7 @@ from ..utils.logger import get_logger
 from ..utils.locale import get_language_instruction, t
 from .neo4j_entity_reader import EntityNode, Neo4jEntityReader
 
-logger = get_logger('mirofish.simulation_config')
+logger = get_logger('superfish.simulation_config')
 
 # 中国作息时间配置（北京时间）
 CHINA_TIMEZONE_CONFIG = {

@@ -19,7 +19,7 @@ from neo4j import GraphDatabase
 
 from .logger import get_logger
 
-logger = get_logger('mirofish.graph_utils')
+logger = get_logger('superfish.graph_utils')
 
 _DEFAULT_MAX_NODES = 2000
 _neo4j_client = None
@@ -96,7 +96,7 @@ def _score_text(query: str, terms: list[str], text: str) -> int:
 
 
 class Neo4jGraphClient:
-    """Small synchronous Neo4j client with the subset used by MiroFish."""
+    """Small synchronous Neo4j client with the subset used by SuperFish."""
 
     def __init__(self):
         from ..config import Config

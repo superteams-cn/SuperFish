@@ -11,7 +11,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.neo4j_graph_utils import get_neo4j_graph_client, fetch_all_nodes, fetch_all_edges
 
-logger = get_logger('mirofish.neo4j_entity_reader')
+logger = get_logger('superfish.neo4j_entity_reader')
 
 
 def _parse_attrs(value: Any) -> Dict[str, Any]:

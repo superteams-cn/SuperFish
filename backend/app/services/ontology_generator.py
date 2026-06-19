@@ -427,7 +427,7 @@ class OntologyGenerator:
         code_lines = [
             '"""',
             '自定义实体类型定义',
-            '由MiroFish自动生成，用于社会舆论模拟',
+            '由SuperFish自动生成，用于社会舆论模拟',
             '"""',
             '',
             'from typing import Optional',

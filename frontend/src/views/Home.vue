@@ -7,12 +7,12 @@
         <span class="bh-mark circle"></span>
         <span class="bh-mark square"></span>
         <span class="bh-mark tri"></span>
-        <span class="bh-brand">MIROFISH</span>
+        <span class="bh-brand">SUPERFISH</span>
       </div>
       <div class="bh-nav-right">
         <ThemeSwitcher />
         <LanguageSwitcher />
-        <a href="https://github.com/666ghj/MiroFish" target="_blank" class="bh-github">
+        <a href="https://github.com/666ghj/SuperFish" target="_blank" class="bh-github">
           {{ $t('nav.visitGithub') }} ↗
         </a>
       </div>
@@ -44,7 +44,7 @@
         <span class="bh-comp-circle"></span>
         <span class="bh-comp-square"></span>
         <span class="bh-comp-tri"></span>
-        <img src="../assets/logo/MiroFish_logo_left.jpeg" alt="MiroFish" class="bh-hero-logo no-invert" />
+        <img src="../assets/logo/SuperFish_logo_left.jpeg" alt="SuperFish" class="bh-hero-logo no-invert" />
       </div>
     </section>
 
@@ -151,11 +151,11 @@
   <div class="home-container" v-else>
     <!-- 顶部导航栏 -->
     <nav class="navbar">
-      <div class="nav-brand">MIROFISH</div>
+      <div class="nav-brand">SUPERFISH</div>
       <div class="nav-links">
         <ThemeSwitcher />
         <LanguageSwitcher />
-        <a href="https://github.com/666ghj/MiroFish" target="_blank" class="github-link">
+        <a href="https://github.com/666ghj/SuperFish" target="_blank" class="github-link">
           {{ $t('nav.visitGithub') }} <span class="arrow">↗</span>
         </a>
       </div>
@@ -194,7 +194,7 @@
         <div class="hero-right">
           <!-- Logo 区域 -->
           <div class="logo-container">
-            <img src="../assets/logo/MiroFish_logo_left.jpeg" alt="MiroFish Logo" class="hero-logo" />
+            <img src="../assets/logo/SuperFish_logo_left.jpeg" alt="SuperFish Logo" class="hero-logo" />
           </div>
           
           <button class="scroll-down-btn" @click="scrollToBottom">

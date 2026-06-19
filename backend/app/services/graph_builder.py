@@ -33,7 +33,7 @@ from ..utils.locale import get_locale, set_locale, t
 from ..utils.logger import get_logger
 from .text_processor import TextProcessor
 
-logger = get_logger('mirofish.graph_builder')
+logger = get_logger('superfish.graph_builder')
 
 _RESERVED_ATTRS = {'uuid', 'name', 'group_id', 'name_embedding', 'summary', 'created_at'}
 
@@ -103,7 +103,7 @@ def _enum_mapping(values: List[str]) -> Dict[str, str]:
     return mapping
 
 
-class MiroFishStructuredLLM(OpenAILike):
+class SuperFishStructuredLLM(OpenAILike):
     """OpenAI-compatible LLM wrapper that returns Pydantic objects via JSON mode."""
 
     _json_client: LLMClient = PrivateAttr()
@@ -208,13 +208,13 @@ class GraphBuilderService:
         self.client = get_neo4j_graph_client()
 
     def _make_llamaindex_llm(self) -> OpenAILike:
-        return MiroFishStructuredLLM()
+        return SuperFishStructuredLLM()
 
     def build_graph_async(
         self,
         text: str,
         ontology: Dict[str, Any],
-        graph_name: str = "MiroFish Graph",
+        graph_name: str = "SuperFish Graph",
         chunk_size: int = 500,
         chunk_overlap: int = 50,
         batch_size: int = 3,
@@ -241,7 +241,7 @@ class GraphBuilderService:
         task_id: str,
         text: str,
         ontology: Dict[str, Any],
-        graph_name: str = "MiroFish Graph",
+        graph_name: str = "SuperFish Graph",
         chunk_size: int = 500,
         chunk_overlap: int = 50,
         batch_size: int = 3,
@@ -337,7 +337,7 @@ class GraphBuilderService:
 
     def create_graph(self, name: str) -> str:
         """生成图谱 group_id。"""
-        return f"mirofish_{uuid.uuid4().hex[:16]}"
+        return f"superfish_{uuid.uuid4().hex[:16]}"
 
     def _build_schema(self, ontology: Dict[str, Any]) -> Dict[str, Any]:
         entity_types = {}
@@ -529,8 +529,8 @@ class GraphBuilderService:
         relation_members = _enum_mapping(list(schema["edge_types"]))
         entity_member_by_label = {label: member for member, label in entity_members.items()}
         relation_member_by_label = {label: member for member, label in relation_members.items()}
-        entity_enum = Enum("MiroFishEntityType", entity_members)
-        relation_enum = Enum("MiroFishRelationType", relation_members)
+        entity_enum = Enum("SuperFishEntityType", entity_members)
+        relation_enum = Enum("SuperFishRelationType", relation_members)
         validation_schema = [
             (
                 entity_enum[entity_member_by_label[source]],

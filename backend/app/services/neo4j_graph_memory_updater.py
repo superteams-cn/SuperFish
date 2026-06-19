@@ -15,7 +15,7 @@ from ..utils.logger import get_logger
 from ..utils.neo4j_graph_utils import get_neo4j_graph_client
 from ..utils.locale import get_locale, set_locale
 
-logger = get_logger('mirofish.neo4j_graph_memory_updater')
+logger = get_logger('superfish.neo4j_graph_memory_updater')
 
 
 @dataclass

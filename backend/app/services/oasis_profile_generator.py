@@ -23,7 +23,7 @@ from ..utils.locale import get_language_instruction, get_locale, set_locale, t
 from ..utils.neo4j_graph_utils import get_neo4j_graph_client, fetch_all_edges, fetch_all_nodes
 from .neo4j_entity_reader import EntityNode, Neo4jEntityReader
 
-logger = get_logger('mirofish.oasis_profile')
+logger = get_logger('superfish.oasis_profile')
 
 
 @dataclass
