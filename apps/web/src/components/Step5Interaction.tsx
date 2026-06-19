@@ -8,7 +8,7 @@ import { chatWithReport, getAgentLog, getReport } from '@/lib/api/report'
 import { interviewAgents, getSimulationProfilesRealtime } from '@/lib/api/simulation'
 import { cn } from '@/lib/utils'
 import type { Profile } from '@/lib/step2-types'
-import type { ChatMessage, SurveyResult } from '@/lib/step5-types'
+import type { ChatMessage, SurveyResult, ToolCall } from '@/lib/step5-types'
 
 interface Step5Props {
   reportId: string
@@ -91,6 +91,7 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
     setIsSending(true)
     try {
       let answer: string
+      let toolCalls: ToolCall[] | undefined
       if (key === 'report_agent') {
         addLog(t('log.sendToReportAgent', { message: text.substring(0, 50) }))
         const historyForApi = prev.slice(-10).map((m) => ({ role: m.role, content: m.content }))
@@ -101,6 +102,8 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         })
         if (!res.success || !res.data) throw new Error(res.error || t('step5.requestFailed'))
         answer = res.data.response || res.data.answer || t('step5.noResponse')
+        const rawCalls = res.data.tool_calls
+        if (Array.isArray(rawCalls) && rawCalls.length > 0) toolCalls = rawCalls as ToolCall[]
         addLog(t('log.reportAgentReplied'))
       } else {
         const idx = selectedAgentIndex as number
@@ -130,7 +133,12 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         answer = (agentResult?.response || agentResult?.answer) ?? t('step5.noResponse')
         addLog(t('log.agentReplied', { name: selectedAgent?.username }))
       }
-      append(key, { role: 'assistant', content: answer, timestamp: new Date().toISOString() })
+      append(key, {
+        role: 'assistant',
+        content: answer,
+        timestamp: new Date().toISOString(),
+        toolCalls,
+      })
     } catch (err) {
       addLog(t('log.sendFailed', { error: (err as Error).message }))
       append(key, {
@@ -238,12 +246,8 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
           />
         ) : (
           <ChatPanel
-            title={
-              targetKey === 'report_agent'
-                ? t('step5.chatWithReportAgent')
-                : selectedAgent?.username || 'Agent'
-            }
-            subtitle={targetKey === 'report_agent' ? reportId : selectedAgent?.profession}
+            target={targetKey === 'report_agent' ? 'report_agent' : 'agent'}
+            agent={selectedAgent}
             messages={currentMessages}
             isSending={isSending}
             onSend={sendMessage}

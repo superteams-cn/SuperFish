@@ -9,6 +9,14 @@ interface Props {
   onClose: () => void
 }
 
+/** 人设四维度框架（静态展示，对应后端单一 persona 文本的结构化注解）。 */
+const PERSONA_DIMENSIONS = [
+  { titleKey: 'step2.personaDimExperience', descKey: 'step2.personaDimExperienceDesc' },
+  { titleKey: 'step2.personaDimBehavior', descKey: 'step2.personaDimBehaviorDesc' },
+  { titleKey: 'step2.personaDimMemory', descKey: 'step2.personaDimMemoryDesc' },
+  { titleKey: 'step2.personaDimSocial', descKey: 'step2.personaDimSocialDesc' },
+] as const
+
 /** Agent 人设详情模态框（基于 shadcn Dialog）。 */
 export function ProfileModal({ profile, onClose }: Props) {
   const { t } = useTranslation()
@@ -67,6 +75,17 @@ export function ProfileModal({ profile, onClose }: Props) {
 
             {profile.persona && (
               <Section label={t('step2.profileModalPersona')}>
+                {/* 人设维度框架：Experience / Behavior / Memory / Social */}
+                <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {PERSONA_DIMENSIONS.map((dim) => (
+                    <div key={dim.titleKey} className="bg-muted/40 rounded-md border p-2">
+                      <span className="block text-[11px] font-semibold">{t(dim.titleKey)}</span>
+                      <span className="text-muted-foreground mt-0.5 block text-[10px] leading-snug">
+                        {t(dim.descKey)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
                 <p className="bg-muted/50 text-foreground/80 whitespace-pre-wrap rounded-md p-3 text-[11px] leading-relaxed">
                   {profile.persona}
                 </p>

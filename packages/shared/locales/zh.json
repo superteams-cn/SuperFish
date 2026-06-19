@@ -79,7 +79,8 @@
     "promptPlaceholder": "// 用自然语言输入模拟或预测需求（例.武大若发布撤销肖某处分的公告，会引发什么舆情走向）",
     "engineBadge": "引擎: SuperFish-V1.0",
     "startEngine": "启动引擎",
-    "initializing": "初始化中..."
+    "initializing": "初始化中...",
+    "scrollToHistory": "查看历史推演"
   },
   "main": {
     "layoutGraph": "图谱",
@@ -212,7 +213,9 @@
     "projectIdLabel": "项目ID",
     "graphIdLabel": "图谱ID",
     "simulationIdLabel": "模拟ID",
-    "taskIdLabel": "任务ID"
+    "taskIdLabel": "任务ID",
+    "activityMultiplier": "活跃倍率",
+    "personaDimFramework": "人设维度框架"
   },
   "step3": {
     "startGenerateReport": "开始生成结果报告",
@@ -259,7 +262,10 @@
     "followed": "关注了 @{name}",
     "upvotedPost": "顶了帖子",
     "downvotedPost": "踩了帖子",
-    "actionSkipped": "跳过操作"
+    "actionSkipped": "跳过操作",
+    "stopSimulation": "停止模拟",
+    "stopConfirmTitle": "停止当前模拟?",
+    "stopConfirmDesc": "模拟将立即停止,已产生的动作与结果会保留,之后可直接生成报告。"
   },
   "step4": {
     "generatingSection": "正在生成{title}...",
@@ -332,7 +338,27 @@
     "infoRequirement": "需求",
     "reportGenComplete": "报告生成完成",
     "waitingForAgentActivity": "等待 Agent 活动...",
-    "consoleOutput": "控制台输出"
+    "consoleOutput": "控制台输出",
+    "downloadReport": "下载报告",
+    "workflowProgress": "工作流进度",
+    "statFacts": "事实",
+    "statEntities": "实体",
+    "statRelations": "关系",
+    "statNodes": "节点",
+    "statEdges": "边",
+    "statResults": "结果",
+    "statInterviewed": "已采访",
+    "statTotal": "总计",
+    "selectionReason": "选择理由",
+    "keyQuotes": "关键引言",
+    "interviewSummary": "采访摘要",
+    "showMore": "展开全文",
+    "rawOutput": "原始输出",
+    "structuredView": "结构化视图",
+    "stepPlanning": "规划 / 大纲",
+    "stepComplete": "完成",
+    "inProgress": "进行中",
+    "statusWaiting": "等待中"
   },
   "step5": {
     "interactiveTools": "互动工具",
@@ -377,7 +403,13 @@
     "errorOccurred": "抱歉，发生了错误: {error}",
     "noResponse": "无响应",
     "requestFailed": "请求失败",
-    "selectAgentFirst": "请先选择一个模拟个体"
+    "selectAgentFirst": "请先选择一个模拟个体",
+    "reportAgentName": "Report Agent",
+    "youName": "你",
+    "toggleTools": "展开/收起工具",
+    "toggleProfile": "展开/收起档案",
+    "toolCallsCount": "调用了 {{count}} 个工具",
+    "unknownTool": "未知工具"
   },
   "graph": {
     "panelTitle": "图谱关系可视化",
@@ -708,7 +740,9 @@
     "fetchConsoleLogFailed": "获取控制台日志失败: {error}",
     "enterStep": "进入 Step {step}: {name}",
     "returnToStep": "返回 Step {step}: {name}",
-    "customSimRounds": "自定义模拟轮数: {rounds} 轮"
+    "customSimRounds": "自定义模拟轮数: {rounds} 轮",
+    "reportDownloaded": "报告已下载: {{reportId}}",
+    "reportDownloadFailed": "报告下载失败: {{error}}"
   },
   "report": {
     "taskStarted": "报告生成任务开始",

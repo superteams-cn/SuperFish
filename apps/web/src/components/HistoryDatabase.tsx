@@ -44,8 +44,13 @@ function formatDateTime(s?: string) {
   }
 }
 
+interface HistoryDatabaseProps {
+  /** 历史项目加载完成后回调（用于首页决定是否显示"滚动到历史"按钮）。 */
+  onHasProjects?: (hasProjects: boolean) => void
+}
+
 /** 首页历史库：展示历史模拟项目卡片，点击查看详情并回放到对应步骤。 */
-export function HistoryDatabase() {
+export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [projects, setProjects] = useState<HistoryProject[]>([])
@@ -57,14 +62,17 @@ export function HistoryDatabase() {
     try {
       setLoading(true)
       const res = await getSimulationHistory(20)
-      if (res.success) setProjects(res.data || [])
+      const list = res.success ? res.data || [] : []
+      setProjects(list)
+      onHasProjects?.(list.length > 0)
     } catch (err) {
       console.error('加载历史项目失败:', err)
       setProjects([])
+      onHasProjects?.(false)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [onHasProjects])
 
   useEffect(() => {
     if (loadedRef.current) return
@@ -90,7 +98,7 @@ export function HistoryDatabase() {
   if (projects.length === 0) return null
 
   return (
-    <section className="mt-12">
+    <section id="history-section" className="mt-12 scroll-mt-6">
       <div className="mb-4 flex items-center gap-3">
         <Separator className="flex-1" />
         <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
@@ -104,10 +112,10 @@ export function HistoryDatabase() {
           <button
             key={p.simulation_id}
             onClick={() => setSelected(p)}
-            className="bg-card hover:border-brand rounded-lg border p-4 text-left transition hover:shadow-md"
+            className="bg-card hover:border-brand group rounded-lg border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-muted-foreground font-mono text-xs font-bold">
+              <span className="text-muted-foreground group-hover:text-brand font-mono text-xs font-bold transition-colors">
                 {formatSimId(p.simulation_id)}
               </span>
               <div className="flex gap-1 text-xs">

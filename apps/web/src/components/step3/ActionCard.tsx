@@ -49,20 +49,32 @@ function actionTime(ts?: string) {
   }
 }
 
-/** 时间线中的单条 Agent 动作卡片，按动作类型渲染不同正文。 */
-export function ActionCard({ action }: { action: ActionItem }) {
+/**
+ * 时间线中的单条 Agent 动作卡片，按动作类型渲染不同正文。
+ * - variant="list"：自带左侧圆点与缩进（单轨列表）。
+ * - variant="bare"：仅卡片本体，圆点由外层双轨时间线负责。
+ */
+export function ActionCard({
+  action,
+  variant = 'list',
+}: {
+  action: ActionItem
+  variant?: 'list' | 'bare'
+}) {
   const { t } = useTranslation()
   const args = action.action_args || {}
   const type = action.action_type
 
   return (
-    <div className="relative pl-6">
-      <span
-        className={cn(
-          'border-background absolute left-0 top-2 h-2.5 w-2.5 rounded-full border-2',
-          action.platform === 'twitter' ? 'bg-sky-500' : 'bg-orange-500',
-        )}
-      />
+    <div className={cn(variant === 'list' && 'relative pl-6')}>
+      {variant === 'list' && (
+        <span
+          className={cn(
+            'border-background absolute left-0 top-2 h-2.5 w-2.5 rounded-full border-2',
+            action.platform === 'twitter' ? 'bg-sky-500' : 'bg-orange-500',
+          )}
+        />
+      )}
       <div className="bg-card rounded-md border p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">

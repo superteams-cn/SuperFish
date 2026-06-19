@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { Loader2 } from 'lucide-react'
+import { Loader2, HelpCircle } from 'lucide-react'
 
 import { Markdown } from '@/components/Markdown'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -98,11 +99,22 @@ export function SurveyPanel({
           </span>
           {results.map((r) => (
             <div key={r.agent_id} className="rounded-md border p-3">
-              <div className="mb-1 flex items-baseline gap-2">
-                <span className="text-sm font-semibold">{r.agent_name}</span>
-                {r.profession && (
-                  <span className="text-muted-foreground text-[10px]">{r.profession}</span>
-                )}
+              <div className="mb-2 flex items-center gap-2">
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarFallback className="bg-brand text-[11px] font-semibold text-white">
+                    {(r.agent_name || 'A').charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">{r.agent_name}</div>
+                  <div className="text-muted-foreground truncate text-[10px]">
+                    {r.profession || t('step2.unknownProfession')}
+                  </div>
+                </div>
+              </div>
+              <div className="text-muted-foreground mb-2 flex items-start gap-1.5 text-xs">
+                <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{r.question}</span>
               </div>
               <Markdown content={r.answer} className="text-[13px]" />
             </div>

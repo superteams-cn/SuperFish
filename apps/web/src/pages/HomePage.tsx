@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Upload, X, FileText, Cpu } from 'lucide-react'
+import { Upload, X, FileText, Cpu, ChevronDown } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,6 +21,11 @@ export default function HomePage() {
   const [files, setFiles] = useState<File[]>([])
   const [requirement, setRequirement] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [hasHistory, setHasHistory] = useState(false)
+
+  const scrollToHistory = () => {
+    document.getElementById('history-section')?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   const canSubmit = requirement.trim() !== '' && files.length > 0
 
@@ -165,8 +170,23 @@ export default function HomePage() {
         </Card>
       </div>
 
+      {/* 向下滚动到历史区的快捷按钮 */}
+      {hasHistory && (
+        <div className="mt-8 flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={scrollToHistory}
+            className="text-muted-foreground hover:text-foreground gap-1.5"
+          >
+            {t('home.scrollToHistory')}
+            <ChevronDown className="h-4 w-4 animate-bounce" />
+          </Button>
+        </div>
+      )}
+
       {/* 历史模拟项目 */}
-      <HistoryDatabase />
+      <HistoryDatabase onHasProjects={setHasHistory} />
     </div>
   )
 }

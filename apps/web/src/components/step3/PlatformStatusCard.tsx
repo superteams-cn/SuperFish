@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -15,7 +16,7 @@ interface Props {
   availableActions: string[]
 }
 
-/** 单平台运行状态卡片（轮次 / 模拟时长 / 动作数 + 可用动作提示）。 */
+/** 单平台运行状态卡片（轮次 / 模拟时长 / 动作数 + 可用动作 tooltip）。 */
 export function PlatformStatusCard({
   name,
   running,
@@ -29,32 +30,43 @@ export function PlatformStatusCard({
   const { t } = useTranslation()
 
   return (
-    <div
-      className={cn(
-        'group relative flex-1 rounded-md border p-3 transition',
-        running && 'border-brand',
-        completed && 'border-green-500',
-      )}
-    >
-      <div className="mb-2 flex items-center gap-2">
-        <span className="text-xs font-semibold">{name}</span>
-        {completed && <Check className="h-3.5 w-3.5 text-green-600" />}
-        {running && <span className="bg-brand h-1.5 w-1.5 animate-pulse rounded-full" />}
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <Stat label={t('step3.statRound')} value={`${currentRound}/${totalRounds}`} />
-        <Stat label={t('step3.statTime')} value={elapsedTime} />
-        <Stat label={t('step3.statActs')} value={String(actionsCount)} />
-      </div>
-      {/* 可用动作提示 */}
-      <div className="mt-2 hidden flex-wrap gap-1 group-hover:flex">
-        {availableActions.map((a) => (
-          <span key={a} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[9px]">
-            {a}
-          </span>
-        ))}
-      </div>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            'relative flex-1 cursor-default rounded-md border p-3 transition',
+            running && 'border-brand',
+            completed && 'border-green-500',
+          )}
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs font-semibold">{name}</span>
+            {completed && <Check className="h-3.5 w-3.5 text-green-600" />}
+            {running && <span className="bg-brand h-1.5 w-1.5 animate-pulse rounded-full" />}
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <Stat label={t('step3.statRound')} value={`${currentRound}/${totalRounds}`} />
+            <Stat label={t('step3.statTime')} value={elapsedTime} />
+            <Stat label={t('step3.statActs')} value={String(actionsCount)} />
+          </div>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[240px]" side="bottom" align="start">
+        <p className="text-muted-foreground/80 mb-1.5 text-[10px] font-semibold uppercase tracking-wide">
+          {t('step3.availableActions')}
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {availableActions.map((a) => (
+            <span
+              key={a}
+              className="bg-primary-foreground/15 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide"
+            >
+              {a}
+            </span>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

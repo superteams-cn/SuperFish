@@ -1,4 +1,4 @@
-import { http, requestWithRetry } from './client'
+import service, { http, requestWithRetry } from './client'
 import type {
   AgentLogData,
   ApiEnvelope,
@@ -35,6 +35,15 @@ export const getConsoleLog = (
 /** 获取报告详情。 */
 export const getReport = (reportId: string): Promise<ApiEnvelope<ReportData>> =>
   http.get<ReportData>(`/api/report/${reportId}`)
+
+/** 下载报告（Markdown）。返回 Blob，由调用方触发浏览器下载。 */
+export const downloadReport = async (reportId: string): Promise<Blob> => {
+  // 该端点返回文件流而非 JSON 信封，故直接用底层 axios 实例拿 blob。
+  const res = await service.get(`/api/report/${reportId}/download`, {
+    responseType: 'blob',
+  })
+  return res.data as Blob
+}
 
 /** 与 Report Agent 对话。data: { simulation_id, message, chat_history? } */
 export const chatWithReport = (data: Record<string, unknown>): Promise<ApiEnvelope<ChatData>> =>

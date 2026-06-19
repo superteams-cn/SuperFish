@@ -79,7 +79,8 @@
     "promptPlaceholder": "// Describe your simulation or prediction requirement in natural language",
     "engineBadge": "Engine: SuperFish-V1.0",
     "startEngine": "Start Engine",
-    "initializing": "Initializing..."
+    "initializing": "Initializing...",
+    "scrollToHistory": "View simulation history"
   },
   "main": {
     "layoutGraph": "Graph",
@@ -212,7 +213,9 @@
     "projectIdLabel": "Project ID",
     "graphIdLabel": "Graph ID",
     "simulationIdLabel": "Simulation ID",
-    "taskIdLabel": "Task ID"
+    "taskIdLabel": "Task ID",
+    "activityMultiplier": "Activity Multiplier",
+    "personaDimFramework": "Persona Dimensions"
   },
   "step3": {
     "startGenerateReport": "Generate Report",
@@ -259,7 +262,10 @@
     "followed": "Followed @{name}",
     "upvotedPost": "Upvoted Post",
     "downvotedPost": "Downvoted Post",
-    "actionSkipped": "Action Skipped"
+    "actionSkipped": "Action Skipped",
+    "stopSimulation": "Stop Simulation",
+    "stopConfirmTitle": "Stop the simulation?",
+    "stopConfirmDesc": "The simulation will stop immediately. Generated actions and results are kept, and you can proceed to generate the report."
   },
   "step4": {
     "generatingSection": "Generating {title}...",
@@ -332,7 +338,27 @@
     "infoRequirement": "Requirement",
     "reportGenComplete": "Report Generation Complete",
     "waitingForAgentActivity": "Waiting for agent activity...",
-    "consoleOutput": "CONSOLE OUTPUT"
+    "consoleOutput": "CONSOLE OUTPUT",
+    "downloadReport": "Download Report",
+    "workflowProgress": "Workflow Progress",
+    "statFacts": "Facts",
+    "statEntities": "Entities",
+    "statRelations": "Relations",
+    "statNodes": "Nodes",
+    "statEdges": "Edges",
+    "statResults": "Results",
+    "statInterviewed": "Interviewed",
+    "statTotal": "Total",
+    "selectionReason": "Selection Reason",
+    "keyQuotes": "Key Quotes",
+    "interviewSummary": "Interview Summary",
+    "showMore": "Show More",
+    "rawOutput": "Raw Output",
+    "structuredView": "Structured View",
+    "stepPlanning": "Planning / Outline",
+    "stepComplete": "Complete",
+    "inProgress": "In Progress",
+    "statusWaiting": "Waiting"
   },
   "step5": {
     "interactiveTools": "Interactive Tools",
@@ -377,7 +403,13 @@
     "errorOccurred": "Sorry, an error occurred: {error}",
     "noResponse": "No response",
     "requestFailed": "Request failed",
-    "selectAgentFirst": "Please select a simulated individual first"
+    "selectAgentFirst": "Please select a simulated individual first",
+    "reportAgentName": "Report Agent",
+    "youName": "You",
+    "toggleTools": "Toggle tools",
+    "toggleProfile": "Toggle profile",
+    "toolCallsCount": "Called {{count}} tool(s)",
+    "unknownTool": "Unknown tool"
   },
   "graph": {
     "panelTitle": "Graph Relationship Visualization",
@@ -708,7 +740,9 @@
     "fetchConsoleLogFailed": "Failed to fetch console log: {error}",
     "enterStep": "Entering Step {step}: {name}",
     "returnToStep": "Returning to Step {step}: {name}",
-    "customSimRounds": "Custom simulation rounds: {rounds} rounds"
+    "customSimRounds": "Custom simulation rounds: {rounds} rounds",
+    "reportDownloaded": "Report downloaded: {{reportId}}",
+    "reportDownloadFailed": "Report download failed: {{error}}"
   },
   "report": {
     "taskStarted": "Report generation task started",

@@ -1,13 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Square } from 'lucide-react'
 
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { PlatformStatusCard } from '@/components/step3/PlatformStatusCard'
-import { ActionCard } from '@/components/step3/ActionCard'
-import { startSimulation, getRunStatus, getRunStatusDetail } from '@/lib/api/simulation'
+import { DualTimeline } from '@/components/step3/DualTimeline'
+import {
+  startSimulation,
+  stopSimulation,
+  getRunStatus,
+  getRunStatusDetail,
+} from '@/lib/api/simulation'
 import { generateReport } from '@/lib/api/report'
 import type { SystemLog } from '@/lib/process-types'
 import type { ActionItem, RunStatus } from '@/lib/step3-types'
@@ -50,6 +63,8 @@ export function Step3Simulation({
 
   const [phase, setPhase] = useState(0) // 0 未开始 / 1 运行中 / 2 已完成
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const [isStopping, setIsStopping] = useState(false)
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false)
   const [runStatus, setRunStatus] = useState<RunStatus>({})
   const [actions, setActions] = useState<ActionItem[]>([])
 
@@ -239,68 +254,125 @@ export function Step3Simulation({
     }
   }
 
+  // 停止模拟：终止运行但保留已产生的动作与结果，随后可生成报告
+  const handleStopSimulation = async () => {
+    if (!simulationId || isStopping) return
+    setStopConfirmOpen(false)
+    setIsStopping(true)
+    addLog(t('log.stoppingSim'))
+    try {
+      const res = await stopSimulation({ simulation_id: simulationId })
+      if (res.success) {
+        addLog(t('log.simStoppedSuccess'))
+        setPhase(2)
+        stopPolling()
+        onUpdateStatus('completed')
+      } else {
+        addLog(t('log.stopFailed', { error: res.error || t('common.unknownError') }))
+      }
+    } catch (err) {
+      addLog(t('log.stopException', { error: (err as Error).message }))
+    } finally {
+      setIsStopping(false)
+    }
+  }
+
   const totalRounds = runStatus.total_rounds || maxRounds || '-'
 
   return (
-    <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
-      {/* 顶部控制栏 */}
-      <div className="bg-card flex items-center gap-3 border-b p-3">
-        <div className="flex flex-1 gap-3">
-          <PlatformStatusCard
-            name={t('step3.platformTwitterName')}
-            running={runStatus.twitter_running}
-            completed={runStatus.twitter_completed}
-            currentRound={runStatus.twitter_current_round || 0}
-            totalRounds={totalRounds}
-            elapsedTime={elapsed(runStatus.twitter_current_round)}
-            actionsCount={runStatus.twitter_actions_count || 0}
-            availableActions={TWITTER_ACTIONS}
-          />
-          <PlatformStatusCard
-            name={t('step3.platformRedditName')}
-            running={runStatus.reddit_running}
-            completed={runStatus.reddit_completed}
-            currentRound={runStatus.reddit_current_round || 0}
-            totalRounds={totalRounds}
-            elapsedTime={elapsed(runStatus.reddit_current_round)}
-            actionsCount={runStatus.reddit_actions_count || 0}
-            availableActions={REDDIT_ACTIONS}
-          />
+    <TooltipProvider delayDuration={150}>
+      <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
+        {/* 顶部控制栏 */}
+        <div className="bg-card flex items-center gap-3 border-b p-3">
+          <div className="flex flex-1 gap-3">
+            <PlatformStatusCard
+              name={t('step3.platformTwitterName')}
+              running={runStatus.twitter_running}
+              completed={runStatus.twitter_completed}
+              currentRound={runStatus.twitter_current_round || 0}
+              totalRounds={totalRounds}
+              elapsedTime={elapsed(runStatus.twitter_current_round)}
+              actionsCount={runStatus.twitter_actions_count || 0}
+              availableActions={TWITTER_ACTIONS}
+            />
+            <PlatformStatusCard
+              name={t('step3.platformRedditName')}
+              running={runStatus.reddit_running}
+              completed={runStatus.reddit_completed}
+              currentRound={runStatus.reddit_current_round || 0}
+              totalRounds={totalRounds}
+              elapsedTime={elapsed(runStatus.reddit_current_round)}
+              actionsCount={runStatus.reddit_actions_count || 0}
+              availableActions={REDDIT_ACTIONS}
+            />
+          </div>
+          {/* 运行中可停止：保留已产生的结果 */}
+          {phase === 1 && (
+            <Button
+              variant="outline"
+              onClick={() => setStopConfirmOpen(true)}
+              disabled={isStopping}
+            >
+              {isStopping ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Square className="h-3.5 w-3.5" />
+              )}
+              {t('step3.stopSimulation')}
+            </Button>
+          )}
+          <Button onClick={handleGenerateReport} disabled={phase !== 2 || isGeneratingReport}>
+            {isGeneratingReport && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {isGeneratingReport
+              ? t('step3.generatingReportBtn')
+              : t('step3.startGenerateReportBtn')}
+            {!isGeneratingReport && <span>→</span>}
+          </Button>
         </div>
-        <Button onClick={handleGenerateReport} disabled={phase !== 2 || isGeneratingReport}>
-          {isGeneratingReport && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {isGeneratingReport ? t('step3.generatingReportBtn') : t('step3.startGenerateReportBtn')}
-          {!isGeneratingReport && <span>→</span>}
-        </Button>
+
+        {/* 动作时间线（双轨：左信息广场 / 右话题社区，窄屏降级单轨） */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {actions.length > 0 && (
+            <div className="text-muted-foreground mb-3 flex items-center gap-3 text-xs">
+              <span>
+                {t('step3.totalEvents')}: <span className="font-mono">{actions.length}</span>
+              </span>
+              <span className="font-mono">
+                <span className="text-sky-500">{twitterCount}</span> /{' '}
+                <span className="text-orange-500">{redditCount}</span>
+              </span>
+            </div>
+          )}
+          {actions.length > 0 ? (
+            <DualTimeline actions={actions} />
+          ) : (
+            <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 text-sm">
+              <span className="bg-brand h-3 w-3 animate-ping rounded-full" />
+              {t('step3.waitingForActions')}
+            </div>
+          )}
+        </div>
+
+        <SystemLogTerminal logs={systemLogs} badge={simulationId || 'NO_SIMULATION'} />
       </div>
 
-      {/* 动作时间线 */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {actions.length > 0 && (
-          <div className="text-muted-foreground mb-3 flex items-center gap-3 text-xs">
-            <span>
-              {t('step3.totalEvents')}: <span className="font-mono">{actions.length}</span>
-            </span>
-            <span className="font-mono">
-              <span className="text-sky-500">{twitterCount}</span> /{' '}
-              <span className="text-orange-500">{redditCount}</span>
-            </span>
+      {/* 停止确认 */}
+      <Dialog open={stopConfirmOpen} onOpenChange={setStopConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('step3.stopConfirmTitle')}</DialogTitle>
+            <DialogDescription>{t('step3.stopConfirmDesc')}</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setStopConfirmOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="destructive" onClick={handleStopSimulation}>
+              {t('step3.stopSimulation')}
+            </Button>
           </div>
-        )}
-        <div className="border-muted space-y-2 border-l pl-1">
-          {actions.map((action) => (
-            <ActionCard key={action._uniqueId || action.id} action={action} />
-          ))}
-        </div>
-        {actions.length === 0 && (
-          <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 text-sm">
-            <span className="bg-brand h-3 w-3 animate-ping rounded-full" />
-            {t('step3.waitingForActions')}
-          </div>
-        )}
-      </div>
-
-      <SystemLogTerminal logs={systemLogs} badge={simulationId || 'NO_SIMULATION'} />
-    </div>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   )
 }

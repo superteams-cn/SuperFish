@@ -56,6 +56,9 @@ export function PlatformConfigCard({ phase, config }: Props) {
                   value={`${tc.agents_per_hour_min}-${tc.agents_per_hour_max}`}
                 />
               </div>
+
+              {/* 活跃时段分解 */}
+              <TimePeriods tc={tc} />
             </div>
           )}
 
@@ -113,6 +116,62 @@ export function PlatformConfigCard({ phase, config }: Props) {
       )}
     </StepCard>
   )
+}
+
+/** 活跃时段分解：高峰 / 工作 / 早间 / 低谷（hours 范围 + 活跃倍率）。 */
+function TimePeriods({ tc }: { tc: NonNullable<SimulationConfig['time_config']> }) {
+  const { t } = useTranslation()
+
+  const periods = [
+    { label: t('step2.peakHours'), hours: tc.peak_hours, mult: tc.peak_activity_multiplier },
+    { label: t('step2.workHours'), hours: tc.work_hours, mult: tc.work_activity_multiplier },
+    {
+      label: t('step2.morningHours'),
+      hours: tc.morning_hours,
+      mult: tc.morning_activity_multiplier,
+    },
+    {
+      label: t('step2.offPeakHours'),
+      hours: tc.off_peak_hours,
+      mult: tc.off_peak_activity_multiplier,
+    },
+  ].filter((p) => p.hours?.length)
+
+  if (!periods.length) return null
+
+  return (
+    <div className="mt-3 flex flex-col gap-1.5">
+      {periods.map((p) => (
+        <div
+          key={p.label}
+          className="bg-card flex items-center gap-3 rounded-md border px-3 py-1.5 text-[11px]"
+        >
+          <span className="text-muted-foreground min-w-[64px] font-medium">{p.label}</span>
+          <span className="text-foreground/80 flex-1 font-mono">{formatHours(p.hours)}</span>
+          {p.mult != null && (
+            <span
+              className="bg-brand/10 text-brand rounded px-1.5 py-0.5 font-mono font-semibold"
+              title={t('step2.activityMultiplier')}
+            >
+              ×{p.mult}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** 把小时数组格式化为可读时段字符串。 */
+function formatHours(hours?: number[]) {
+  if (!hours?.length) return '-'
+  // 连续区间用 a:00-b:00；离散小时用逗号拼接（对齐旧版高峰时段展示）。
+  const sorted = [...hours].sort((a, b) => a - b)
+  const isContiguous = sorted.every((h, i) => i === 0 || h === sorted[i - 1] + 1)
+  if (isContiguous && sorted.length > 1) {
+    return `${sorted[0]}:00-${sorted[sorted.length - 1]}:00`
+  }
+  return sorted.map((h) => `${h}:00`).join(', ')
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

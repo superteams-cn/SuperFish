@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AgentLogEntry } from '@/lib/step4-types'
+import { ToolResultDisplay } from './ToolResultDisplay'
 
 const ACTION_LABEL_KEYS: Record<string, string> = {
   report_start: 'step4.actionReportStart',
@@ -46,10 +47,9 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
         const key = log.timestamp || String(idx)
         const isMilestone = log.action === 'section_complete' || log.action === 'report_complete'
         const detail = log.details || {}
-        const expandable =
-          log.action === 'tool_call' ||
-          log.action === 'tool_result' ||
-          log.action === 'llm_response'
+        // tool_result 走结构化展示组件（含自己的展开/Raw 切换），其余可展开类型仍用通用面板
+        const isToolResult = log.action === 'tool_result'
+        const expandable = log.action === 'tool_call' || log.action === 'llm_response'
         const isOpen = expanded.has(key)
 
         return (
@@ -96,7 +96,16 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
                 <p className="text-muted-foreground mt-1 text-[11px]">{log.section_title}</p>
               )}
 
-              {/* 可展开详情 */}
+              {/* 工具结果：按工具类型结构化展示，JSON 兜底 */}
+              {isToolResult && (
+                <ToolResultDisplay
+                  toolName={detail.tool_name}
+                  result={detail.result}
+                  resultLength={detail.result_length}
+                />
+              )}
+
+              {/* 其余可展开详情（工具调用参数 / LLM 响应） */}
               {expandable && (
                 <>
                   <Button
@@ -110,8 +119,7 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
                   {isOpen && (
                     <pre className="bg-muted mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded p-2 text-[10px] leading-relaxed">
                       {detail.response ||
-                        (detail.parameters ? JSON.stringify(detail.parameters, null, 2) : '') ||
-                        (detail.result ? JSON.stringify(detail.result, null, 2) : '')}
+                        (detail.parameters ? JSON.stringify(detail.parameters, null, 2) : '')}
                     </pre>
                   )}
                 </>
