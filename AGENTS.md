@@ -76,6 +76,8 @@ superfish/
 - 路由声明顺序敏感：字面量路径必须在动态段 `/{id}` 之前声明。
 - i18n：请求级语言由 `app/deps.py:use_locale` 依赖从 `Accept-Language` 设置；后台线程入口处需 `set_locale(get_locale())` 继承。
 - 涉及 OASIS 模拟的进程/生命周期由 FastAPI `lifespan` 统一管理。
+- **无状态化约定**：元数据/记录落 Postgres（`session_scope` + `*Row` 模型），产物落 S3(RustFS)，跨进程状态不放内存。重活（图谱构建、报告生成）经 `app/jobqueue.py:enqueue` 投递到 **arq** 队列，由独立 worker 进程执行（`app/jobs.py`）；队列不可用时兜底本地线程。
+- **异步任务必须先写占位记录**：凡是「立即返回 id + 入队 worker 异步落库」的接口，必须在入队**前**就向 Postgres 写一条状态为 `pending` 的占位行，否则调用方在 worker 落库前 `GET /{id}` 会 404。占位行须带齐下游读取路径所需字段（如 `simulation_id`/`graph_id`），worker 完成时按同一 id upsert 覆盖。参见 `app/routers/report.py` 的 `POST /generate`。
 
 ## 5. 协作纪律
 

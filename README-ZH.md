@@ -100,6 +100,22 @@ SuperFish 现在使用自托管 Neo4j property graph 作为 GraphRAG 后端：
 - 抽取出的节点与边写入 Neo4j，并通过 `group_id` 按项目隔离。
 - 环境搭建、模拟记忆更新和 ReportAgent 检索都读取同一份 Neo4j 图谱。
 
+## 🏗️ 架构总览
+
+SuperFish 是一个 **pnpm + turbo monorepo**：
+
+```
+SuperFish/
+├── apps/
+│   ├── web/        # 前端 —— React 18 + Vite + TypeScript + TailwindCSS + shadcn/ui（端口 3000）
+│   └── api/        # 后端 —— FastAPI + Pydantic，由 uv 管理（端口 5001）
+├── packages/
+│   └── shared/     # 共享资源（i18n 文案等）
+└── docker-compose.yml
+```
+
+后端已做到**无状态、可水平扩展**：元数据存于 **PostgreSQL**，上传文件/提取文本存于 **S3 兼容对象存储（RustFS）**，Neo4j property graph 作为 GraphRAG 后端。重活（图谱构建、报告生成）经 **Redis 支撑的 [arq](https://arq-docs.helpmanual.io/) 队列** 投递，由**独立 worker 进程**执行（`apps/api/app/worker.py`）。若 Redis 不可达，`enqueue` 会自动回退到进程内线程执行——因此开发时**独立 worker 可选**，但生产与扩缩容场景推荐单独运行。
+
 ## 🚀 快速开始
 
 ### 一、源码部署（推荐）
@@ -108,10 +124,14 @@ SuperFish 现在使用自托管 Neo4j property graph 作为 GraphRAG 后端：
 
 | 工具 | 版本要求 | 说明 | 安装检查 |
 |------|---------|------|---------|
-| **Node.js** | 18+ | 前端运行环境，包含 npm | `node -v` |
+| **Node.js** | 18+ | 前端运行环境 | `node -v` |
+| **pnpm** | 9+ | monorepo 包管理器 | `pnpm -v` |
 | **Python** | ≥3.11, ≤3.12 | 后端运行环境 | `python --version` |
 | **uv** | 最新版 | Python 包管理器 | `uv --version` |
-| **Neo4j** | 5.x | 知识图谱数据库 | 可用 `docker compose` 内置服务或外部实例 |
+| **Docker** | 最新版 | 运行内置中间件（Neo4j / PostgreSQL / Redis / RustFS） | `docker -v` |
+
+> 没有 pnpm？用 `npm install -g pnpm` 或 `corepack enable` 安装。
+> 四个中间件（Neo4j 5.x、PostgreSQL 16、Redis 7、RustFS）均已内置在 `docker-compose.yml`，无需手动安装；也可把环境变量指向你自己的实例。
 
 #### 1. 配置环境变量
 
@@ -125,9 +145,9 @@ cp .env.example .env
 **必需的环境变量：**
 
 ```env
-# LLM API配置（支持 OpenAI SDK 格式的任意 LLM API）
-# 推荐使用阿里百炼平台qwen-plus模型：https://bailian.console.aliyun.com/
-# 注意消耗较大，可先进行小于40轮的模拟尝试
+# ── LLM API（支持 OpenAI SDK 格式的任意 LLM API）──
+# 推荐使用阿里百炼平台 qwen-plus 模型：https://bailian.console.aliyun.com/
+# 注意消耗较大，可先进行小于 40 轮的模拟尝试。
 LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
@@ -135,43 +155,51 @@ LLM_REQUEST_TIMEOUT=120
 GRAPH_EXTRACT_MAX_TOKENS=8192
 GRAPH_EXTRACT_MAX_TRIPLETS=20
 
-# Neo4j 配置
-# 可通过 docker-compose 启动内置 Neo4j 服务，也可以填写已有实例。
+# ── Neo4j（知识图谱）──
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_neo4j_password
+
+# ── PostgreSQL（项目/任务/报告等元数据）──
+DATABASE_URL=postgresql+psycopg://superfish:superfish_pg@localhost:5432/superfish
+
+# ── Redis（arq 任务队列）──
+REDIS_URL=redis://localhost:6379/0
+
+# ── S3 兼容对象存储 RustFS（上传文件/提取文本）──
+S3_ENDPOINT_URL=http://localhost:9000
+S3_ACCESS_KEY=superfish
+S3_SECRET_KEY=superfish_secret
+S3_BUCKET=superfish
+S3_REGION=us-east-1
 ```
 
-可选加速模型配置：`LLM_BOOST_API_KEY`、`LLM_BOOST_BASE_URL`、`LLM_BOOST_MODEL_NAME`。
+> 上面的 `localhost` 取值用于源码部署。完整 Docker Compose 部署时改用服务名（`bolt://neo4j:7687`、`postgres`、`redis://redis:6379/0`、`http://rustfs:9000`）——`worker` 与 `superfish` 服务已内置这些覆盖值。
+
+可选加速模型配置：`LLM_BOOST_API_KEY`、`LLM_BOOST_BASE_URL`、`LLM_BOOST_MODEL_NAME`。（不使用时请整行删除，不要留占位值。）
 
 #### 2. 安装依赖
 
 ```bash
-# 一键安装所有依赖（根目录 + 前端 + 后端）
-npm run setup:all
+# 一键安装全部依赖：Node 工作区依赖（根 + web）与 Python 依赖（api，走 uv sync）
+pnpm setup
 ```
 
-或者分步安装：
+`pnpm setup` 会先执行 `pnpm install`，再执行 `pnpm setup:api`（即在 `apps/api` 内 `uv sync`，自动创建虚拟环境）。
+
+#### 3. 启动中间件
+
+拉起四个后端依赖服务（应用本身从源码运行，不在 Docker 内）：
 
 ```bash
-# 安装 Node 依赖（根目录 + 前端）
-npm run setup
-
-# 安装 Python 依赖（后端，自动创建虚拟环境）
-npm run setup:backend
+docker compose up -d neo4j postgres redis rustfs
 ```
 
-源码部署时，请确保 Neo4j 已经启动后再构建图谱。你可以把 `NEO4J_URI` 指向已有的 Neo4j 5.x 实例，也可以只启动内置数据库：
+#### 4. 启动应用
 
 ```bash
-docker compose up -d neo4j
-```
-
-#### 3. 启动服务
-
-```bash
-# 同时启动前后端（在项目根目录执行）
-npm run dev
+# 同时启动前后端（在项目根目录执行，经 turbo 编排）
+pnpm dev
 ```
 
 **服务地址：**
@@ -181,8 +209,16 @@ npm run dev
 **单独启动：**
 
 ```bash
-npm run backend   # 仅启动后端
-npm run frontend  # 仅启动前端
+pnpm dev:web   # 仅启动前端
+pnpm dev:api   # 仅启动后端
+```
+
+#### 5.（可选）启动任务 worker
+
+图谱构建与报告生成会投递到 arq 队列。开发时若没有 worker 在跑，会回退到进程内线程执行，故此步可选。要运行真正独立的 worker（推荐，与生产一致）：
+
+```bash
+cd apps/api && uv run arq app.worker.WorkerSettings
 ```
 
 ### 二、Docker 部署
@@ -190,16 +226,16 @@ npm run frontend  # 仅启动前端
 ```bash
 # 1. 配置环境变量（同源码部署）
 cp .env.example .env
-# 完整 Docker Compose 部署时请设置：
-# NEO4J_URI=bolt://neo4j:7687
+# 完整 Docker Compose 部署时，内置服务已使用容器名
+# （neo4j / postgres / redis / rustfs），无需改 localhost。
 
-# 2. 拉取镜像并启动
+# 2. 拉取镜像并启动整套（应用 + worker + 全部中间件）
 docker compose up -d
 ```
 
-默认会读取根目录下的 `.env`，并映射端口 `3000（前端）/5001（后端）`
+会一次性启动全部：`superfish`（web + api）、`worker`（arq），以及 Neo4j / PostgreSQL / Redis / RustFS。默认读取根目录 `.env`，映射端口 `3000（前端）/5001（后端）`。
 
-> 在 `docker-compose.yml` 中已通过注释提供加速镜像地址，可按需替换
+> 在 `docker-compose.yml` 中已通过注释提供加速镜像地址，可按需替换。
 
 ## 📬 更多交流
 
