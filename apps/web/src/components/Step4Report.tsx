@@ -9,6 +9,7 @@ import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
 import { AgentLogTimeline } from '@/components/step4/AgentLogTimeline'
 import { WorkflowProgressPanel } from '@/components/step4/WorkflowProgressPanel'
+import { ConsoleLogView } from '@/components/step4/ConsoleLogView'
 import {
   getAgentLog,
   getConsoleLog,
@@ -18,39 +19,10 @@ import {
   getReportProgress,
   getReportSections,
 } from '@/lib/api/report'
-import { cn } from '@/lib/utils'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type { SystemLog } from '@/lib/process-types'
 import type { AgentLogEntry, ReportOutline } from '@/lib/step4-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
-
-/** 控制台日志级别着色（ERROR/错误 → 红，WARNING/警告 → 琥珀）。 */
-function consoleLevelClass(line: string) {
-  if (line.includes('ERROR') || line.includes('错误')) return 'text-red-400'
-  if (line.includes('WARNING') || line.includes('警告')) return 'text-amber-400'
-  return ''
-}
-
-/** 终端风格控制台输出：级别着色 + 新日志自动滚到底部。 */
-function ConsoleLogView({ logs, emptyText }: { logs: string[]; emptyText: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [logs.length])
-  return (
-    <div
-      ref={ref}
-      className="h-full overflow-y-auto bg-black p-4 font-mono text-[11px] text-zinc-300"
-    >
-      {logs.length === 0 && <span className="text-zinc-600">{emptyText}</span>}
-      {logs.map((line, idx) => (
-        <div key={idx} className={cn('break-all leading-relaxed', consoleLevelClass(line))}>
-          {line}
-        </div>
-      ))}
-    </div>
-  )
-}
 
 interface Step4Props {
   reportId: string
@@ -59,21 +31,6 @@ interface Step4Props {
   systemLogs: SystemLog[]
   addLog: (msg: string) => void
   onUpdateStatus: (s: WorkflowStatus) => void
-}
-
-/** 监听媒体查询（窄屏降级判断）。 */
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
-  )
-  useEffect(() => {
-    const mql = window.matchMedia(query)
-    const handler = () => setMatches(mql.matches)
-    handler()
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [query])
-  return matches
 }
 
 /**
