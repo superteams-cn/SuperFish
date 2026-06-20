@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Square } from 'lucide-react'
+import { Loader2, CheckCircle2, Sparkles, ArrowRight, Code, ChevronDown, Radio } from 'lucide-react'
 
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { PlatformStatusCard } from '@/components/step3/PlatformStatusCard'
-import { DualTimeline } from '@/components/step3/DualTimeline'
+import { LiveActionItem } from '@/components/step3/LiveActionItem'
 import {
   startSimulation,
   stopSimulation,
@@ -22,10 +22,13 @@ import {
   getRunStatusDetail,
 } from '@/lib/api/simulation'
 import { generateReport } from '@/lib/api/report'
-import { PLATFORM_META } from '@/lib/ui-meta'
+import { cn } from '@/lib/utils'
 import type { SystemLog } from '@/lib/process-types'
 import type { ActionItem, RunStatus } from '@/lib/step3-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
+
+const GRADIENT_BTN =
+  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
 
 interface Step3Props {
   simulationId: string
@@ -68,6 +71,7 @@ export function Step3Simulation({
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false)
   const [runStatus, setRunStatus] = useState<RunStatus>({})
   const [actions, setActions] = useState<ActionItem[]>([])
+  const [backstageOpen, setBackstageOpen] = useState(false)
 
   const statusTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const detailTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -85,14 +89,12 @@ export function Step3Simulation({
     [minutesPerRound],
   )
 
-  const twitterCount = useMemo(
-    () => actions.filter((a) => a.platform === 'twitter').length,
+  // 实况流只展示有意义的互动（过滤「无操作」噪声）；最新的在最上
+  const meaningfulActions = useMemo(
+    () => actions.filter((a) => a.action_type !== 'DO_NOTHING'),
     [actions],
   )
-  const redditCount = useMemo(
-    () => actions.filter((a) => a.platform === 'reddit').length,
-    [actions],
-  )
+  const feedActions = useMemo(() => meaningfulActions.slice(-80).reverse(), [meaningfulActions])
 
   const stopPolling = useCallback(() => {
     if (statusTimer.current) clearInterval(statusTimer.current)
@@ -327,82 +329,144 @@ export function Step3Simulation({
   }
 
   const totalRounds = runStatus.total_rounds || maxRounds || '-'
+  const done = phase === 2
+  const interactions = meaningfulActions.length
+
+  // 软进度：双平台轮次推进（结束直接 100）
+  const tot = Number(runStatus.total_rounds || maxRounds || 0)
+  const cur = (runStatus.twitter_current_round || 0) + (runStatus.reddit_current_round || 0)
+  const softProgress = done ? 100 : tot > 0 ? Math.min(Math.round((cur / (2 * tot)) * 100), 99) : 6
 
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
-        {/* 顶部控制栏 */}
-        <div className="bg-card flex items-center gap-3 border-b p-3">
-          <div className="flex flex-1 gap-3">
-            <PlatformStatusCard
-              name={t('step3.platformTwitterName')}
-              running={runStatus.twitter_running}
-              completed={runStatus.twitter_completed}
-              currentRound={runStatus.twitter_current_round || 0}
-              totalRounds={totalRounds}
-              elapsedTime={elapsed(runStatus.twitter_current_round)}
-              actionsCount={runStatus.twitter_actions_count || 0}
-              availableActions={TWITTER_ACTIONS}
-            />
-            <PlatformStatusCard
-              name={t('step3.platformRedditName')}
-              running={runStatus.reddit_running}
-              completed={runStatus.reddit_completed}
-              currentRound={runStatus.reddit_current_round || 0}
-              totalRounds={totalRounds}
-              elapsedTime={elapsed(runStatus.reddit_current_round)}
-              actionsCount={runStatus.reddit_actions_count || 0}
-              availableActions={REDDIT_ACTIONS}
-            />
-          </div>
-          {/* 运行中可停止：保留已产生的结果 */}
-          {phase === 1 && (
-            <Button
-              variant="outline"
-              onClick={() => setStopConfirmOpen(true)}
-              disabled={isStopping}
-            >
-              {isStopping ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      <div className="relative flex h-full flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
+          <div className="mx-auto max-w-2xl">
+            {/* 舞台标题 */}
+            <div className="animate-rise-in text-center">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-lg">
+                {done ? (
+                  <CheckCircle2 className="h-8 w-8" />
+                ) : (
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                )}
+              </div>
+              <h2 className="text-2xl font-semibold tracking-tight">
+                {done ? t('step3.cActed') : t('step3.cActing')}
+              </h2>
+              <p className="text-muted-foreground mt-2">
+                {done ? t('step3.cActedDone', { count: interactions }) : t('step3.cActingSub')}
+              </p>
+            </div>
+
+            {/* 进展：软进度 + 互动计数 */}
+            <div className="mt-6">
+              <p className="text-muted-foreground mb-2 text-center text-sm">
+                {t('step3.cInteractions', { count: interactions })}
+              </p>
+              <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all duration-500"
+                  style={{ width: `${Math.max(softProgress, 6)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* 完成 → 给你结论 CTA；运行中 → 提前结束 */}
+            <div className="animate-rise-in mt-7 flex flex-col items-center gap-3">
+              {done ? (
+                <Button
+                  className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                  onClick={handleGenerateReport}
+                  disabled={isGeneratingReport}
+                >
+                  {isGeneratingReport ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-5 w-5" />
+                  )}
+                  {isGeneratingReport ? t('step3.cGenerating') : t('step3.cNext')}
+                  {!isGeneratingReport && <ArrowRight className="h-5 w-5" />}
+                </Button>
               ) : (
-                <Square className="h-3.5 w-3.5" />
+                <button
+                  type="button"
+                  onClick={() => setStopConfirmOpen(true)}
+                  disabled={isStopping}
+                  className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+                >
+                  {t('step3.cStopEarly')}
+                </button>
               )}
-              {t('step3.stopSimulation')}
-            </Button>
-          )}
-          <Button onClick={handleGenerateReport} disabled={phase !== 2 || isGeneratingReport}>
-            {isGeneratingReport && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {isGeneratingReport
-              ? t('step3.generatingReportBtn')
-              : t('step3.startGenerateReportBtn')}
-            {!isGeneratingReport && <span>→</span>}
-          </Button>
-        </div>
-
-        {/* 动作时间线（双轨：左信息广场 / 右话题社区，窄屏降级单轨） */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {actions.length > 0 && (
-            <div className="text-muted-foreground mb-3 flex items-center gap-3 text-xs">
-              <span>
-                {t('step3.totalEvents')}: <span className="font-mono">{actions.length}</span>
-              </span>
-              <span className="font-mono">
-                <span className={PLATFORM_META.twitter.text}>{twitterCount}</span> /{' '}
-                <span className={PLATFORM_META.reddit.text}>{redditCount}</span>
-              </span>
             </div>
-          )}
-          {actions.length > 0 ? (
-            <DualTimeline actions={actions} />
-          ) : (
-            <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 text-sm">
-              <span className="bg-brand h-3 w-3 animate-ping rounded-full" />
-              {t('step3.waitingForActions')}
-            </div>
-          )}
-        </div>
 
-        <SystemLogTerminal logs={systemLogs} badge={simulationId || 'NO_SIMULATION'} />
+            {/* 实况流（人话）：谁·做了什么·内容 */}
+            <div className="mt-8">
+              {feedActions.length > 0 ? (
+                <div className="space-y-3">
+                  {feedActions.map((action) => (
+                    <LiveActionItem key={action._uniqueId || action.id} action={action} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-3 text-sm">
+                  <Radio className="h-6 w-6 animate-pulse text-indigo-500" />
+                  {t('step3.cWaiting')}
+                </div>
+              )}
+            </div>
+
+            {/* 幕后：双平台技术状态 / 原始日志 */}
+            <div className="mt-10">
+              <button
+                type="button"
+                onClick={() => setBackstageOpen((o) => !o)}
+                className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-xl border border-dashed px-4 py-3 text-sm transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Code className="h-4 w-4" />
+                  {t('step3.cBackstage')}
+                  <span className="text-muted-foreground/70 hidden text-xs sm:inline">
+                    · {t('step3.cBackstageHint')}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={cn('h-4 w-4 transition-transform', backstageOpen && 'rotate-180')}
+                />
+              </button>
+
+              {backstageOpen && (
+                <div className="mt-3 space-y-4">
+                  <div className="flex gap-3">
+                    <PlatformStatusCard
+                      name={t('step3.platformTwitterName')}
+                      platform="twitter"
+                      running={runStatus.twitter_running}
+                      completed={runStatus.twitter_completed}
+                      currentRound={runStatus.twitter_current_round || 0}
+                      totalRounds={totalRounds}
+                      elapsedTime={elapsed(runStatus.twitter_current_round)}
+                      actionsCount={runStatus.twitter_actions_count || 0}
+                      availableActions={TWITTER_ACTIONS}
+                    />
+                    <PlatformStatusCard
+                      name={t('step3.platformRedditName')}
+                      platform="reddit"
+                      running={runStatus.reddit_running}
+                      completed={runStatus.reddit_completed}
+                      currentRound={runStatus.reddit_current_round || 0}
+                      totalRounds={totalRounds}
+                      elapsedTime={elapsed(runStatus.reddit_current_round)}
+                      actionsCount={runStatus.reddit_actions_count || 0}
+                      availableActions={REDDIT_ACTIONS}
+                    />
+                  </div>
+                  <SystemLogTerminal logs={systemLogs} badge={simulationId || 'NO_SIMULATION'} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 停止确认 */}
@@ -417,7 +481,7 @@ export function Step3Simulation({
               {t('common.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleStopSimulation}>
-              {t('step3.stopSimulation')}
+              {t('step3.cStopEarly')}
             </Button>
           </div>
         </DialogContent>
