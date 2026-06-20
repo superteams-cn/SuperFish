@@ -40,6 +40,9 @@ class Project:
     created_at: str
     updated_at: str
 
+    # 所属用户（数据隔离归属根）
+    user_id: str = ""
+
     # 文件信息
     files: list[dict[str, Any]] = field(default_factory=list)  # [{filename, size, s3_key}]
     total_text_length: int = 0
@@ -64,6 +67,7 @@ class Project:
         """转换为字典"""
         return {
             "project_id": self.project_id,
+            "user_id": self.user_id,
             "name": self.name,
             "status": self.status.value if isinstance(self.status, ProjectStatus) else self.status,
             "created_at": self.created_at,
@@ -89,6 +93,7 @@ class Project:
 
         return cls(
             project_id=data["project_id"],
+            user_id=data.get("user_id", ""),
             name=data.get("name", "Unnamed Project"),
             status=status,
             created_at=data.get("created_at", ""),
@@ -109,6 +114,7 @@ class Project:
 def _row_to_project(row: ProjectRow) -> Project:
     return Project(
         project_id=row.project_id,
+        user_id=row.user_id or "",
         name=row.name,
         status=ProjectStatus(row.status),
         created_at=row.created_at,
@@ -128,6 +134,7 @@ def _row_to_project(row: ProjectRow) -> Project:
 
 def _apply_project_to_row(project: Project, row: ProjectRow) -> None:
     status = project.status
+    row.user_id = project.user_id
     row.name = project.name
     row.status = status.value if isinstance(status, ProjectStatus) else status
     row.created_at = project.created_at
@@ -164,12 +171,13 @@ class ProjectManager:
     # ============== 元数据 CRUD ==============
 
     @classmethod
-    def create_project(cls, name: str = "Unnamed Project") -> Project:
+    def create_project(cls, name: str = "Unnamed Project", user_id: str = "") -> Project:
         """创建新项目并落库。"""
         project_id = f"proj_{uuid.uuid4().hex[:12]}"
         now = datetime.now().isoformat()
         project = Project(
             project_id=project_id,
+            user_id=user_id,
             name=name,
             status=ProjectStatus.CREATED,
             created_at=now,
@@ -199,13 +207,36 @@ class ProjectManager:
             return _row_to_project(row) if row else None
 
     @classmethod
-    def list_projects(cls, limit: int = 50) -> list[Project]:
-        """列出项目，按创建时间倒序。"""
+    def list_projects(cls, limit: int = 50, user_id: str | None = None) -> list[Project]:
+        """列出项目，按创建时间倒序；传 user_id 时只返回该用户的项目。"""
         with session_scope() as session:
-            rows = (
-                session.query(ProjectRow).order_by(ProjectRow.created_at.desc()).limit(limit).all()
-            )
+            query = session.query(ProjectRow)
+            if user_id is not None:
+                query = query.filter(ProjectRow.user_id == user_id)
+            rows = query.order_by(ProjectRow.created_at.desc()).limit(limit).all()
             return [_row_to_project(r) for r in rows]
+
+    @classmethod
+    def user_owns_graph(cls, graph_id: str, user_id: str) -> bool:
+        """判断某 graph_id 是否属于该用户（其名下的项目或模拟引用了它）。"""
+        if not graph_id:
+            return False
+        from ..db_models import SimulationRow
+
+        with session_scope() as session:
+            owned = (
+                session.query(ProjectRow.project_id)
+                .filter(ProjectRow.graph_id == graph_id, ProjectRow.user_id == user_id)
+                .first()
+            )
+            if owned:
+                return True
+            owned_sim = (
+                session.query(SimulationRow.simulation_id)
+                .filter(SimulationRow.graph_id == graph_id, SimulationRow.user_id == user_id)
+                .first()
+            )
+            return owned_sim is not None
 
     @classmethod
     def delete_project(cls, project_id: str) -> bool:

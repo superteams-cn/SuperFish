@@ -16,10 +16,10 @@ import threading
 import traceback
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-from ..deps import use_locale
+from ..deps import get_current_user, use_locale
 from ..models.project import ProjectManager
 from ..schemas.simulation import (
     CloseEnvRequest,
@@ -43,8 +43,23 @@ from ..settings import settings
 from ..utils.locale import get_locale, set_locale, t
 from ..utils.logger import get_logger
 
+
 # 整个模拟路由统一在请求开始时解析语言
-router = APIRouter(dependencies=[Depends(use_locale)])
+def _enforce_sim_ownership(request: Request, current=Depends(get_current_user)):
+    """路由级守卫：整个模拟路由需登录；凡 path 含 simulation_id 的，校验归属。
+
+    覆盖所有 GET /{simulation_id}/* 详情接口；以 body 传 simulation_id 的
+    变更类接口（prepare/start/stop/interview/*-env 等）在各自处理器内单独校验。
+    """
+    sid = request.path_params.get("simulation_id")
+    if sid:
+        state = SimulationManager().get_simulation(sid)
+        if not state or state.user_id != current["user_id"]:
+            raise HTTPException(status_code=404, detail=t("api.simulationNotFound", id=sid))
+
+
+# 整个模拟路由：解析语言 + 强制登录与 simulation_id 归属校验
+router = APIRouter(dependencies=[Depends(use_locale), Depends(_enforce_sim_ownership)])
 
 logger = get_logger("superfish.api.simulation")
 
@@ -54,6 +69,14 @@ def _error(message: str, status: int, **extra) -> JSONResponse:
     body = {"success": False, "error": message}
     body.update(extra)
     return JSONResponse(status_code=status, content=body)
+
+
+def _owned_simulation(simulation_id: str, current: dict):
+    """返回属于当前用户的模拟 state；不存在或非属主返回 None（调用方据此回 404）。"""
+    state = SimulationManager().get_simulation(simulation_id)
+    if not state or state.user_id != current["user_id"]:
+        return None
+    return state
 
 
 # Interview prompt 优化前缀
@@ -157,9 +180,11 @@ def _get_report_id_for_simulation(simulation_id: str) -> str | None:
 
 
 @router.get("/entities/{graph_id}")
-def get_graph_entities(graph_id: str, entity_types: str = "", enrich: str = "true"):
+def get_graph_entities(
+    graph_id: str, entity_types: str = "", enrich: str = "true", current=Depends(get_current_user)
+):
     """
-    获取图谱中的所有实体（已过滤）
+    获取图谱中的所有实体（已过滤，仅限属主）
 
     只返回符合预定义实体类型的节点（Labels 不只是 Entity 的节点）
 
@@ -170,6 +195,9 @@ def get_graph_entities(graph_id: str, entity_types: str = "", enrich: str = "tru
     try:
         if not settings.neo4j_uri:
             return _error(t("api.neo4jConfigMissing"), 500)
+
+        if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
+            return _error(t("api.projectNotFound", id=graph_id), 404)
 
         entity_types_str = entity_types
         # 注意：循环变量改名为 et，避免遮蔽翻译函数 t
@@ -197,11 +225,16 @@ def get_graph_entities(graph_id: str, entity_types: str = "", enrich: str = "tru
 
 
 @router.get("/entities/{graph_id}/by-type/{entity_type}")
-def get_entities_by_type(graph_id: str, entity_type: str, enrich: str = "true"):
-    """获取指定类型的所有实体"""
+def get_entities_by_type(
+    graph_id: str, entity_type: str, enrich: str = "true", current=Depends(get_current_user)
+):
+    """获取指定类型的所有实体（仅限属主）"""
     try:
         if not settings.neo4j_uri:
             return _error(t("api.neo4jConfigMissing"), 500)
+
+        if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
+            return _error(t("api.projectNotFound", id=graph_id), 404)
 
         enrich_bool = enrich.lower() == "true"
 
@@ -225,11 +258,14 @@ def get_entities_by_type(graph_id: str, entity_type: str, enrich: str = "true"):
 
 
 @router.get("/entities/{graph_id}/{entity_uuid}")
-def get_entity_detail(graph_id: str, entity_uuid: str):
-    """获取单个实体的详细信息"""
+def get_entity_detail(graph_id: str, entity_uuid: str, current=Depends(get_current_user)):
+    """获取单个实体的详细信息（仅限属主）"""
     try:
         if not settings.neo4j_uri:
             return _error(t("api.neo4jConfigMissing"), 500)
+
+        if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
+            return _error(t("api.projectNotFound", id=graph_id), 404)
 
         reader = Neo4jEntityReader()
         entity = reader.get_entity_with_context(graph_id, entity_uuid)
@@ -248,7 +284,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
 
 
 @router.post("/create")
-def create_simulation(req: CreateSimulationRequest):
+def create_simulation(req: CreateSimulationRequest, current=Depends(get_current_user)):
     """
     创建新的模拟
 
@@ -268,7 +304,7 @@ def create_simulation(req: CreateSimulationRequest):
             return _error(t("api.requireProjectId"), 400)
 
         project = ProjectManager.get_project(project_id)
-        if not project:
+        if not project or project.user_id != current["user_id"]:
             return _error(t("api.projectNotFound", id=project_id), 404)
 
         graph_id = req.graph_id or project.graph_id
@@ -281,6 +317,7 @@ def create_simulation(req: CreateSimulationRequest):
             graph_id=graph_id,
             enable_twitter=req.enable_twitter,
             enable_reddit=req.enable_reddit,
+            user_id=project.user_id,
         )
 
         return {"success": True, "data": state.to_dict()}
@@ -291,7 +328,7 @@ def create_simulation(req: CreateSimulationRequest):
 
 
 @router.post("/prepare")
-def prepare_simulation(req: PrepareSimulationRequest):
+def prepare_simulation(req: PrepareSimulationRequest, current=Depends(get_current_user)):
     """
     准备模拟环境（异步任务，LLM 智能生成所有参数）
 
@@ -313,7 +350,7 @@ def prepare_simulation(req: PrepareSimulationRequest):
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
 
-        if not state:
+        if not state or state.user_id != current["user_id"]:
             return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         # 检查是否强制重新生成
@@ -522,7 +559,7 @@ def prepare_simulation(req: PrepareSimulationRequest):
 
 
 @router.post("/prepare/status")
-def get_prepare_status(req: PrepareStatusRequest):
+def get_prepare_status(req: PrepareStatusRequest, current=Depends(get_current_user)):
     """
     查询准备任务进度
 
@@ -538,6 +575,8 @@ def get_prepare_status(req: PrepareStatusRequest):
 
         # 如果提供了 simulation_id，先检查是否已准备完成
         if simulation_id:
+            if _owned_simulation(simulation_id, current) is None:
+                return _error(t("api.simulationNotFound", id=simulation_id), 404)
             is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
             if is_prepared:
                 return {
@@ -602,16 +641,18 @@ def get_prepare_status(req: PrepareStatusRequest):
 
 
 @router.get("/list")
-def list_simulations(project_id: str | None = None):
+def list_simulations(project_id: str | None = None, current=Depends(get_current_user)):
     """
-    列出所有模拟
+    列出当前用户的模拟
 
     Query 参数：
         project_id: 按项目ID过滤（可选）
     """
     try:
         manager = SimulationManager()
-        simulations = manager.list_simulations(project_id=project_id)
+        simulations = manager.list_simulations(
+            project_id=project_id, user_id=current["user_id"]
+        )
 
         return {
             "success": True,
@@ -625,9 +666,9 @@ def list_simulations(project_id: str | None = None):
 
 
 @router.get("/history")
-def get_simulation_history(limit: int = 20):
+def get_simulation_history(limit: int = 20, current=Depends(get_current_user)):
     """
-    获取历史模拟列表（带项目详情）
+    获取当前用户的历史模拟列表（带项目详情）
 
     用于首页历史项目展示，返回包含项目名称、描述等丰富信息的模拟列表
 
@@ -637,9 +678,12 @@ def get_simulation_history(limit: int = 20):
     from concurrent.futures import ThreadPoolExecutor
     from concurrent.futures import TimeoutError as _FutureTimeout
 
+    user_id = current["user_id"]
+
     def _build():
         manager = SimulationManager()
-        simulations = manager.list_simulations()[:limit]
+        # 按用户过滤：既隔离数据，也把 N+1 的逐条增强限制在「当前用户的少量模拟」内
+        simulations = manager.list_simulations(user_id=user_id)[:limit]
 
         # 增强模拟数据，只从 Simulation 文件读取
         enriched_simulations = []
@@ -703,7 +747,7 @@ def get_simulation_history(limit: int = 20):
 
         # 合并「已建图谱但尚无模拟」的项目，使首页历史也能看到并续做这类项目
         sim_project_ids = {s.project_id for s in simulations if s.project_id}
-        for project in ProjectManager.list_projects(limit=limit):
+        for project in ProjectManager.list_projects(limit=limit, user_id=user_id):
             if project.project_id in sim_project_ids:
                 continue
             files = getattr(project, "files", None) or []
@@ -754,9 +798,9 @@ def get_simulation_history(limit: int = 20):
 
 
 @router.post("/generate-profiles")
-def generate_profiles(req: GenerateProfilesRequest):
+def generate_profiles(req: GenerateProfilesRequest, current=Depends(get_current_user)):
     """
-    直接从图谱生成 OASIS Agent Profile（不创建模拟）
+    直接从图谱生成 OASIS Agent Profile（不创建模拟，仅限属主）
 
     请求（JSON）：
         {
@@ -770,6 +814,8 @@ def generate_profiles(req: GenerateProfilesRequest):
         graph_id = req.graph_id
         if not graph_id:
             return _error(t("api.requireGraphId"), 400)
+        if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
+            return _error(t("api.projectNotFound", id=graph_id), 404)
 
         entity_types = req.entity_types
         use_llm = req.use_llm
@@ -814,7 +860,7 @@ def generate_profiles(req: GenerateProfilesRequest):
 
 
 @router.post("/start")
-def start_simulation(req: StartSimulationRequest):
+def start_simulation(req: StartSimulationRequest, current=Depends(get_current_user)):
     """
     开始运行模拟
 
@@ -831,6 +877,8 @@ def start_simulation(req: StartSimulationRequest):
         simulation_id = req.simulation_id
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         platform = req.platform
         max_rounds = req.max_rounds  # 可选：最大模拟轮数
@@ -946,7 +994,7 @@ def start_simulation(req: StartSimulationRequest):
 
 
 @router.post("/stop")
-def stop_simulation(req: StopSimulationRequest):
+def stop_simulation(req: StopSimulationRequest, current=Depends(get_current_user)):
     """
     停止模拟
 
@@ -959,6 +1007,8 @@ def stop_simulation(req: StopSimulationRequest):
         simulation_id = req.simulation_id
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         run_state = SimulationRunner.stop_simulation(simulation_id)
 
@@ -1007,7 +1057,7 @@ def stop_all_simulations():
 
 
 @router.post("/interview")
-def interview_agent(req: InterviewAgentRequest):
+def interview_agent(req: InterviewAgentRequest, current=Depends(get_current_user)):
     """
     采访单个 Agent
 
@@ -1031,6 +1081,8 @@ def interview_agent(req: InterviewAgentRequest):
 
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         if agent_id is None:
             return _error(t("api.requireAgentId"), 400)
@@ -1071,7 +1123,7 @@ def interview_agent(req: InterviewAgentRequest):
 
 
 @router.post("/interview/batch")
-def interview_agents_batch(req: InterviewBatchRequest):
+def interview_agents_batch(req: InterviewBatchRequest, current=Depends(get_current_user)):
     """
     批量采访多个 Agent
 
@@ -1085,6 +1137,8 @@ def interview_agents_batch(req: InterviewBatchRequest):
 
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         if not interviews or not isinstance(interviews, list):
             return _error(t("api.requireInterviews"), 400)
@@ -1209,10 +1263,12 @@ def _interview_stream_response(simulation_id: str, poster) -> StreamingResponse:
 
 
 @router.post("/interview/stream")
-def interview_stream(req: InterviewAgentRequest):
+def interview_stream(req: InterviewAgentRequest, current=Depends(get_current_user)):
     """单 Agent 流式采访（SSE）。事件：`data:{"type":"chunk"|"done"|"error",...}`。"""
     if not req.simulation_id or req.agent_id is None or not req.prompt:
         return _error(t("api.requireSimulationId"), 400)
+    if _owned_simulation(req.simulation_id, current) is None:
+        return _error(t("api.simulationNotFound", id=req.simulation_id), 404)
     agent_id = int(req.agent_id)
     prompt = req.prompt
     platform = req.platform
@@ -1223,13 +1279,15 @@ def interview_stream(req: InterviewAgentRequest):
 
 
 @router.post("/interview/stream-batch")
-def interview_stream_batch(req: InterviewBatchRequest):
+def interview_stream_batch(req: InterviewBatchRequest, current=Depends(get_current_user)):
     """多 Agent 并发流式群访（SSE）。
 
     事件：chunk/agent_done/agent_error 均带 agent_id，全部完成发 done；前端按 agent_id 分别填充。
     """
     if not req.simulation_id or not req.interviews:
         return _error(t("api.requireSimulationId"), 400)
+    if _owned_simulation(req.simulation_id, current) is None:
+        return _error(t("api.simulationNotFound", id=req.simulation_id), 404)
     interviews = req.interviews
     platform = req.platform
     return _interview_stream_response(
@@ -1239,7 +1297,7 @@ def interview_stream_batch(req: InterviewBatchRequest):
 
 
 @router.post("/interview/all")
-def interview_all_agents(req: InterviewAllRequest):
+def interview_all_agents(req: InterviewAllRequest, current=Depends(get_current_user)):
     """
     全局采访 - 使用相同问题采访所有 Agent
 
@@ -1253,6 +1311,8 @@ def interview_all_agents(req: InterviewAllRequest):
 
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         if not prompt:
             return _error(t("api.requirePrompt"), 400)
@@ -1290,7 +1350,7 @@ def interview_all_agents(req: InterviewAllRequest):
 
 
 @router.post("/interview/history")
-def get_interview_history(req: InterviewHistoryRequest):
+def get_interview_history(req: InterviewHistoryRequest, current=Depends(get_current_user)):
     """
     获取 Interview 历史记录
 
@@ -1304,6 +1364,8 @@ def get_interview_history(req: InterviewHistoryRequest):
 
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         # platform/agent_id 为可选；运行期接受 None（service 签名偏紧，定向忽略）
         history = SimulationRunner.get_interview_history(
@@ -1321,7 +1383,7 @@ def get_interview_history(req: InterviewHistoryRequest):
 
 
 @router.post("/env-status")
-def get_env_status(req: EnvStatusRequest):
+def get_env_status(req: EnvStatusRequest, current=Depends(get_current_user)):
     """
     获取模拟环境状态
 
@@ -1332,6 +1394,8 @@ def get_env_status(req: EnvStatusRequest):
 
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         env_alive = SimulationRunner.check_env_alive(simulation_id)
 
@@ -1360,7 +1424,7 @@ def get_env_status(req: EnvStatusRequest):
 
 
 @router.post("/ensure-env")
-def ensure_env(req: EnvStatusRequest):
+def ensure_env(req: EnvStatusRequest, current=Depends(get_current_user)):
     """
     确保模拟环境存活（采访前唤醒）。
 
@@ -1371,6 +1435,8 @@ def ensure_env(req: EnvStatusRequest):
         simulation_id = req.simulation_id
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         result = SimulationRunner.wake_env(simulation_id)
         if result.get("success"):
@@ -1383,7 +1449,7 @@ def ensure_env(req: EnvStatusRequest):
 
 
 @router.post("/close-env")
-def close_simulation_env(req: CloseEnvRequest):
+def close_simulation_env(req: CloseEnvRequest, current=Depends(get_current_user)):
     """
     关闭模拟环境
 
@@ -1398,6 +1464,8 @@ def close_simulation_env(req: CloseEnvRequest):
 
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
+        if _owned_simulation(simulation_id, current) is None:
+            return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         result = SimulationRunner.close_simulation_env(simulation_id=simulation_id, timeout=timeout)
 

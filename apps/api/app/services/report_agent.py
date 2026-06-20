@@ -426,6 +426,8 @@ class Report:
     graph_id: str
     simulation_requirement: str
     status: ReportStatus
+    # 所属用户（从所属模拟继承）
+    user_id: str = ""
     outline: ReportOutline | None = None
     markdown_content: str = ""
     created_at: str = ""
@@ -436,6 +438,7 @@ class Report:
         return {
             "report_id": self.report_id,
             "simulation_id": self.simulation_id,
+            "user_id": self.user_id,
             "graph_id": self.graph_id,
             "simulation_requirement": self.simulation_requirement,
             "status": self.status.value,
@@ -2359,6 +2362,9 @@ class ReportManager:
         with session_scope() as session:
             row = cls._load_row(session, report.report_id, create=True)
             row.simulation_id = report.simulation_id
+            # 只在有值时写入，避免后续进度保存把已继承的归属清空
+            if report.user_id:
+                row.user_id = report.user_id
             row.graph_id = report.graph_id
             row.simulation_requirement = report.simulation_requirement
             row.status = (
@@ -2388,6 +2394,7 @@ class ReportManager:
         return Report(
             report_id=row.report_id,
             simulation_id=row.simulation_id,
+            user_id=row.user_id or "",
             graph_id=row.graph_id,
             simulation_requirement=row.simulation_requirement,
             status=ReportStatus(row.status),
@@ -2418,10 +2425,14 @@ class ReportManager:
             return cls._row_to_report(row) if row else None
 
     @classmethod
-    def list_reports(cls, simulation_id: str | None = None, limit: int = 50) -> list[Report]:
-        """列出报告（Postgres，按创建时间倒序）。"""
+    def list_reports(
+        cls, simulation_id: str | None = None, limit: int = 50, user_id: str | None = None
+    ) -> list[Report]:
+        """列出报告（Postgres，按创建时间倒序）；传 user_id 时只返回该用户的。"""
         with session_scope() as session:
             query = session.query(ReportRow)
+            if user_id is not None:
+                query = query.filter(ReportRow.user_id == user_id)
             if simulation_id is not None:
                 query = query.filter(ReportRow.simulation_id == simulation_id)
             rows = query.order_by(ReportRow.created_at.desc()).limit(limit).all()

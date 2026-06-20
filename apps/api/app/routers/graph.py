@@ -11,7 +11,7 @@ import traceback
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
-from ..deps import use_locale
+from ..deps import get_current_user, use_locale
 from ..jobqueue import enqueue
 from ..models.project import ProjectManager, ProjectStatus
 from ..models.task import TaskManager
@@ -24,8 +24,8 @@ from ..utils.file_parser import FileParser
 from ..utils.locale import get_locale, t
 from ..utils.logger import get_logger
 
-# 整个图谱路由统一在请求开始时解析语言
-router = APIRouter(dependencies=[Depends(use_locale)])
+# 整个图谱路由：解析语言 + 强制登录（具体的 graph_id/project_id 归属在各处理器内校验）
+router = APIRouter(dependencies=[Depends(use_locale), Depends(get_current_user)])
 
 # 获取日志器
 logger = get_logger("superfish.api")
@@ -52,9 +52,9 @@ def allowed_file(filename: str) -> bool:
 # 注意：/project/list 必须声明在 /project/{project_id} 之前，
 # 否则 "list" 会被当作 project_id 捕获。
 @router.get("/project/list")
-def list_projects(limit: int = 50):
-    """列出所有项目"""
-    projects = ProjectManager.list_projects(limit=limit)
+def list_projects(limit: int = 50, current=Depends(get_current_user)):
+    """列出当前用户的项目"""
+    projects = ProjectManager.list_projects(limit=limit, user_id=current["user_id"])
     return {
         "success": True,
         "data": [p.to_dict() for p in projects],
@@ -63,17 +63,21 @@ def list_projects(limit: int = 50):
 
 
 @router.get("/project/{project_id}")
-def get_project(project_id: str):
-    """获取项目详情"""
+def get_project(project_id: str, current=Depends(get_current_user)):
+    """获取项目详情（仅限属主）"""
     project = ProjectManager.get_project(project_id)
-    if not project:
+    # 非属主一律按「不存在」处理，避免泄露资源是否存在
+    if not project or project.user_id != current["user_id"]:
         return _error(t("api.projectNotFound", id=project_id), 404)
     return {"success": True, "data": project.to_dict()}
 
 
 @router.delete("/project/{project_id}")
-def delete_project(project_id: str):
-    """删除项目"""
+def delete_project(project_id: str, current=Depends(get_current_user)):
+    """删除项目（仅限属主）"""
+    project = ProjectManager.get_project(project_id)
+    if not project or project.user_id != current["user_id"]:
+        return _error(t("api.projectDeleteFailed", id=project_id), 404)
     success = ProjectManager.delete_project(project_id)
     if not success:
         return _error(t("api.projectDeleteFailed", id=project_id), 404)
@@ -81,10 +85,10 @@ def delete_project(project_id: str):
 
 
 @router.post("/project/{project_id}/reset")
-def reset_project(project_id: str):
-    """重置项目状态（用于重新构建图谱）"""
+def reset_project(project_id: str, current=Depends(get_current_user)):
+    """重置项目状态（用于重新构建图谱，仅限属主）"""
     project = ProjectManager.get_project(project_id)
-    if not project:
+    if not project or project.user_id != current["user_id"]:
         return _error(t("api.projectNotFound", id=project_id), 404)
 
     # 重置到本体已生成状态
@@ -114,6 +118,7 @@ async def generate_ontology(
     simulation_requirement: str = Form(default=""),
     project_name: str = Form(default="Unnamed Project"),
     additional_context: str = Form(default=""),
+    current=Depends(get_current_user),
 ):
     """接口1：上传文件（PDF/MD/TXT），分析生成本体定义。
 
@@ -131,8 +136,8 @@ async def generate_ontology(
         if not files or all(not f.filename for f in files):
             return _error(t("api.requireFileUpload"), 400)
 
-        # 创建项目
-        project = ProjectManager.create_project(name=project_name)
+        # 创建项目（盖章当前用户为属主）
+        project = ProjectManager.create_project(name=project_name, user_id=current["user_id"])
         project.simulation_requirement = simulation_requirement
         logger.info(f"创建项目: {project.project_id}")
 
@@ -216,8 +221,8 @@ async def generate_ontology(
 
 
 @router.post("/build")
-def build_graph(req: BuildGraphRequest):
-    """接口2：根据 project_id 构建图谱（后台异步执行）。"""
+def build_graph(req: BuildGraphRequest, current=Depends(get_current_user)):
+    """接口2：根据 project_id 构建图谱（后台异步执行，仅限属主）。"""
     try:
         logger.info("=== 开始构建图谱 ===")
 
@@ -232,9 +237,9 @@ def build_graph(req: BuildGraphRequest):
         if not project_id:
             return _error(t("api.requireProjectId"), 400)
 
-        # 获取项目
+        # 获取项目（校验归属）
         project = ProjectManager.get_project(project_id)
-        if not project:
+        if not project or project.user_id != current["user_id"]:
             return _error(t("api.projectNotFound", id=project_id), 404)
 
         # 检查项目状态
@@ -357,11 +362,14 @@ def list_tasks():
 
 
 @router.get("/data/{graph_id}")
-def get_graph_data(graph_id: str):
-    """获取图谱数据（节点和边）"""
+def get_graph_data(graph_id: str, current=Depends(get_current_user)):
+    """获取图谱数据（节点和边，仅限属主）"""
     try:
         if not settings.neo4j_uri:
             return _error(t("api.neo4jConfigMissing"), 500)
+
+        if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
+            return _error(t("api.projectNotFound", id=graph_id), 404)
 
         builder = GraphBuilderService(api_key=settings.neo4j_uri)
         graph_data = builder.get_graph_data(graph_id)
@@ -372,8 +380,10 @@ def get_graph_data(graph_id: str):
 
 
 @router.post("/project/{project_id}/recanonicalize")
-def recanonicalize_project_graph(project_id: str, dry_run: bool = False):
-    """对项目已构建的图谱重跑实体消解，合并重复/别名实体（无需重新抽取）。
+def recanonicalize_project_graph(
+    project_id: str, dry_run: bool = False, current=Depends(get_current_user)
+):
+    """对项目已构建的图谱重跑实体消解，合并重复/别名实体（无需重新抽取，仅限属主）。
 
     dry_run=true 时只返回拟合并分组，不改动数据库（用于先复核再执行）。
     """
@@ -382,7 +392,7 @@ def recanonicalize_project_graph(project_id: str, dry_run: bool = False):
             return _error(t("api.neo4jConfigMissing"), 500)
 
         project = ProjectManager.get_project(project_id)
-        if not project:
+        if not project or project.user_id != current["user_id"]:
             return _error(t("api.projectNotFound", id=project_id), 404)
         if not project.graph_id:
             return _error(t("api.graphNotBuilt"), 400)
@@ -397,11 +407,14 @@ def recanonicalize_project_graph(project_id: str, dry_run: bool = False):
 
 
 @router.delete("/delete/{graph_id}")
-def delete_graph(graph_id: str):
-    """删除 Neo4j 图谱"""
+def delete_graph(graph_id: str, current=Depends(get_current_user)):
+    """删除 Neo4j 图谱（仅限属主）"""
     try:
         if not settings.neo4j_uri:
             return _error(t("api.neo4jConfigMissing"), 500)
+
+        if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
+            return _error(t("api.graphDeleted", id=graph_id), 404)
 
         builder = GraphBuilderService(api_key=settings.neo4j_uri)
         builder.delete_graph(graph_id)

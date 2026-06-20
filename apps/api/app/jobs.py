@@ -133,6 +133,15 @@ def run_report_generate(
             task_manager.update_task(task_id, progress=progress, message=f"[{stage}] {message}")
 
         report = agent.generate_report(progress_callback=progress_callback, report_id=report_id)
+        # worker 无请求上下文：从所属模拟继承数据归属，确保报告带上 user_id
+        try:
+            from .services.simulation_manager import SimulationManager
+
+            sim = SimulationManager().get_simulation(simulation_id)
+            if sim and sim.user_id:
+                report.user_id = sim.user_id
+        except Exception:
+            pass
         ReportManager.save_report(report)
 
         if report.status == ReportStatus.COMPLETED:

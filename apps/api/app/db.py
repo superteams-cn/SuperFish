@@ -55,4 +55,23 @@ def init_db() -> None:
     from . import db_models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _migrate_add_user_id()
     logger.info("数据库表已就绪（Postgres）")
+
+
+def _migrate_add_user_id() -> None:
+    """补列迁移：create_all 不会给「已存在的表」加列，故对三张业务表
+    幂等地补 user_id 列与索引（Postgres 支持 IF NOT EXISTS）。"""
+    from sqlalchemy import text
+
+    stmts = []
+    for table in ("projects", "simulations", "reports"):
+        stmts.append(
+            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS user_id VARCHAR(64) NOT NULL DEFAULT ''"
+        )
+        stmts.append(
+            f"CREATE INDEX IF NOT EXISTS ix_{table}_user_id ON {table} (user_id)"
+        )
+    with engine.begin() as conn:
+        for s in stmts:
+            conn.execute(text(s))

@@ -39,6 +39,8 @@ class ProjectRow(Base):
     __tablename__ = "projects"
 
     project_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # 所属用户（数据隔离的归属根）；存量数据为空串
+    user_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     name: Mapped[str] = mapped_column(String(255), default="Unnamed Project")
     status: Mapped[str] = mapped_column(String(32), index=True, default="created")
     # created_at/updated_at 沿用 ISO 字符串语义（与既有 to_dict 契约一致，便于字符串排序）
@@ -88,6 +90,8 @@ class SimulationRow(Base):
     __tablename__ = "simulations"
 
     simulation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # 所属用户（从所属项目继承），历史列表主查询走它
+    user_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     project_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     graph_id: Mapped[str] = mapped_column(String(64), default="")
 
@@ -122,6 +126,8 @@ class ReportRow(Base):
     __tablename__ = "reports"
 
     report_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # 所属用户（从所属模拟继承，在后台 worker 创建时回填）
+    user_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     simulation_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     graph_id: Mapped[str] = mapped_column(String(64), default="")
     simulation_requirement: Mapped[str] = mapped_column(Text, default="")

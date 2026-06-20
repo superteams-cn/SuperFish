@@ -52,6 +52,9 @@ class SimulationState:
     project_id: str
     graph_id: str
 
+    # 所属用户（从所属项目继承）
+    user_id: str = ""
+
     # 平台启用状态
     enable_twitter: bool = True
     enable_reddit: bool = True
@@ -85,6 +88,7 @@ class SimulationState:
         return {
             "simulation_id": self.simulation_id,
             "project_id": self.project_id,
+            "user_id": self.user_id,
             "graph_id": self.graph_id,
             "enable_twitter": self.enable_twitter,
             "enable_reddit": self.enable_reddit,
@@ -107,6 +111,7 @@ class SimulationState:
         return {
             "simulation_id": self.simulation_id,
             "project_id": self.project_id,
+            "user_id": self.user_id,
             "graph_id": self.graph_id,
             "status": self.status.value,
             "entities_count": self.entities_count,
@@ -121,6 +126,7 @@ def _row_to_state(row: SimulationRow) -> "SimulationState":
     return SimulationState(
         simulation_id=row.simulation_id,
         project_id=row.project_id,
+        user_id=row.user_id or "",
         graph_id=row.graph_id,
         enable_twitter=row.enable_twitter,
         enable_reddit=row.enable_reddit,
@@ -141,6 +147,7 @@ def _row_to_state(row: SimulationRow) -> "SimulationState":
 
 def _apply_state_to_row(state: "SimulationState", row: SimulationRow) -> None:
     row.project_id = state.project_id
+    row.user_id = state.user_id
     row.graph_id = state.graph_id
     row.enable_twitter = state.enable_twitter
     row.enable_reddit = state.enable_reddit
@@ -221,6 +228,7 @@ class SimulationManager:
         graph_id: str,
         enable_twitter: bool = True,
         enable_reddit: bool = True,
+        user_id: str = "",
     ) -> SimulationState:
         """
         创建新的模拟
@@ -230,6 +238,7 @@ class SimulationManager:
             graph_id: Neo4j图谱ID
             enable_twitter: 是否启用Twitter模拟
             enable_reddit: 是否启用Reddit模拟
+            user_id: 所属用户（从所属项目继承）
 
         Returns:
             SimulationState
@@ -241,6 +250,7 @@ class SimulationManager:
         state = SimulationState(
             simulation_id=simulation_id,
             project_id=project_id,
+            user_id=user_id,
             graph_id=graph_id,
             enable_twitter=enable_twitter,
             enable_reddit=enable_reddit,
@@ -487,10 +497,14 @@ class SimulationManager:
         """获取模拟状态"""
         return self._load_simulation_state(simulation_id)
 
-    def list_simulations(self, project_id: str | None = None) -> list[SimulationState]:
-        """列出所有模拟（Postgres，按创建时间倒序）"""
+    def list_simulations(
+        self, project_id: str | None = None, user_id: str | None = None
+    ) -> list[SimulationState]:
+        """列出所有模拟（Postgres，按创建时间倒序）；传 user_id 时只返回该用户的。"""
         with session_scope() as session:
             query = session.query(SimulationRow)
+            if user_id is not None:
+                query = query.filter(SimulationRow.user_id == user_id)
             if project_id is not None:
                 query = query.filter(SimulationRow.project_id == project_id)
             rows = query.order_by(SimulationRow.created_at.desc()).all()

@@ -12,10 +12,10 @@ import traceback
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from ..deps import use_locale
+from ..deps import get_current_user, use_locale
 from ..jobqueue import enqueue
 from ..models.project import ProjectManager
 from ..models.task import TaskManager
@@ -31,9 +31,36 @@ from ..services.simulation_manager import SimulationManager
 from ..utils.locale import get_locale, t
 from ..utils.logger import get_logger
 
-router = APIRouter(dependencies=[Depends(use_locale)])
+
+def _enforce_report_ownership(request: Request, current=Depends(get_current_user)):
+    """路由级守卫：整个报告路由需登录；path 含 report_id / simulation_id 的校验归属。
+
+    覆盖所有 /{report_id}/* 与 /by-simulation|/check/{simulation_id} 接口；
+    以 body 传 id 的接口（generate/chat/tools 等）在各自处理器内单独校验。
+    """
+    uid = current["user_id"]
+    rid = request.path_params.get("report_id")
+    if rid:
+        rep = ReportManager.get_report(rid)
+        if not rep or rep.user_id != uid:
+            raise HTTPException(status_code=404, detail=t("api.reportNotFound", id=rid))
+    sid = request.path_params.get("simulation_id")
+    if sid:
+        st = SimulationManager().get_simulation(sid)
+        if not st or st.user_id != uid:
+            raise HTTPException(status_code=404, detail=t("api.simulationNotFound", id=sid))
+
+
+# 整个报告路由：解析语言 + 强制登录与 report_id/simulation_id 归属校验
+router = APIRouter(dependencies=[Depends(use_locale), Depends(_enforce_report_ownership)])
 
 logger = get_logger("superfish.api.report")
+
+
+def _owns_simulation(simulation_id: str, current: dict) -> bool:
+    """body 传入 simulation_id 时的归属校验。"""
+    st = SimulationManager().get_simulation(simulation_id)
+    return bool(st) and st.user_id == current["user_id"]
 
 
 def _error(message: str, status: int, **extra) -> JSONResponse:
@@ -47,7 +74,7 @@ def _error(message: str, status: int, **extra) -> JSONResponse:
 
 
 @router.post("/generate")
-def generate_report(req: GenerateReportRequest):
+def generate_report(req: GenerateReportRequest, current=Depends(get_current_user)):
     """生成模拟分析报告（异步任务）。立即返回 task_id，用 /generate/status 查询进度。"""
     try:
         simulation_id = req.simulation_id
@@ -56,10 +83,10 @@ def generate_report(req: GenerateReportRequest):
 
         force_regenerate = req.force_regenerate
 
-        # 获取模拟信息
+        # 获取模拟信息（校验归属）
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
-        if not state:
+        if not state or state.user_id != current["user_id"]:
             return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         # 检查是否已有报告
@@ -101,6 +128,7 @@ def generate_report(req: GenerateReportRequest):
             Report(
                 report_id=report_id,
                 simulation_id=simulation_id,
+                user_id=state.user_id,
                 graph_id=graph_id,
                 simulation_requirement=simulation_requirement,
                 status=ReportStatus.PENDING,
@@ -149,7 +177,7 @@ def generate_report(req: GenerateReportRequest):
 
 
 @router.post("/generate/status")
-def get_generate_status(req: GenerateStatusRequest):
+def get_generate_status(req: GenerateStatusRequest, current=Depends(get_current_user)):
     """查询报告生成任务进度。"""
     try:
         task_id = req.task_id
@@ -157,6 +185,8 @@ def get_generate_status(req: GenerateStatusRequest):
 
         # 如果提供了 simulation_id，先检查是否已有完成的报告
         if simulation_id:
+            if not _owns_simulation(simulation_id, current):
+                return _error(t("api.simulationNotFound", id=simulation_id), 404)
             existing_report = ReportManager.get_report_by_simulation(simulation_id)
             if existing_report and existing_report.status == ReportStatus.COMPLETED:
                 return {
@@ -190,10 +220,14 @@ def get_generate_status(req: GenerateStatusRequest):
 
 
 @router.get("/list")
-def list_reports(simulation_id: str | None = None, limit: int = 50):
-    """列出所有报告，可按模拟ID过滤。"""
+def list_reports(
+    simulation_id: str | None = None, limit: int = 50, current=Depends(get_current_user)
+):
+    """列出当前用户的报告，可按模拟ID过滤。"""
     try:
-        reports = ReportManager.list_reports(simulation_id=simulation_id, limit=limit)
+        reports = ReportManager.list_reports(
+            simulation_id=simulation_id, limit=limit, user_id=current["user_id"]
+        )
         return {
             "success": True,
             "data": [r.to_dict() for r in reports],
@@ -221,7 +255,7 @@ def get_report_by_simulation(simulation_id: str):
 
 
 @router.post("/chat")
-def chat_with_report_agent(req: ChatRequest):
+def chat_with_report_agent(req: ChatRequest, current=Depends(get_current_user)):
     """与 Report Agent 对话，Agent 可自主调用检索工具回答问题。"""
     try:
         simulation_id = req.simulation_id
@@ -233,10 +267,10 @@ def chat_with_report_agent(req: ChatRequest):
         if not message:
             return _error(t("api.requireMessage"), 400)
 
-        # 获取模拟和项目信息
+        # 获取模拟和项目信息（校验归属）
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
-        if not state:
+        if not state or state.user_id != current["user_id"]:
             return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
         project = ProjectManager.get_project(state.project_id)
