@@ -214,6 +214,8 @@ class CommandType:
     """命令类型常量"""
     INTERVIEW = "interview"
     BATCH_INTERVIEW = "batch_interview"
+    STREAM_INTERVIEW = "stream_interview"  # 单 agent 流式采访：逐 token 经 Redis 推给前端
+    STREAM_BATCH_INTERVIEW = "stream_batch_interview"  # 多 agent 并发流式群访
     CLOSE_ENV = "close_env"
 
 
@@ -245,7 +247,146 @@ class ParallelIPCHandler:
         # 确保目录存在
         os.makedirs(self.commands_dir, exist_ok=True)
         os.makedirs(self.responses_dir, exist_ok=True)
-    
+
+        # 流式采访用的 Redis 客户端（懒加载）
+        self._redis = None
+
+    def _get_redis(self):
+        """懒加载 async Redis 客户端，用于流式采访逐 token 发布。"""
+        if self._redis is None:
+            import redis.asyncio as aioredis
+            url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            self._redis = aioredis.from_url(url, encoding="utf-8", decode_responses=True)
+        return self._redis
+
+    async def _publish_stream(self, command_id: str, payload: dict):
+        """把一个流式事件发布到 Redis 频道 interview:stream:{command_id}。失败不抛。"""
+        try:
+            r = self._get_redis()
+            await r.publish(f"interview:stream:{command_id}", json.dumps(payload, ensure_ascii=False))
+        except Exception as e:
+            print(f"[stream] 发布失败: {e}")
+
+    def _resolve_platform(self, platform):
+        """platform 缺省时择一可用平台（与前端一致优先 reddit）。"""
+        if not platform:
+            platform = "reddit" if self.reddit_env else ("twitter" if self.twitter_env else None)
+        return self._get_env_and_graph(platform)
+
+    def _make_llm_client(self, agent):
+        """按 env 配置构造 AsyncOpenAI 客户端 + 模型名（采访流式专用）。"""
+        from openai import AsyncOpenAI
+
+        api_key = os.environ.get("LLM_API_KEY", "")
+        base_url = os.environ.get("LLM_BASE_URL", "") or None
+        model = os.environ.get("LLM_MODEL_NAME", "")
+        if not model:
+            model = getattr(getattr(agent, "model_type", None), "value", "") or "gpt-4o-mini"
+        if not api_key:
+            raise ValueError("缺少 LLM_API_KEY")
+        return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=180.0, max_retries=1), model
+
+    async def _stream_one_agent(self, command_id, agent, prompt, client, model, agent_tag=None):
+        """对单个 agent 流式生成并逐 token 发布；agent_tag 非空时事件带 agent_id（群访多人复用）。
+
+        返回完整文本。与 OASIS perform_interview 一致：去掉 system prompt 的 RESPONSE FORMAT 段，
+        让回答是自由口语而非 JSON 动作；附上该 agent 整场推演的记忆上下文。
+        """
+        openai_messages, _ = agent.memory.get_context()
+        sys_content = agent.system_message.content.split("# RESPONSE FORMAT")[0]
+        messages = (
+            [{"role": "system", "content": sys_content}]
+            + openai_messages
+            + [{"role": "user", "content": prompt}]
+        )
+        stream = await client.chat.completions.create(
+            model=model, messages=messages, temperature=0.7, stream=True
+        )
+        parts = []
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                parts.append(delta)
+                evt = {"type": "chunk", "content": delta}
+                if agent_tag is not None:
+                    evt["agent_id"] = agent_tag
+                await self._publish_stream(command_id, evt)
+        return "".join(parts)
+
+    async def handle_stream_interview(
+        self, command_id: str, agent_id: int, prompt: str, platform: str = None
+    ) -> bool:
+        """
+        单 agent 流式采访：直接对 LLM 发起 streaming 调用，逐 token 经 Redis 推给前端
+        （绕开 env.step+DB，体感从数十秒等待变为即时打字）。最后仍写一份 IPC 响应文件兼容清理。
+        """
+        env, agent_graph, actual_platform = self._resolve_platform(platform)
+        if not env or not agent_graph:
+            await self._publish_stream(command_id, {"type": "error", "error": "没有可用的模拟环境"})
+            self.send_response(command_id, "failed", error="没有可用的模拟环境")
+            return True
+        try:
+            agent = agent_graph.get_agent(agent_id)
+            client, model = self._make_llm_client(agent)
+            text = await self._stream_one_agent(command_id, agent, prompt, client, model)
+            await self._publish_stream(command_id, {"type": "done", "content": text})
+            self.send_response(
+                command_id, "completed", result={"response": text, "platform": actual_platform}
+            )
+        except Exception as e:
+            print(f"[stream] 采访失败: {e}")
+            await self._publish_stream(command_id, {"type": "error", "error": str(e)})
+            self.send_response(command_id, "failed", error=str(e))
+        return True
+
+    async def handle_stream_batch_interview(
+        self, command_id: str, interviews: List[Dict], platform: str = None
+    ) -> bool:
+        """
+        多 agent 流式群访：所有被选 agent 并发生成，各自的 token 带 agent_id 经同一 Redis
+        频道推出，前端按 agent_id 分别填充。每人完成发 agent_done，全部完成发 done。
+        """
+        env, agent_graph, actual_platform = self._resolve_platform(platform)
+        if not env or not agent_graph:
+            await self._publish_stream(command_id, {"type": "error", "error": "没有可用的模拟环境"})
+            self.send_response(command_id, "failed", error="没有可用的模拟环境")
+            return True
+
+        results: Dict[str, str] = {}
+
+        async def run_one(item):
+            agent_id = item.get("agent_id")
+            prompt = item.get("prompt", "")
+            try:
+                agent = agent_graph.get_agent(agent_id)
+                client, model = self._make_llm_client(agent)
+                text = await self._stream_one_agent(
+                    command_id, agent, prompt, client, model, agent_tag=agent_id
+                )
+                results[str(agent_id)] = text
+                await self._publish_stream(
+                    command_id, {"type": "agent_done", "agent_id": agent_id, "content": text}
+                )
+            except Exception as e:
+                print(f"[stream] 群访 agent {agent_id} 失败: {e}")
+                await self._publish_stream(
+                    command_id, {"type": "agent_error", "agent_id": agent_id, "error": str(e)}
+                )
+
+        try:
+            await asyncio.gather(*[run_one(i) for i in interviews])
+            await self._publish_stream(command_id, {"type": "done"})
+            self.send_response(
+                command_id, "completed", result={"results": results, "platform": actual_platform}
+            )
+        except Exception as e:
+            print(f"[stream] 群访失败: {e}")
+            await self._publish_stream(command_id, {"type": "error", "error": str(e)})
+            self.send_response(command_id, "failed", error=str(e))
+        return True
+
     def update_status(self, status: str):
         """更新环境状态"""
         with open(self.status_file, 'w', encoding='utf-8') as f:
@@ -590,6 +731,23 @@ class ParallelIPCHandler:
 
         elif command_type == CommandType.BATCH_INTERVIEW:
             await self.handle_batch_interview(
+                command_id,
+                args.get("interviews", []),
+                args.get("platform")
+            )
+            return True, True
+
+        elif command_type == CommandType.STREAM_INTERVIEW:
+            await self.handle_stream_interview(
+                command_id,
+                args.get("agent_id", 0),
+                args.get("prompt", ""),
+                args.get("platform")
+            )
+            return True, True
+
+        elif command_type == CommandType.STREAM_BATCH_INTERVIEW:
+            await self.handle_stream_batch_interview(
                 command_id,
                 args.get("interviews", []),
                 args.get("platform")

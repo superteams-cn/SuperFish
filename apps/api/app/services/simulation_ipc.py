@@ -27,6 +27,8 @@ class CommandType(StrEnum):
 
     INTERVIEW = "interview"  # 单个Agent采访
     BATCH_INTERVIEW = "batch_interview"  # 批量采访
+    STREAM_INTERVIEW = "stream_interview"  # 单 agent 流式采访（响应经 Redis，不走文件轮询）
+    STREAM_BATCH_INTERVIEW = "stream_batch_interview"  # 多 agent 并发流式群访（响应经 Redis）
     CLOSE_ENV = "close_env"  # 关闭环境
 
 
@@ -211,6 +213,43 @@ class SimulationIPCClient:
             args["platform"] = platform
 
         return self.send_command(command_type=CommandType.INTERVIEW, args=args, timeout=timeout)
+
+    def post_command(
+        self, command_type: CommandType, args: dict[str, Any], command_id: str | None = None
+    ) -> str:
+        """只写命令文件、不等响应，返回 command_id。
+
+        用于流式采访：子进程把结果逐 token 发布到 Redis，由 SSE 端点消费，无需文件轮询。
+        允许调用方预先指定 command_id，以便先订阅 Redis 频道再投递命令、避免漏掉首批 token。
+        """
+        command_id = command_id or str(uuid.uuid4())
+        command = IPCCommand(command_id=command_id, command_type=command_type, args=args)
+        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
+        with open(command_file, "w", encoding="utf-8") as f:
+            json.dump(command.to_dict(), f, ensure_ascii=False, indent=2)
+        logger.info(f"投递IPC命令(不等待): {command_type.value}, command_id={command_id}")
+        return command_id
+
+    def post_stream_interview(
+        self, agent_id: int, prompt: str, platform: str | None = None, command_id: str | None = None
+    ) -> str:
+        """投递单 agent 流式采访命令，返回 command_id（响应经 Redis 频道）。"""
+        args: dict[str, Any] = {"agent_id": agent_id, "prompt": prompt}
+        if platform:
+            args["platform"] = platform
+        return self.post_command(CommandType.STREAM_INTERVIEW, args, command_id=command_id)
+
+    def post_stream_batch_interview(
+        self,
+        interviews: list[dict[str, Any]],
+        platform: str | None = None,
+        command_id: str | None = None,
+    ) -> str:
+        """投递多 agent 并发流式群访命令，返回 command_id（响应经 Redis 频道）。"""
+        args: dict[str, Any] = {"interviews": interviews}
+        if platform:
+            args["platform"] = platform
+        return self.post_command(CommandType.STREAM_BATCH_INTERVIEW, args, command_id=command_id)
 
     def send_batch_interview(
         self, interviews: list[dict[str, Any]], platform: str = None, timeout: float = 120.0

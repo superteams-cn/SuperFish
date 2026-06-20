@@ -17,7 +17,7 @@ import traceback
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from ..deps import use_locale
 from ..models.project import ProjectManager
@@ -1133,6 +1133,109 @@ def interview_agents_batch(req: InterviewBatchRequest):
     except Exception as e:
         logger.error(f"批量Interview失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())
+
+
+def _sse_event(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _interview_stream_response(simulation_id: str, poster) -> StreamingResponse:
+    """采访流式 SSE 通用管道：订阅 Redis 频道 → 投递命令 → 逐块下发，直到 done/error/超时。
+
+    poster: 回调 (ipc, command_id) -> None，负责投递对应的（单/批量）流式采访命令。
+    子进程把 token 逐条发布到 interview:stream:{command_id}，本端点订阅并转成 text/event-stream。
+    """
+    import asyncio
+    import uuid
+
+    import redis.asyncio as aioredis
+
+    from ..services.simulation_ipc import SimulationIPCClient
+
+    async def event_gen():
+        sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
+        if not os.path.isdir(sim_dir):
+            yield _sse_event({"type": "error", "error": "simulation-not-found"})
+            return
+        ipc = SimulationIPCClient(sim_dir)
+        if not ipc.check_env_alive():
+            # 环境已回收：前端应先调 ensure-env 唤醒后再发起；这里直接报错让其走兜底
+            yield _sse_event({"type": "error", "error": "env-not-alive"})
+            return
+
+        command_id = str(uuid.uuid4())
+        channel = f"interview:stream:{command_id}"
+        r = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+        pubsub = r.pubsub()
+        await pubsub.subscribe(channel)
+        try:
+            # 先订阅再投递命令，避免漏掉首批 token
+            poster(ipc, command_id)
+            loop = asyncio.get_event_loop()
+            overall_deadline = loop.time() + 200.0  # 整体上限
+            while True:
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=20.0)
+                if msg is None:
+                    # 无消息：首 token 前可能在唤醒/排队，发心跳保活并检查总超时
+                    if loop.time() > overall_deadline:
+                        yield _sse_event({"type": "error", "error": "timeout"})
+                        break
+                    yield ": keep-alive\n\n"
+                    continue
+                try:
+                    payload = json.loads(msg["data"])
+                except (ValueError, TypeError):
+                    continue
+                yield _sse_event(payload)
+                if payload.get("type") in ("done", "error"):
+                    break
+        finally:
+            try:
+                await pubsub.unsubscribe(channel)
+                await pubsub.aclose()
+                await r.aclose()
+            except Exception:
+                pass
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用反向代理缓冲，确保逐块下发
+        },
+    )
+
+
+@router.post("/interview/stream")
+def interview_stream(req: InterviewAgentRequest):
+    """单 Agent 流式采访（SSE）。事件：`data:{"type":"chunk"|"done"|"error",...}`。"""
+    if not req.simulation_id or req.agent_id is None or not req.prompt:
+        return _error(t("api.requireSimulationId"), 400)
+    agent_id = int(req.agent_id)
+    prompt = req.prompt
+    platform = req.platform
+    return _interview_stream_response(
+        req.simulation_id,
+        lambda ipc, cid: ipc.post_stream_interview(agent_id, prompt, platform, command_id=cid),
+    )
+
+
+@router.post("/interview/stream-batch")
+def interview_stream_batch(req: InterviewBatchRequest):
+    """多 Agent 并发流式群访（SSE）。
+
+    事件：chunk/agent_done/agent_error 均带 agent_id，全部完成发 done；前端按 agent_id 分别填充。
+    """
+    if not req.simulation_id or not req.interviews:
+        return _error(t("api.requireSimulationId"), 400)
+    interviews = req.interviews
+    platform = req.platform
+    return _interview_stream_response(
+        req.simulation_id,
+        lambda ipc, cid: ipc.post_stream_batch_interview(interviews, platform, command_id=cid),
+    )
 
 
 @router.post("/interview/all")

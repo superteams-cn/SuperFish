@@ -8,7 +8,8 @@ import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
 import { Logo } from '@/components/common/Logo'
 import { chatWithReport, getReport, getReportSections } from '@/lib/api/report'
 import {
-  interviewAgents,
+  streamInterview,
+  streamInterviewBatch,
   getSimulationProfilesRealtime,
   ensureEnv,
   getEnvStatus,
@@ -27,9 +28,6 @@ interface Step5Props {
 type TargetKey = 'report_agent' | `agent_${number}`
 /** 追问对象：问 SuperFish / 问一个人 / 问一群人 */
 type Tab = 'super' | 'one' | 'crowd'
-
-/** 采访接口对单个 Agent 的回复 */
-type AgentAnswer = { response?: string; answer?: string }
 
 const initial = (name?: string) => (name || 'A').charAt(0).toUpperCase()
 
@@ -193,17 +191,46 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
             .join('\n')
           prompt = t('step5.followupPrompt', { context: ctx, question: text })
         }
-        const res = await interviewAgents({
-          simulation_id: simulationId,
-          interviews: [{ agent_id: idx, prompt }],
-        })
-        if (!res.success || !res.data) throw new Error(res.error || t('step5.requestFailed'))
-        const resultData = res.data.result || res.data
-        const dict = (resultData.results || resultData) as Record<string, AgentAnswer>
-        const agentResult =
-          dict[`reddit_${idx}`] || dict[`twitter_${idx}`] || Object.values(dict)[0]
-        answer = (agentResult?.response || agentResult?.answer) ?? t('step5.noResponse')
-        addLog(t('log.agentReplied', { name: selectedAgent?.name || selectedAgent?.username }))
+        // 流式采访：先放一个空的助手气泡，逐 token 追加，体感即时（而非干等数十秒）
+        append(key, { role: 'assistant', content: '', timestamp: new Date().toISOString() })
+        const setLastAssistant = (content: string) =>
+          setHistories((prevH) => {
+            const list = prevH[key] || []
+            const next = list.slice()
+            for (let i = next.length - 1; i >= 0; i--) {
+              if (next[i].role === 'assistant') {
+                next[i] = { ...next[i], content }
+                break
+              }
+            }
+            return { ...prevH, [key]: next }
+          })
+        let acc = ''
+        const errBox: { msg: string | null } = { msg: null }
+        await streamInterview(
+          { simulation_id: simulationId, agent_id: idx, prompt },
+          {
+            onChunk: (delta) => {
+              acc += delta
+              setLastAssistant(acc)
+            },
+            onDone: (fullText) => {
+              acc = fullText || acc
+              setLastAssistant(acc || t('step5.noResponse'))
+            },
+            onError: (e) => {
+              errBox.msg = e
+            },
+          },
+        )
+        if (errBox.msg) {
+          addLog(t('log.sendFailed', { error: errBox.msg }))
+          // 唤醒失败/环境已回收 → 人话兜底引导改问 SuperFish
+          setLastAssistant(t('step5.cAgentUnavailable'))
+        } else {
+          addLog(t('log.agentReplied', { name: selectedAgent?.name || selectedAgent?.username }))
+        }
+        return
       }
       append(key, {
         role: 'assistant',
@@ -239,27 +266,46 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         addLog(t('step5.cAgentUnavailable'))
         return
       }
-      const interviews = Array.from(selected).map((idx) => ({
-        agent_id: idx,
-        prompt: question.trim(),
-      }))
-      const res = await interviewAgents({ simulation_id: simulationId, interviews })
-      if (!res.success || !res.data) throw new Error(res.error || t('step5.requestFailed'))
-      const resultData = res.data.result || res.data
-      const dict = (resultData.results || resultData) as Record<string, AgentAnswer>
-      const list: SurveyResult[] = interviews.map(({ agent_id }) => {
+      const q = question.trim()
+      const interviews = Array.from(selected).map((idx) => ({ agent_id: idx, prompt: q }))
+      // 先用空答案占位渲染每个人的卡片，随后各自的答案逐 token 并发填充
+      const placeholders: SurveyResult[] = interviews.map(({ agent_id }) => {
         const agent = profiles[agent_id]
-        const agentResult = dict[`reddit_${agent_id}`] || dict[`twitter_${agent_id}`]
         return {
           agent_id,
           agent_name: agent?.name || agent?.username || `Agent ${agent_id}`,
           profession: agent?.profession,
-          question: question.trim(),
-          answer: (agentResult?.response || agentResult?.answer) ?? t('step5.noResponse'),
+          question: q,
+          answer: '',
         }
       })
-      setSurveyResults(list)
-      addLog(t('log.receivedReplies', { count: list.length }))
+      setSurveyResults(placeholders)
+
+      const acc: Record<number, string> = {}
+      const setAnswer = (agentId: number, content: string) =>
+        setSurveyResults((prev) =>
+          prev.map((r) => (r.agent_id === agentId ? { ...r, answer: content } : r)),
+        )
+      const errBox: { msg: string | null } = { msg: null }
+      await streamInterviewBatch(
+        { simulation_id: simulationId, interviews },
+        {
+          onChunk: (agentId, delta) => {
+            acc[agentId] = (acc[agentId] || '') + delta
+            setAnswer(agentId, acc[agentId])
+          },
+          onAgentDone: (agentId, full) => {
+            acc[agentId] = full || acc[agentId] || t('step5.noResponse')
+            setAnswer(agentId, acc[agentId])
+          },
+          onAgentError: (agentId) => setAnswer(agentId, t('step5.cAgentUnavailable')),
+          onDone: () => addLog(t('log.receivedReplies', { count: interviews.length })),
+          onError: (e) => {
+            errBox.msg = e
+          },
+        },
+      )
+      if (errBox.msg) addLog(t('log.surveySendFailed', { error: errBox.msg }))
     } catch (err) {
       addLog(t('log.surveySendFailed', { error: (err as Error).message }))
     } finally {
