@@ -260,7 +260,6 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
       {/* 左侧：报告正文 */}
       <div className="bg-card w-[45%] min-w-[420px] max-w-[680px] flex-shrink-0 overflow-y-auto border-r px-8 py-6 xl:px-10">
         <ReportOutlinePanel
-          reportId={reportId}
           outline={outline}
           generatedSections={generatedSections}
           currentSectionIndex={null}

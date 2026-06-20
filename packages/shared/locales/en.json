@@ -480,7 +480,15 @@
     "llmFinal": "Final",
     "llmFinalHint": "Section \"{{title}}\" content generated",
     "toolGraphStats": "Graph Stats",
-    "toolEntityQuery": "Entity Query"
+    "toolEntityQuery": "Entity Query",
+    "cWriting": "Putting your conclusion together…",
+    "cWritingSub": "AI is reading through the whole run and distilling what matters to you",
+    "cDone": "Your conclusion is ready",
+    "cDoneSub": "Here's the judgment from this run",
+    "cProgress": "{done} / {total} sections written",
+    "cNext": "Dig deeper",
+    "cBackstage": "Behind the scenes",
+    "cBackstageHint": "Generation progress, agent log, console output — rarely needed"
   },
   "step5": {
     "interactiveTools": "Interactive Tools",

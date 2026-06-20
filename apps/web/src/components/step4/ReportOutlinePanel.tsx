@@ -8,20 +8,14 @@ import { cn } from '@/lib/utils'
 import type { ReportOutline } from '@/lib/step4-types'
 
 interface Props {
-  reportId: string
   outline: ReportOutline | null
   /** 已生成章节内容：{ sectionIndex(1基): content } */
   generatedSections: Record<number, string>
   currentSectionIndex: number | null
 }
 
-/** 报告左侧面板：标题 + 章节列表（已完成章节渲染 markdown，可折叠）。 */
-export function ReportOutlinePanel({
-  reportId,
-  outline,
-  generatedSections,
-  currentSectionIndex,
-}: Props) {
+/** 报告面板：标题 + 章节列表（已完成章节渲染 markdown，可折叠）。 */
+export function ReportOutlinePanel({ outline, generatedSections, currentSectionIndex }: Props) {
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
 
@@ -59,12 +53,6 @@ export function ReportOutlinePanel({
     <div className="mx-auto w-full max-w-6xl">
       {/* 报告头部 */}
       <div className="mb-6 border-b pb-4">
-        <div className="text-muted-foreground mb-2 flex items-center gap-3 text-[10px]">
-          <span className="bg-brand rounded px-2 py-0.5 font-semibold text-white">
-            {t('step4.predictionReport')}
-          </span>
-          <span className="font-mono">ID: {reportId}</span>
-        </div>
         <h1 className="text-2xl font-bold tracking-tight">{outline.title}</h1>
         {outline.summary && <p className="text-muted-foreground mt-2 text-sm">{outline.summary}</p>}
       </div>

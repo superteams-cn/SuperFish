@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowRight, Download, RefreshCw } from 'lucide-react'
+import {
+  ArrowRight,
+  Download,
+  RefreshCw,
+  Loader2,
+  CheckCircle2,
+  Sparkles,
+  Code,
+  ChevronDown,
+} from 'lucide-react'
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
@@ -19,10 +27,13 @@ import {
   getReportProgress,
   getReportSections,
 } from '@/lib/api/report'
-import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { cn } from '@/lib/utils'
 import type { SystemLog } from '@/lib/process-types'
 import type { AgentLogEntry, ReportOutline } from '@/lib/step4-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
+
+const GRADIENT_BTN =
+  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
 
 interface Step4Props {
   reportId: string
@@ -47,8 +58,8 @@ export function Step4Report({
 }: Step4Props) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const isNarrow = useMediaQuery('(max-width: 1024px)')
   const [regenerating, setRegenerating] = useState(false)
+  const [backstageOpen, setBackstageOpen] = useState(false)
 
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([])
   const [consoleLogs, setConsoleLogs] = useState<string[]>([])
@@ -264,7 +275,6 @@ export function Step4Report({
   /* ── 可复用片段 ─────────────────────────────────────── */
   const reportView = (
     <ReportOutlinePanel
-      reportId={reportId}
       outline={outline}
       generatedSections={generatedSections}
       currentSectionIndex={currentSectionIndex}
@@ -345,106 +355,146 @@ export function Step4Report({
     fetchConsoleLog,
   ])
 
-  const actions = (
-    <div className="flex items-center gap-2">
-      {simulationId && (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handleRegenerate}
-          disabled={regenerating || (!isComplete && agentLogs.length > 0)}
-          title={t('step4.regenerateReportHint')}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} />
-          {t('step4.regenerateReport')}
-        </Button>
-      )}
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={handleDownload}
-        disabled={!isComplete || downloading}
-      >
-        <Download className="h-3.5 w-3.5" />
-        {t('step4.downloadReport')}
-      </Button>
-      <Button
-        size="sm"
-        onClick={() => reportId && navigate(`/interaction/${reportId}`)}
-        disabled={!isComplete}
-      >
-        {t('step4.enterInteraction')}
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Button>
-    </div>
-  )
+  // 软进度：已完成章节 / 总章节
+  const totalSections = outline?.sections?.length ?? 0
+  const doneSections = Object.keys(generatedSections).length
+  const softProgress = isComplete
+    ? 100
+    : totalSections > 0
+      ? Math.round((doneSections / totalSections) * 100)
+      : outline
+        ? 8
+        : 3
 
   return (
-    <div className="bg-muted/30 flex h-full flex-col overflow-hidden">
-      {isNarrow ? (
-        /* 窄屏：Tab 串行切换 */
-        <Tabs defaultValue="report" className="flex flex-1 flex-col overflow-hidden">
-          <div className="bg-card flex items-center justify-between border-b px-4 py-2">
-            <TabsList>
-              <TabsTrigger value="report">{t('step4.predictionReport')}</TabsTrigger>
-              <TabsTrigger value="progress">{t('step4.workflowProgress')}</TabsTrigger>
-              <TabsTrigger value="log">{t('step4.agentLog')}</TabsTrigger>
-              <TabsTrigger value="console">{t('step4.consoleOutput')}</TabsTrigger>
-            </TabsList>
-            {actions}
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
+        <div className="mx-auto max-w-3xl">
+          {/* 舞台标题 */}
+          <div className="animate-rise-in text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-lg">
+              {isComplete ? (
+                <CheckCircle2 className="h-8 w-8" />
+              ) : (
+                <Loader2 className="h-8 w-8 animate-spin" />
+              )}
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              {isComplete ? t('step4.cDone') : t('step4.cWriting')}
+            </h2>
+            <p className="text-muted-foreground mt-2">
+              {isComplete ? t('step4.cDoneSub') : t('step4.cWritingSub')}
+            </p>
           </div>
-          <TabsContent value="report" className="mt-0 flex-1 overflow-y-auto p-6">
-            {reportView}
-          </TabsContent>
-          <TabsContent value="progress" className="mt-0 flex-1 overflow-y-auto p-4">
-            {progressView}
-          </TabsContent>
-          <TabsContent value="log" className="mt-0 flex-1 overflow-y-auto p-4">
-            {logView}
-          </TabsContent>
-          <TabsContent value="console" className="mt-0 flex-1 overflow-hidden">
-            {consoleView}
-          </TabsContent>
-        </Tabs>
-      ) : (
-        /* 宽屏：左报告 / 右(进度 + 日志 + 控制台) 并行双面板 */
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="bg-card flex items-center justify-end border-b px-4 py-2">{actions}</div>
-          <div className="flex flex-1 overflow-hidden">
-            {/* 左：报告章节流 */}
-            <div className="flex-1 overflow-y-auto px-8 py-6 xl:px-12">{reportView}</div>
 
-            {/* 右：进度 + 日志 + 控制台（纵向同时可见） */}
-            <div className="bg-card flex w-[32%] min-w-[340px] max-w-[460px] flex-col overflow-hidden border-l">
-              <div className="border-b p-3">
-                <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
-                  {t('step4.workflowProgress')}
-                </h3>
-                {progressView}
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col">
-                <h3 className="text-muted-foreground border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide">
-                  {t('step4.agentLog')}
-                </h3>
-                <div className="flex-1 overflow-y-auto p-3">{logView}</div>
-              </div>
-              <div className="flex h-[30%] min-h-[120px] flex-col border-t">
-                <h3 className="text-muted-foreground border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide">
-                  {t('step4.consoleOutput')}
-                </h3>
-                <div className="min-h-0 flex-1">{consoleView}</div>
+          {/* 进展：软进度（生成中） */}
+          {!isComplete && (
+            <div className="mt-6">
+              {totalSections > 0 && (
+                <p className="text-muted-foreground mb-2 text-center text-sm">
+                  {t('step4.cProgress', { done: doneSections, total: totalSections })}
+                </p>
+              )}
+              <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all duration-500"
+                  style={{ width: `${Math.max(softProgress, 3)}%` }}
+                />
               </div>
             </div>
+          )}
+
+          {/* 完成 → 深入追问 + 下载 */}
+          {isComplete && (
+            <div className="animate-rise-in mt-7 flex flex-col items-center gap-3">
+              <Button
+                className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                onClick={() => reportId && navigate(`/interaction/${reportId}`)}
+              >
+                <Sparkles className="h-5 w-5" />
+                {t('step4.cNext')}
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDownload}
+                disabled={downloading}
+                className="text-muted-foreground hover:text-foreground gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t('step4.downloadReport')}
+              </Button>
+            </div>
+          )}
+
+          {/* 报告本体（章节流式呈现）。不透明「纸」：让长文阅读区脱离动画背景合成，
+              避免快速滚动时反复重绘导致的卡顿/白屏。 */}
+          <div className="bg-background mt-8 rounded-2xl border p-5 shadow-sm sm:p-7">
+            {reportView}
+          </div>
+
+          {/* 幕后：工作流进度 / Agent 日志 / 控制台 / 重新生成 */}
+          <div className="mt-10">
+            <button
+              type="button"
+              onClick={() => setBackstageOpen((o) => !o)}
+              className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-xl border border-dashed px-4 py-3 text-sm transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Code className="h-4 w-4" />
+                {t('step4.cBackstage')}
+                <span className="text-muted-foreground/70 hidden text-xs sm:inline">
+                  · {t('step4.cBackstageHint')}
+                </span>
+              </span>
+              <ChevronDown
+                className={cn('h-4 w-4 transition-transform', backstageOpen && 'rotate-180')}
+              />
+            </button>
+
+            {backstageOpen && (
+              <div className="mt-3 space-y-4">
+                {simulationId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerate}
+                    disabled={regenerating || (!isComplete && agentLogs.length > 0)}
+                    title={t('step4.regenerateReportHint')}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+                    {t('step4.regenerateReport')}
+                  </Button>
+                )}
+                <div className="bg-background rounded-2xl border p-4">
+                  <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
+                    {t('step4.workflowProgress')}
+                  </h3>
+                  {progressView}
+                </div>
+                <div className="bg-background rounded-2xl border p-4">
+                  <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
+                    {t('step4.agentLog')}
+                  </h3>
+                  {logView}
+                </div>
+                <div className="overflow-hidden rounded-2xl border">
+                  <h3 className="text-muted-foreground border-b px-3 py-2 text-[11px] font-semibold uppercase tracking-wide">
+                    {t('step4.consoleOutput')}
+                  </h3>
+                  <div className="h-48">{consoleView}</div>
+                </div>
+                <SystemLogTerminal
+                  logs={systemLogs.length ? systemLogs : consoleAsLogs.slice(-1)}
+                  badge={reportId || 'NO_REPORT'}
+                />
+              </div>
+            )}
           </div>
         </div>
-      )}
-
-      {/* 应用级日志（加载/状态） */}
-      <SystemLogTerminal
-        logs={systemLogs.length ? systemLogs : consoleAsLogs.slice(-1)}
-        badge={reportId || 'NO_REPORT'}
-      />
+      </div>
     </div>
   )
 }

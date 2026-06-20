@@ -480,7 +480,15 @@
     "llmFinal": "最终",
     "llmFinalHint": "章节「{{title}}」内容已生成",
     "toolGraphStats": "图谱统计",
-    "toolEntityQuery": "实体查询"
+    "toolEntityQuery": "实体查询",
+    "cWriting": "正在为你梳理结论……",
+    "cWritingSub": "AI 正在通读这一遍的全部讨论，提炼对你有用的判断",
+    "cDone": "结论好了",
+    "cDoneSub": "这是基于这次推演给你的判断",
+    "cProgress": "已写好 {done} / {total} 章",
+    "cNext": "深入追问",
+    "cBackstage": "幕后数据",
+    "cBackstageHint": "生成进度、Agent 日志、控制台输出，一般用不到"
   },
   "step5": {
     "interactiveTools": "互动工具",
