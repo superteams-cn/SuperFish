@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Trash2 } from 'lucide-react'
+import { FileText, History, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { getSimulationHistory } from '@/lib/api/simulation'
 import { deleteProject } from '@/lib/api/graph'
 import { cn } from '@/lib/utils'
@@ -23,16 +22,6 @@ interface HistoryProject {
   total_rounds?: number
 }
 
-function formatSimId(id?: string) {
-  if (!id) return 'SIM_UNKNOWN'
-  return `SIM_${id.replace('sim_', '').slice(0, 6).toUpperCase()}`
-}
-// 卡片编号：有模拟显示 SIM_xxx，仅建图谱的项目显示 PROJ_xxx
-function cardId(p: HistoryProject) {
-  if (p.simulation_id) return formatSimId(p.simulation_id)
-  if (p.project_id) return `PROJ_${p.project_id.replace('proj_', '').slice(0, 6).toUpperCase()}`
-  return 'SIM_UNKNOWN'
-}
 function fileExt(name?: string) {
   return name?.split('.').pop()?.toUpperCase() || 'FILE'
 }
@@ -153,10 +142,23 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
     return () => observer.disconnect()
   }, [loading, projects.length])
 
-  const rounds = (p: HistoryProject) => {
+  // 预测进展 → 人话状态徽章（不再暴露轮数等内部概念）
+  const statusInfo = (p: HistoryProject) => {
     const total = p.total_rounds || 0
-    if (total === 0) return t('history.notStarted')
-    return t('history.roundsProgress', { current: p.current_round || 0, total })
+    const cur = p.current_round || 0
+    if (p.report_id || (total > 0 && cur >= total)) {
+      return {
+        label: t('history.done'),
+        cls: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+      }
+    }
+    if (p.simulation_id && total > 0) {
+      return {
+        label: t('history.inProgress'),
+        cls: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+      }
+    }
+    return { label: t('history.notStarted'), cls: 'bg-muted text-muted-foreground' }
   }
 
   if (loading) {
@@ -172,12 +174,16 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
 
   return (
     <section id="history-section" ref={sectionRef} className="mt-12 scroll-mt-6">
-      <div className="mb-4 flex items-center gap-3">
-        <Separator className="flex-1" />
-        <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-          {t('history.title')}
-        </span>
-        <Separator className="flex-1" />
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-md">
+          <History className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold leading-tight">{t('history.title')}</h2>
+          <p className="text-muted-foreground text-xs">
+            {t('history.predictionCount', { count: projects.length })}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -214,7 +220,7 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
                 willChange: 'transform, opacity',
               }}
               className={cn(
-                'bg-card focus-visible:ring-ring group relative isolate cursor-pointer overflow-hidden rounded-lg border p-4 text-left focus-visible:outline-none focus-visible:ring-2',
+                'bg-card focus-visible:ring-ring group relative isolate cursor-pointer overflow-hidden rounded-2xl border p-4 text-left backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2',
                 'transition-[transform,opacity,box-shadow,border-color] duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]',
                 'hover:border-brand hover:-translate-y-1 hover:shadow-lg',
                 'motion-reduce:transition-none',
@@ -238,51 +244,31 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
 
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-muted-foreground group-hover:text-brand font-mono text-xs font-bold transition-colors">
-                  {cardId(p)}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                {(() => {
+                  const s = statusInfo(p)
+                  return (
+                    <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', s.cls)}>
+                      {s.label}
+                    </span>
+                  )
+                })()}
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {formatDateTime(p.created_at)}
                 </span>
-                <div className="flex gap-1 text-xs">
-                  <span className={p.project_id ? 'text-brand' : 'text-muted-foreground/40'}>
-                    ◇
-                  </span>
-                  <span className={p.simulation_id ? 'text-brand' : 'text-muted-foreground/40'}>
-                    ◈
-                  </span>
-                  <span className={p.report_id ? 'text-brand' : 'text-muted-foreground/40'}>◆</span>
-                </div>
               </div>
 
-              <h3 className="group-hover:text-brand mb-1 truncate text-sm font-semibold transition-colors">
-                {truncate(p.simulation_requirement, 20) || t('history.untitledSimulation')}
+              <h3 className="group-hover:text-brand mb-2 line-clamp-2 font-semibold transition-colors">
+                {truncate(p.simulation_requirement, 40) || t('history.untitledSimulation')}
               </h3>
-              <p className="text-muted-foreground mb-3 line-clamp-2 text-xs">
-                {truncate(p.simulation_requirement, 55)}
-              </p>
 
-              {/* 文件预览 */}
-              {p.files && p.files.length > 0 ? (
-                <div className="mb-3 flex flex-wrap gap-1">
-                  {p.files.slice(0, 3).map((f, i) => (
-                    <Badge key={i} variant="secondary" className="font-mono text-[10px]">
-                      {fileExt(f.filename)}
-                    </Badge>
-                  ))}
-                  {p.files.length > 3 && (
-                    <span className="text-muted-foreground self-center font-mono text-[10px]">
-                      {t('history.moreFiles', { count: p.files.length - 3 })}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div className="text-muted-foreground/60 mb-3 font-mono text-[10px]">
-                  {t('history.noFiles')}
-                </div>
-              )}
-
-              <div className="text-muted-foreground flex items-center justify-between border-t pt-2 text-[10px]">
-                <span className="font-mono">{formatDateTime(p.created_at)}</span>
-                <span className="font-mono">{rounds(p)}</span>
+              <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                <FileText className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {p.files && p.files.length > 0
+                    ? t('history.fileCount', { count: p.files.length })
+                    : t('history.noFiles')}
+                </span>
               </div>
 
               {/* 底部强调线（hover 时展开） */}
@@ -298,7 +284,9 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
           {selected && (
             <>
               <DialogHeader>
-                <DialogTitle className="font-mono text-sm">{cardId(selected)}</DialogTitle>
+                <DialogTitle className="text-base">
+                  {truncate(selected.simulation_requirement, 30) || t('history.untitledSimulation')}
+                </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -382,9 +370,8 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
           </DialogHeader>
           <p className="text-muted-foreground text-sm">{t('history.deleteConfirmDesc')}</p>
           {pendingDelete && (
-            <p className="bg-muted/50 truncate rounded-md px-3 py-2 font-mono text-xs">
-              {cardId(pendingDelete)} ·{' '}
-              {truncate(pendingDelete.simulation_requirement, 28) ||
+            <p className="bg-muted/50 truncate rounded-md px-3 py-2 text-sm">
+              {truncate(pendingDelete.simulation_requirement, 36) ||
                 t('history.untitledSimulation')}
             </p>
           )}

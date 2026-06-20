@@ -62,9 +62,9 @@ export function WorkflowLayout({
     viewMode === 'workbench' ? 'w-full' : viewMode === 'graph' ? 'w-0 opacity-0' : 'w-1/2'
 
   return (
-    <div className="bg-background flex h-screen flex-col overflow-hidden">
+    <div className="relative flex h-screen flex-col overflow-hidden">
       {/* 头部 */}
-      <header className="relative z-10 flex h-[60px] items-center justify-between border-b px-6">
+      <header className="glass-subtle relative z-10 flex h-[60px] items-center justify-between border-b border-white/30 px-6 dark:border-white/10">
         <Brand />
 
         <ToggleGroup

@@ -2,6 +2,8 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 
+import { AuroraBackground } from '@/components/AuroraBackground'
+
 // 路由级代码分割：每个页面单独打包，按需加载，减小首屏体积
 const HomePage = lazy(() => import('@/pages/HomePage'))
 const ProcessPage = lazy(() => import('@/pages/ProcessPage'))
@@ -19,9 +21,14 @@ function PageLoader() {
   )
 }
 
-/** 用 Suspense 包裹懒加载页面。 */
+/** 全站统一外壳：玻璃流动背景铺底 + 懒加载占位。所有页面共享同一视觉地基。 */
 function withSuspense(node: ReactNode) {
-  return <Suspense fallback={<PageLoader />}>{node}</Suspense>
+  return (
+    <>
+      <AuroraBackground />
+      <Suspense fallback={<PageLoader />}>{node}</Suspense>
+    </>
+  )
 }
 
 export const router = createBrowserRouter([

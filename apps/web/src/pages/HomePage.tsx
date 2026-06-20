@@ -1,34 +1,91 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Upload, X, FileText, Cpu, ChevronDown } from 'lucide-react'
+import { Upload, X, FileText, ArrowUp, Sparkles, RotateCcw, History, Paperclip } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { HistoryDatabase } from '@/components/HistoryDatabase'
+import { Logo } from '@/components/common/Logo'
 import { setPendingUpload } from '@/stores/pendingUpload'
 
 const ACCEPTED = ['pdf', 'md', 'txt']
+const THINK_MS = 750
+
+// 主操作的品牌渐变：业务层一次性强调样式，不进组件 variant
+const GRADIENT_BTN =
+  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
+
+type Stage = 'topic' | 'material' | 'ready'
+
+function AiAvatar() {
+  return <Logo variant="mark" className="h-9 w-9 shrink-0 rounded-full shadow-md" />
+}
+
+/** SuperFish 气泡 */
+function Bubble({ children }: { children: ReactNode }) {
+  return (
+    <div className="animate-rise-in flex items-start gap-3">
+      <AiAvatar />
+      <div className="bg-card max-w-[82%] rounded-3xl rounded-tl-lg border px-5 py-3.5 text-sm leading-relaxed shadow-lg backdrop-blur-xl sm:text-base">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** “正在输入”指示，给对话真实的节奏感 */
+function TypingBubble() {
+  return (
+    <div className="animate-rise-in flex items-start gap-3">
+      <AiAvatar />
+      <div className="bg-card flex items-center gap-1.5 rounded-3xl rounded-tl-lg border px-5 py-4 shadow-lg backdrop-blur-xl">
+        <span className="bg-foreground/40 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.3s]" />
+        <span className="bg-foreground/40 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.15s]" />
+        <span className="bg-foreground/40 h-2 w-2 animate-bounce rounded-full" />
+      </div>
+    </div>
+  )
+}
+
+/** 用户气泡 */
+function UserBubble({ children }: { children: ReactNode }) {
+  return (
+    <div className="animate-rise-in flex justify-end">
+      <div className="max-w-[82%] rounded-3xl rounded-tr-lg bg-gradient-to-br from-indigo-500 to-fuchsia-500 px-5 py-3.5 text-sm leading-relaxed text-white shadow-lg shadow-indigo-500/25 sm:text-base">
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function HomePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const timerRef = useRef<number>()
 
-  const [files, setFiles] = useState<File[]>([])
+  const [stage, setStage] = useState<Stage>('topic')
+  const [thinking, setThinking] = useState(false)
+  const [draft, setDraft] = useState('')
   const [requirement, setRequirement] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [dragOver, setDragOver] = useState(false)
-  const [hasHistory, setHasHistory] = useState(false)
+  const [hasHistory, setHasHistory] = useState<boolean | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
-  const scrollToHistory = () => {
-    document.getElementById('history-section')?.scrollIntoView({ behavior: 'smooth' })
+  // 推进到下一段对话：先让 SuperFish “想一下”，再开口，制造真实节奏
+  const advanceTo = (next: Stage) => {
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    setStage(next)
+    if (reduce) return
+    setThinking(true)
+    window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => setThinking(false), THINK_MS)
   }
-
-  const canSubmit = requirement.trim() !== '' && files.length > 0
 
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return
@@ -37,160 +94,255 @@ export default function HomePage() {
     )
     setFiles((prev) => [...prev, ...valid])
   }
+  const removeFile = (index: number) => setFiles((prev) => prev.filter((_, i) => i !== index))
 
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index))
+  const submitTopic = (text: string) => {
+    const value = text.trim()
+    if (!value) return
+    setRequirement(value)
+    setDraft('')
+    // 已经先传了材料 → 直接就绪；否则进入“邀请上传材料”一步
+    advanceTo(files.length > 0 ? 'ready' : 'material')
+  }
+
+  const restart = () => {
+    window.clearTimeout(timerRef.current)
+    setThinking(false)
+    setStage('topic')
+    setRequirement('')
+    setDraft('')
+    setFiles([])
   }
 
   const startEngine = () => {
-    if (!canSubmit) return
-    // 存储待上传数据后跳转，本体生成在 Process 页面进行（projectId='new' 表示新建）
+    if (!requirement || files.length === 0) return
     setPendingUpload(files, requirement)
     navigate('/process/new')
   }
 
-  return (
-    <div className="container max-w-5xl py-10">
-      {/* 顶部：品牌 + 语言切换 */}
-      <header className="mb-10 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            SuperFish
-            <span className="text-muted-foreground ml-2 align-middle text-sm font-normal">
-              {t('home.version')}
+  // 已选文件清单（topic 与 material 两步共用）
+  const fileList = () =>
+    files.length > 0 ? (
+      <ul className="flex flex-col gap-2">
+        {files.map((file, index) => (
+          <li
+            key={`${file.name}-${index}`}
+            className="bg-card animate-rise-in flex items-center justify-between rounded-xl border px-3 py-2 text-sm backdrop-blur-xl"
+          >
+            <span className="flex items-center gap-2 truncate">
+              <FileText className="h-4 w-4 shrink-0 text-indigo-500" />
+              <span className="truncate">{file.name}</span>
             </span>
-          </h1>
-          <p className="text-muted-foreground text-sm">{t('home.tagline')}</p>
-        </div>
-        <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => removeFile(index)}
+              aria-label="移除文件"
+              className="text-muted-foreground hover:text-destructive rounded-md p-0.5 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    ) : null
+
+  return (
+    <div className="relative">
+      {/* 极简悬浮顶栏 */}
+      <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between px-5 py-4 sm:px-8">
+        <Logo className="h-8 w-auto" />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">{t('home.records')}</span>
+          </Button>
           <ThemeSwitcher />
           <LanguageSwitcher />
         </div>
       </header>
 
-      {/* 主标题 */}
-      <section className="mb-10 text-center">
-        <h2 className="text-4xl font-extrabold tracking-tight md:text-5xl">
-          {t('home.heroTitle1')}
-          <br />
-          {t('home.heroTitle2')}
-        </h2>
-        <p className="text-muted-foreground mx-auto mt-4 max-w-2xl">{t('home.slogan')}</p>
-      </section>
+      {/* 对话式引导 */}
+      <section className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-4 px-5 py-28">
+        {/* 共用的文件选择器（附件按钮与上传区都触发它） */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.md,.txt"
+          className="hidden"
+          onChange={(e) => addFiles(e.target.files)}
+        />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* 现实种子上传 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('home.realitySeed')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label={t('home.dragToUpload')}
-              onClick={() => fileInputRef.current?.click()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  fileInputRef.current?.click()
-                }
-              }}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragOver(true)
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDragOver(false)
-                addFiles(e.dataTransfer.files)
-              }}
-              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-                dragOver ? 'border-primary bg-accent' : 'border-input hover:bg-accent/50'
-              }`}
-            >
-              <Upload className="text-muted-foreground h-8 w-8" />
-              <p className="font-medium">{t('home.dragToUpload')}</p>
-              <p className="text-muted-foreground text-xs">{t('home.orBrowse')}</p>
-              <p className="text-muted-foreground text-xs">{t('home.supportedFormats')}</p>
+        {/* 1. 开场 + 提问 */}
+        <Bubble>
+          <p className="font-medium">{t('home.chatHi')}</p>
+          <p className="mt-1">{t('home.chatAskTopic')}</p>
+        </Bubble>
+
+        {stage === 'topic' ? (
+          <div className="animate-rise-in ml-12 flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              {(['chatEg1', 'chatEg2', 'chatEg3'] as const).map((k) => (
+                <Button
+                  key={k}
+                  variant="secondary"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground h-auto rounded-full px-3.5 py-1.5 font-normal"
+                  onClick={() => submitTopic(t(`home.${k}`))}
+                >
+                  {t(`home.${k}`)}
+                </Button>
+              ))}
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf,.md,.txt"
-              className="hidden"
-              onChange={(e) => addFiles(e.target.files)}
-            />
 
-            {files.length > 0 && (
-              <ul className="space-y-2">
-                {files.map((file, index) => (
-                  <li
-                    key={`${file.name}-${index}`}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                  >
-                    <span className="flex items-center gap-2 truncate">
-                      <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
-                      <span className="truncate">{file.name}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+            {/* 先传的文件显示在输入框上方 */}
+            {fileList()}
 
-        {/* 模拟提示词 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('home.simulationPrompt')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Textarea
-              value={requirement}
-              onChange={(e) => setRequirement(e.target.value)}
-              placeholder={t('home.promptPlaceholder')}
-              className="min-h-[180px]"
-            />
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary" className="gap-1">
-                <Cpu className="h-3 w-3" />
-                {t('home.engineBadge')}
-              </Badge>
-              <Button onClick={startEngine} disabled={!canSubmit}>
-                {t('home.startEngine')}
+            <div className="bg-card flex items-end gap-1.5 rounded-3xl border p-2 shadow-lg backdrop-blur-xl">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground shrink-0 rounded-full"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label={t('home.chatUploadHint')}
+                title={t('home.chatUploadHint')}
+              >
+                <Paperclip className="h-5 w-5" />
+              </Button>
+              <Textarea
+                rows={1}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    submitTopic(draft)
+                  }
+                }}
+                placeholder={t('home.chatInputPlaceholder')}
+                className="max-h-32 min-h-[44px] flex-1 resize-none border-0 bg-transparent py-2.5 text-sm shadow-none focus-visible:ring-0 sm:text-base"
+              />
+              <Button
+                size="icon"
+                className={`${GRADIENT_BTN} size-10 shrink-0 rounded-full`}
+                onClick={() => submitTopic(draft)}
+                disabled={!draft.trim()}
+                aria-label={t('home.chatGo')}
+              >
+                <ArrowUp className="h-5 w-5" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        ) : (
+          <UserBubble>{requirement}</UserBubble>
+        )}
 
-      {/* 向下滚动到历史区的快捷按钮 */}
-      {hasHistory && (
-        <div className="mt-8 flex justify-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={scrollToHistory}
-            className="text-muted-foreground hover:text-foreground gap-1.5"
-          >
-            {t('home.scrollToHistory')}
-            <ChevronDown className="h-4 w-4 animate-bounce" />
-          </Button>
-        </div>
-      )}
+        {/* 2. 邀请上传材料（thinking 时先显示“正在输入”） */}
+        {stage !== 'topic' &&
+          (stage === 'material' && thinking ? (
+            <TypingBubble />
+          ) : (
+            <>
+              <Bubble>{t('home.chatAskMaterial')}</Bubble>
 
-      {/* 历史模拟项目 */}
-      <HistoryDatabase onHasProjects={setHasHistory} />
+              {stage === 'material' ? (
+                <div className="animate-rise-in ml-12 flex flex-col gap-3">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t('home.chatUploadHint')}
+                    onClick={() => fileInputRef.current?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        fileInputRef.current?.click()
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDragOver(true)
+                    }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setDragOver(false)
+                      addFiles(e.dataTransfer.files)
+                    }}
+                    className={`bg-card group flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed px-5 py-4 backdrop-blur-xl transition-all duration-300 ${
+                      dragOver
+                        ? 'scale-[1.01] border-indigo-400 bg-indigo-500/10'
+                        : 'hover:bg-accent'
+                    }`}
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 text-white shadow-md transition-transform duration-300 group-hover:-translate-y-0.5">
+                      <Upload className="h-5 w-5" />
+                    </div>
+                    <span className="text-muted-foreground text-sm">
+                      {t('home.chatUploadHint')}
+                    </span>
+                  </div>
+
+                  {fileList()}
+
+                  <Button
+                    size="sm"
+                    className={`${GRADIENT_BTN} h-auto self-start rounded-full px-5 py-2.5`}
+                    onClick={() => advanceTo('ready')}
+                    disabled={files.length === 0}
+                  >
+                    {files.length === 0 ? t('home.chatNeedFile') : t('home.chatContinue')}
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <UserBubble>{t('home.chatUserMaterial', { count: files.length })}</UserBubble>
+                  {thinking ? (
+                    <TypingBubble />
+                  ) : (
+                    <>
+                      <Bubble>{t('home.chatReady')}</Bubble>
+                      <div className="animate-rise-in ml-12 flex flex-wrap items-center gap-3">
+                        <Button
+                          className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                          onClick={startEngine}
+                        >
+                          <Sparkles className="h-5 w-5" />
+                          {t('home.chatGo')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground gap-1.5"
+                          onClick={restart}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          {t('home.chatRestart')}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          ))}
+      </section>
+
+      {/* 历史：从顶栏「记录」唤出的 radix Dialog 浮层 */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+          <DialogTitle className="sr-only">{t('home.records')}</DialogTitle>
+          <HistoryDatabase onHasProjects={setHasHistory} />
+          {hasHistory === false && (
+            <p className="text-muted-foreground py-16 text-center text-sm">{t('home.noHistory')}</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

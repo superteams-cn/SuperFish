@@ -6,26 +6,29 @@
    颜色用 HSL 通道值，配合 tailwind.config.js 的 hsl(var(--x)) 引用。 */
 @layer base {
   :root {
+    /* 玻璃主题：容器类令牌（card/popover/secondary/muted/accent/border/input）
+       带 alpha 半透明，配合组件基类的 backdrop-blur 形成统一玻璃质感。
+       页面底由 AuroraBackground 提供，故 --background 保持不透明。 */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
+    --card: 0 0% 100% / 0.55;
     --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
+    --popover: 0 0% 100% / 0.72;
     --popover-foreground: 222.2 84% 4.9%;
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
+    --secondary: 210 40% 96.1% / 0.5;
     --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
+    --muted: 210 40% 96.1% / 0.5;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
+    --accent: 210 40% 96.1% / 0.6;
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 0 0% 100% / 0.5;
+    --input: 0 0% 100% / 0.5;
     --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --radius: 0.75rem;
     /* 品牌强调色（橙），暗色下略提亮以保证对比度 */
     --brand: 14 100% 57%;
     --brand-foreground: 0 0% 100%;
@@ -34,22 +37,22 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 222.2 44% 11% / 0.55;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222.2 44% 11% / 0.72;
     --popover-foreground: 210 40% 98%;
     --primary: 210 40% 98%;
     --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 217.2 32.6% 17.5% / 0.5;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 217.2 32.6% 17.5% / 0.5;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 217.2 32.6% 17.5% / 0.6;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 0 0% 100% / 0.09;
+    --input: 0 0% 100% / 0.12;
     --ring: 212.7 26.8% 83.9%;
     --brand: 18 100% 62%;
     --brand-foreground: 0 0% 100%;
@@ -62,5 +65,88 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================================
+   苹果玻璃质感（Liquid Glass）设计层
+   毛玻璃面板靠 backdrop-filter，需要其下有 AuroraBackground 透上来。
+   亮/暗两套，新页面统一用 .glass / .glass-subtle。
+   ============================================================ */
+@layer components {
+  .glass {
+    background: hsl(0 0% 100% / 0.55);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid hsl(0 0% 100% / 0.65);
+    box-shadow:
+      0 12px 40px -10px hsl(222 47% 25% / 0.22),
+      inset 0 1px 0 hsl(0 0% 100% / 0.7);
+  }
+  .glass-subtle {
+    background: hsl(0 0% 100% / 0.38);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid hsl(0 0% 100% / 0.5);
+  }
+  .dark .glass {
+    background: hsl(222 44% 11% / 0.55);
+    border-color: hsl(0 0% 100% / 0.09);
+    box-shadow:
+      0 12px 40px -10px hsl(0 0% 0% / 0.55),
+      inset 0 1px 0 hsl(0 0% 100% / 0.07);
+  }
+  .dark .glass-subtle {
+    background: hsl(222 44% 11% / 0.4);
+    border-color: hsl(0 0% 100% / 0.07);
+  }
+}
+
+@layer utilities {
+  /* 品牌渐变文字（蓝→紫→品红） */
+  .text-gradient-brand {
+    background-image: linear-gradient(
+      120deg,
+      hsl(245 80% 62%),
+      hsl(282 72% 60%) 42%,
+      hsl(330 82% 62%)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* 浮动光晕：缓慢有机漂移 */
+@keyframes blob-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(36px, -44px) scale(1.08);
+  }
+  66% {
+    transform: translate(-24px, 24px) scale(0.95);
+  }
+}
+/* 内容入场：上浮淡入 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise-in {
+  animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise-in,
+  [class*='animate-[blob-float'] {
+    animation: none !important;
   }
 }

@@ -17,7 +17,13 @@ export function ThemeSwitcher() {
   }
 
   return (
-    <Button variant="ghost" size="icon" onClick={toggle} title={t('theme.toggle')}>
+    <Button
+      variant="secondary"
+      size="icon"
+      onClick={toggle}
+      title={t('theme.toggle')}
+      className="rounded-full"
+    >
       {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
     </Button>
   )
