@@ -81,6 +81,6 @@ def test_openapi_route_counts(client: TestClient):
     graph = [p for p in paths if p.startswith("/api/graph")]
     report = [p for p in paths if p.startswith("/api/report")]
     sim = [p for p in paths if p.startswith("/api/simulation")]
-    assert len(graph) == 9
+    assert len(graph) == 10
     assert len(report) == 17
     assert len(sim) == 31

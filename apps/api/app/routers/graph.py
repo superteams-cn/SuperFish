@@ -371,6 +371,31 @@ def get_graph_data(graph_id: str):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
+@router.post("/project/{project_id}/recanonicalize")
+def recanonicalize_project_graph(project_id: str, dry_run: bool = False):
+    """对项目已构建的图谱重跑实体消解，合并重复/别名实体（无需重新抽取）。
+
+    dry_run=true 时只返回拟合并分组，不改动数据库（用于先复核再执行）。
+    """
+    try:
+        if not Config.NEO4J_URI:
+            return _error(t("api.neo4jConfigMissing"), 500)
+
+        project = ProjectManager.get_project(project_id)
+        if not project:
+            return _error(t("api.projectNotFound", id=project_id), 404)
+        if not project.graph_id:
+            return _error(t("api.graphNotBuilt"), 400)
+
+        builder = GraphBuilderService(api_key=Config.NEO4J_URI)
+        result = builder.recanonicalize_graph(project.graph_id, dry_run=dry_run)
+        logger.info(f"图谱实体消解完成: {result}")
+        return {"success": True, "data": result}
+
+    except Exception as e:
+        return _error(str(e), 500, traceback=traceback.format_exc())
+
+
 @router.delete("/delete/{graph_id}")
 def delete_graph(graph_id: str):
     """删除 Neo4j 图谱"""

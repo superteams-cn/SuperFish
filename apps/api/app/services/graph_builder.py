@@ -32,6 +32,11 @@ from ..utils.neo4j_graph_utils import (
     fetch_all_nodes,
     get_neo4j_graph_client,
 )
+from .entity_resolution import (
+    candidate_clusters,
+    resolve_entities,
+    unambiguous_containment_groups,
+)
 from .text_processor import TextProcessor
 
 logger = get_logger("superfish.graph_builder")
@@ -518,108 +523,208 @@ class GraphBuilderService:
         return list(nodes_by_key.values()), list(edges_by_key.values())
 
     def _resolve_entities(
-        self, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]
+        self,
+        nodes: list[dict[str, Any]],
+        edges: list[dict[str, Any]],
+        max_passes: int = 3,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """实体消解：用 LLM 把同一现实实体的不同称谓(本名/字/号/简称/全称)聚类合并。
+        """实体消解：合并同一现实实体被拆出的多个节点，并把边重指向规范节点。
 
-        分块独立抽取 + 仅字面去重会把同一实体的不同称谓(全称/简称、别名/别称等)拆成多个节点。
-        本步在全部抽完后,让 LLM 判定别名分组,选规范节点,合并摘要/属性并把边重指向
-        规范 uuid,再交由调用方清空旧图并写入规范集。
+        三路信号叠加，由 ``entity_resolution.resolve_entities`` 统一用并查集合并：
+        1. **确定性·同名**：归一名称相同即合并（跨类型）。始终执行。
+        2. **确定性·唯一容器子串**：``unambiguous_containment_groups`` 安全合并(敖广⊂东海龙王敖广)，
+           不依赖 LLM、绝不误并，构成稳定主干——即便 LLM 限流不可用，这部分也始终生效。
+        3. **LLM 别名**(``_llm_alias_groups``)：歧义子串(妖王/土地，被多个不同实体共享)、字根族、
+           高度数昵称型同指，由 LLM 把关拆分/归并；失败时降级为「仅确定性」，只少合并、绝不误并。
 
-        失败或无可合并时原样返回(调用方据节点数变化决定是否需要清库重写)。
+        **迭代到收敛**（最多 max_passes 轮）：每轮在上一轮的规范节点上重跑，使本来分属不同
+        子串族、首轮未桥接的同一实体(如 玉帝 / 玉皇大帝)在更干净的名单上被 LLM 并到一起。
         """
-        # 仅对实体类型节点消解，规模过大时跳过(单次 LLM 调用上限)
-        if len(nodes) < 2 or len(nodes) > 400:
+        if len(nodes) < 2:
             return nodes, edges
 
-        listing = []
-        for i, n in enumerate(nodes):
-            labels = n.get("labels") or []
-            ntype = next((label for label in labels if label != "Entity"), "Entity")
-            summary = (n.get("summary") or "").replace("\n", " ")[:50]
-            listing.append(f"{i}. {n.get('name', '')} [{ntype}] — {summary}")
+        total_before = len(nodes)
+        for _ in range(max_passes):
+            alias_groups = unambiguous_containment_groups(nodes) + self._llm_alias_groups(
+                nodes, edges
+            )
+            nodes, edges, stats = resolve_entities(nodes, edges, alias_groups=alias_groups)
+            if not stats["merged_nodes"]:
+                break  # 本轮无新合并 → 已收敛
+
+        if len(nodes) != total_before:
+            logger.info(f"实体消解：{total_before} → {len(nodes)} 个实体（迭代至收敛）")
+        return nodes, edges
+
+    def _llm_alias_groups(
+        self, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]
+    ) -> list[list[int]]:
+        """抓出字面不同但实指同一实体的别名分组，两路 LLM 信号并用：
+
+        A. **名称候选簇裁决**：``candidate_clusters`` 用名称信号(包含/字根)生成小候选簇，
+           再分批让 LLM 在簇内确认/拆分(处理 玉兔精/玉兔、敖广/东海龙王敖广 等子串族)。
+        B. **高度数全局别名**：把度数最高的若干实体的名称(+类型+关联)压成一份紧凑清单，
+           单次让 LLM 凭常识归并昵称型别名(如 行者/齐天大圣/孙悟空——彼此无共同子串，
+           仅靠世界知识可知同指)。输入小、输出短，不会因超长被截断。
+
+        两路结果都是 nodes 全局下标分组，交由 ``resolve_entities`` 用并查集叠加合并。
+        """
+        # 度数与邻居名（上下文，帮助 LLM 判断同指）
+        idx_of = {n["uuid"]: i for i, n in enumerate(nodes)}
+        degree = [0] * len(nodes)
+        neighbor_names: dict[int, list[str]] = {}
+        for e in edges:
+            si, ti = idx_of.get(e.get("source_node_uuid")), idx_of.get(e.get("target_node_uuid"))
+            if si is None or ti is None:
+                continue
+            degree[si] += 1
+            degree[ti] += 1
+            for a, b in ((si, ti), (ti, si)):
+                lst = neighbor_names.setdefault(a, [])
+                nb = nodes[b].get("name", "")
+                if nb and nb not in lst and len(lst) < 6:
+                    lst.append(nb)
+
+        def _ntype(n: dict[str, Any]) -> str:
+            return next((x for x in (n.get("labels") or []) if x != "Entity"), "Entity")
+
+        alias_groups: list[list[int]] = []
+
+        # A. 名称候选簇 → 一次性裁决（候选簇通常只覆盖少量节点，单次调用即可，
+        #    既减少 LLM 往返/被限流的概率，也避免拆批导致部分批失败丢结果）。
+        #    仅当候选节点数过多时才分批（上限 200）。
+        clusters = candidate_clusters(nodes)
+        batch: list[list[int]] = []
+        batch_nodes = 0
+        for cl in clusters + [[]]:
+            if cl and batch_nodes + len(cl) <= 200:
+                batch.append(cl)
+                batch_nodes += len(cl)
+                continue
+            if batch:
+                alias_groups.extend(self._adjudicate_clusters(batch, nodes, neighbor_names, _ntype))
+            batch = [cl] if cl else []
+            batch_nodes = len(cl)
+
+        # B. 高度数全局别名（昵称型，无共同子串）
+        alias_groups.extend(self._global_alias_groups(nodes, degree, neighbor_names, _ntype))
+        return alias_groups
+
+    def _alias_json_with_retry(self, prompt: str, attempts: int = 3) -> dict[str, Any] | None:
+        """带退避重试地调用 LLM 取 JSON；全部失败返回 None。
+
+        实体消解的 LLM 调用偶发限流/超时，静默吞掉会导致整轮合并丢失(结果在 38↔0 间抖动)。
+        重试 + 退避显著提升稳定性，使确定性同名归并之上的别名合并也基本可复现。
+        """
+        for k in range(attempts):
+            try:
+                return LLMClient().chat_json(
+                    [{"role": "user", "content": prompt}], temperature=0.1, max_tokens=2048
+                )
+            except Exception as exc:
+                if k == attempts - 1:
+                    logger.warning(f"实体消解 LLM 调用重试 {attempts} 次仍失败,跳过: {exc}")
+                    return None
+                time.sleep(1.5 * (k + 1))
+        return None
+
+    def _global_alias_groups(
+        self,
+        nodes: list[dict[str, Any]],
+        degree: list[int],
+        neighbor_names: dict[int, list[str]],
+        ntype_of,
+        top_k: int = 60,
+    ) -> list[list[int]]:
+        """单次紧凑调用：在度数最高的实体里，凭常识归并昵称/别号型同指别名。"""
+        ranked = sorted(range(len(nodes)), key=lambda i: -degree[i])[:top_k]
+        ranked = [i for i in ranked if degree[i] > 0]
+        if len(ranked) < 2:
+            return []
+
+        lines = []
+        for i in ranked:
+            n = nodes[i]
+            nbs = "、".join(neighbor_names.get(i, [])[:5])
+            aka = "、".join((n.get("attributes") or {}).get("aliases") or [])
+            lines.append(
+                f"{i}. {n.get('name', '')} [{ntype_of(n)}]"
+                f"{'（又名:' + aka + '）' if aka else ''}{'（关联:' + nbs + '）' if nbs else ''}"
+            )
 
         prompt = (
-            "你在做知识图谱的实体消解。下面是从同一篇文档抽取的实体列表(序号. 名称 [类型] — 简介)。\n"
-            "请把指向【同一个现实实体】的不同称谓归为一组。常见的同一实体不同写法包括:"
-            "全称与简称/缩写、正式名与别名/别称/俗称、同一实体在文中出现的不同表述。\n"
+            "你在做知识图谱实体消解。下面是文档里最重要的一批实体"
+            "(序号. 名称 [类型]（又名:…）（关联对象）)。\n"
+            "请把指向【同一个现实实体】、但写法不同的条目归为一组——尤其是本名与别号/尊号/简称"
+            "(它们可能没有共同的字，只能靠常识、又名与关联对象判断是否同指)。\n"
             "规则:\n"
-            "- 仅在确信是同一实体时才合并;不确定就保持独立。\n"
-            "- 名称相近但实为不同实体的不要合并;优先依据简介与类型等上下文判断,而非仅看字面。\n"
-            "- 每组选一个最完整、最规范的作为 canonical_index。\n"
-            '仅返回 JSON:{"groups":[{"canonical_index":int,"member_indices":[int,...]}]},'
-            '只包含成员数 ≥2 的组,没有可合并时返回 {"groups":[]}。\n\n'
-            "实体列表:\n" + "\n".join(listing)
+            "- 仅在确信是同一实体时才归并；不同实体务必分开，宁缺毋滥。\n"
+            "- 结合类型与关联对象判断，不要把同阵营的不同角色误并。\n"
+            '仅返回 JSON:{"groups":[{"member_indices":[int,...]}]}，'
+            'member_indices 用上面的序号，只列成员数 ≥2 的组；没有可并的返回 {"groups":[]}。\n\n'
+            + "\n".join(lines)
         )
 
-        try:
-            result = LLMClient().chat_json(
-                [{"role": "user", "content": prompt}], temperature=0.1, max_tokens=4096
-            )
-        except Exception as exc:
-            logger.warning(f"实体消解 LLM 调用失败,跳过: {exc}")
-            return nodes, edges
-
+        result = self._alias_json_with_retry(prompt)
         groups = result.get("groups") if isinstance(result, dict) else None
-        if not groups:
-            return nodes, edges
-
-        n_total = len(nodes)
-        remap: dict[str, str] = {}  # 别名 uuid -> 规范 uuid
-        merged_away: set[int] = set()  # 被合并掉的节点下标
-
+        if not isinstance(groups, list):
+            return []
+        allowed = set(ranked)
+        out: list[list[int]] = []
         for g in groups:
-            members = [
-                i for i in g.get("member_indices", []) if isinstance(i, int) and 0 <= i < n_total
-            ]
-            members = list(dict.fromkeys(members))  # 去重保序
-            if len(members) < 2:
-                continue
-            canon = g.get("canonical_index")
-            if not isinstance(canon, int) or canon not in members:
-                canon = max(members, key=lambda i: len(nodes[i].get("name", "")))  # 退化:取最长名
-            canon_node = nodes[canon]
-            aliases = set(canon_node.get("attributes", {}).get("aliases", []) or [])
-            for i in members:
-                if i == canon:
-                    continue
-                src = nodes[i]
-                remap[src["uuid"]] = canon_node["uuid"]
-                merged_away.add(i)
-                aliases.add(src.get("name", ""))
-                # 合并摘要与属性
-                if src.get("summary") and src["summary"] not in (canon_node.get("summary") or ""):
-                    canon_node["summary"] = (
-                        canon_node.get("summary", "") + "\n" + src["summary"]
-                    ).strip()[:2000]
-                for k, v in (src.get("attributes") or {}).items():
-                    canon_node.setdefault("attributes", {}).setdefault(k, v)
-            # 别名去掉空值与等于规范名本身的项(避免详情面板出现"刘备<=刘备")
-            alias_list = sorted(a for a in aliases if a and a != canon_node.get("name"))
-            if alias_list:
-                canon_node.setdefault("attributes", {})["aliases"] = alias_list
+            members = g.get("member_indices") if isinstance(g, dict) else None
+            if isinstance(members, list):
+                idxs = [i for i in members if isinstance(i, int) and i in allowed]
+                if len(idxs) >= 2:
+                    out.append(idxs)
+        return out
 
-        if not merged_away:
-            return nodes, edges
+    def _adjudicate_clusters(
+        self,
+        clusters: list[list[int]],
+        nodes: list[dict[str, Any]],
+        neighbor_names: dict[int, list[str]],
+        ntype_of,
+    ) -> list[list[int]]:
+        """让 LLM 在给定候选簇内部确认同指子组，返回确认的全局下标分组。"""
+        lines = []
+        for ci, cl in enumerate(clusters):
+            lines.append(f"候选簇 {ci}:")
+            for i in cl:
+                n = nodes[i]
+                summary = (n.get("summary") or "").replace("\n", " ")[:60]
+                nbs = "、".join(neighbor_names.get(i, [])[:6])
+                lines.append(
+                    f"  {i}. {n.get('name', '')} [{ntype_of(n)}]"
+                    f"{' — ' + summary if summary else ''}{'（关联:' + nbs + '）' if nbs else ''}"
+                )
 
-        new_nodes = [n for i, n in enumerate(nodes) if i not in merged_away]
+        prompt = (
+            "你在做知识图谱实体消解。下面给出若干【候选簇】，每簇内的实体仅因名称或关联相似被初筛到一起，"
+            "未必真是同一实体。请在**每个簇内部**，把确信指向【同一个现实实体】的条目归为一组"
+            "(全称/简称、本名/别号、同一对象的不同写法)。\n"
+            "规则:\n"
+            "- 仅在确信同一实体时才归并；不同实体(哪怕名称相近)必须分开。\n"
+            "- 结合类型、简介、关联对象综合判断，不要只看字面。\n"
+            "- 跨簇不要归并。\n"
+            '仅返回 JSON:{"groups":[{"member_indices":[int,...]}]}，'
+            'member_indices 用上面的序号，只列成员数 ≥2 的组；没有可并的返回 {"groups":[]}。\n\n'
+            + "\n".join(lines)
+        )
 
-        # 边重指向规范 uuid，丢弃因合并产生的自环，按 (源,类型,目标) 再去重
-        new_edges: list[dict[str, Any]] = []
-        seen_edge: set[tuple[str, str, str]] = set()
-        for e in edges:
-            s = remap.get(e["source_node_uuid"], e["source_node_uuid"])
-            tgt = remap.get(e["target_node_uuid"], e["target_node_uuid"])
-            if s == tgt:
-                continue  # 合并后自指,丢弃
-            key = (s, e.get("name", ""), tgt)
-            if key in seen_edge:
-                continue
-            seen_edge.add(key)
-            new_edges.append({**e, "source_node_uuid": s, "target_node_uuid": tgt})
-
-        logger.info(f"实体消解:{n_total} → {len(new_nodes)} 个实体(合并 {len(merged_away)} 个别名)")
-        return new_nodes, new_edges
+        result = self._alias_json_with_retry(prompt)
+        groups = result.get("groups") if isinstance(result, dict) else None
+        if not isinstance(groups, list):
+            return []
+        valid_idxs = {i for cl in clusters for i in cl}
+        out: list[list[int]] = []
+        for g in groups:
+            members = g.get("member_indices") if isinstance(g, dict) else None
+            if isinstance(members, list):
+                idxs = [i for i in members if isinstance(i, int) and i in valid_idxs]
+                if len(idxs) >= 2:
+                    out.append(idxs)
+        return out
 
     def _extract_chunk_with_llamaindex(
         self,
@@ -809,6 +914,40 @@ class GraphBuilderService:
             "edges": edges_data,
             "node_count": len(nodes_data),
             "edge_count": len(edges_data),
+        }
+
+    def recanonicalize_graph(self, graph_id: str, dry_run: bool = False) -> dict[str, Any]:
+        """对已构建的图谱重跑实体消解：读取现有节点/边→合并同指实体→清库重写。
+
+        用于修复历史图谱(构建时消解不充分而残留重复/别名节点)，无需重新抽取。
+        与构建期走同一 ``_resolve_entities``，保证算法一致。
+        ``dry_run=True`` 时只计算并返回拟合并的分组，不改动数据库。
+        """
+        nodes = fetch_all_nodes(self.client, graph_id)
+        edges = fetch_all_edges(self.client, graph_id)
+        before = len(nodes)
+        new_nodes, new_edges = self._resolve_entities(nodes, edges)
+
+        # 拟合并明细：规范名 ← 别名列表（便于复核）
+        merges = [
+            {"canonical": n.get("name", ""), "aliases": (n.get("attributes") or {}).get("aliases")}
+            for n in new_nodes
+            if (n.get("attributes") or {}).get("aliases")
+        ]
+
+        if not dry_run and len(new_nodes) != before:
+            delete_group(self.client, graph_id)
+            self.client.write_graph(graph_id, new_nodes, new_edges)
+
+        return {
+            "graph_id": graph_id,
+            "dry_run": dry_run,
+            "nodes_before": before,
+            "nodes_after": len(new_nodes),
+            "edges_before": len(edges),
+            "edges_after": len(new_edges),
+            "merged": before - len(new_nodes),
+            "merges": merges,
         }
 
     def delete_graph(self, graph_id: str):
