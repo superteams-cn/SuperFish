@@ -72,6 +72,7 @@ import multiprocessing
 import random
 import signal
 import sqlite3
+import time
 import warnings
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
@@ -557,23 +558,25 @@ class ParallelIPCHandler:
         
         return result
     
-    async def process_commands(self) -> bool:
+    async def process_commands(self) -> Tuple[bool, bool]:
         """
         处理所有待处理命令
-        
+
         Returns:
-            True 表示继续运行，False 表示应该退出
+            (should_continue, had_command)
+            should_continue: True 表示继续运行，False 表示应该退出
+            had_command: 本次轮询是否实际收到并处理了命令（用于空闲超时判断）
         """
         command = self.poll_command()
         if not command:
-            return True
-        
+            return True, False
+
         command_id = command.get("command_id")
         command_type = command.get("command_type")
         args = command.get("args", {})
-        
+
         print(f"\n收到IPC命令: {command_type}, id={command_id}")
-        
+
         if command_type == CommandType.INTERVIEW:
             await self.handle_interview(
                 command_id,
@@ -581,24 +584,24 @@ class ParallelIPCHandler:
                 args.get("prompt", ""),
                 args.get("platform")
             )
-            return True
-            
+            return True, True
+
         elif command_type == CommandType.BATCH_INTERVIEW:
             await self.handle_batch_interview(
                 command_id,
                 args.get("interviews", []),
                 args.get("platform")
             )
-            return True
-            
+            return True, True
+
         elif command_type == CommandType.CLOSE_ENV:
             print("收到关闭环境命令")
             self.send_response(command_id, "completed", result={"message": "环境即将关闭"})
-            return False
-        
+            return False, True
+
         else:
             self.send_response(command_id, "failed", error=f"未知命令类型: {command_type}")
-            return True
+            return True, True
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
@@ -1519,7 +1522,14 @@ async def main():
         default=False,
         help='模拟完成后立即关闭环境，不进入等待命令模式'
     )
-    
+    parser.add_argument(
+        '--idle-timeout',
+        type=int,
+        default=1800,
+        help='等待命令模式下，模拟跑完后连续多少秒未收到任何 IPC 命令则自动退出并关闭环境，'
+             '避免无人接管的孤儿进程长期空跑（默认 1800=30 分钟；设为 0 禁用，永久等待）'
+    )
+
     args = parser.parse_args()
     
     # 在 main 函数开始时创建 shutdown 事件，确保整个程序都能响应退出信号
@@ -1598,8 +1608,12 @@ async def main():
         log_manager.info("=" * 60)
         log_manager.info("进入等待命令模式 - 环境保持运行")
         log_manager.info("支持的命令: interview, batch_interview, close_env")
+        if args.idle_timeout > 0:
+            log_manager.info(f"空闲超时: {args.idle_timeout}s 无新命令则自动退出")
+        else:
+            log_manager.info("空闲超时: 已禁用（永久等待命令）")
         log_manager.info("=" * 60)
-        
+
         # 创建IPC处理器
         ipc_handler = ParallelIPCHandler(
             simulation_dir=simulation_dir,
@@ -1609,12 +1623,23 @@ async def main():
             reddit_agent_graph=reddit_result.agent_graph if reddit_result else None
         )
         ipc_handler.update_status("alive")
-        
+
         # 等待命令循环（使用全局 _shutdown_event）
+        # 维护 last_activity：每次收到命令时刷新；连续空闲超过 idle_timeout 则自动退出，
+        # 防止无人接管的孤儿进程在模拟跑完后长期空跑占用资源。
+        idle_timeout = args.idle_timeout
+        last_activity = time.monotonic()
         try:
             while not _shutdown_event.is_set():
-                should_continue = await ipc_handler.process_commands()
+                should_continue, had_command = await ipc_handler.process_commands()
                 if not should_continue:
+                    break
+                if had_command:
+                    last_activity = time.monotonic()
+                elif idle_timeout > 0 and (time.monotonic() - last_activity) > idle_timeout:
+                    log_manager.info(
+                        f"等待命令模式空闲超过 {idle_timeout}s 无新命令，自动退出并关闭环境以释放资源"
+                    )
                     break
                 # 使用 wait_for 替代 sleep，这样可以响应 shutdown_event
                 try:
