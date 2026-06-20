@@ -53,8 +53,13 @@ def dump_memories(simulation_dir: str, platform: str, agent_graph) -> int:
 
     path = memory_path(simulation_dir, platform)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    # 原子写：先写临时文件再 rename，避免周期性快照写到一半被 SIGKILL 留下损坏的 JSON。
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
     print(f"[memory] 已导出 {platform} 记忆: {len(data)} 个 agent → {path}")
     return len(data)
 

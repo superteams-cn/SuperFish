@@ -833,9 +833,9 @@ class SimulationRunner:
                     state.runner_status = RunnerStatus.INTERRUPTED
                     logger.warning(f"接管的模拟进程已消失且未跑完，标记中断: {simulation_id}")
 
-            # 模拟完成 → 上传 agent 记忆快照到 S3，供后续按需唤醒环境采访时取回
-            if state.runner_status == RunnerStatus.COMPLETED:
-                cls._upload_run_artifacts(simulation_id, sim_dir)
+            # 任意终态都上传 agent 记忆快照到 S3：强停/中断的模拟同样已周期性落盘，
+            # 用户多半正是对"提前结束"的推演发起采访（无 agent_memory 时该调用是空操作）。
+            cls._upload_run_artifacts(simulation_id, sim_dir)
 
             state.twitter_running = False
             state.reddit_running = False
@@ -1091,8 +1091,12 @@ class SimulationRunner:
         return {"adopted": adopted, "finalized": finalized}
 
     @classmethod
-    def _kill_pid_group(cls, pid: int, timeout: int = 8) -> None:
-        """无 Popen 句柄时按 PID 杀进程组（start_new_session 保证 PID==PGID）。"""
+    def _kill_pid_group(cls, pid: int, timeout: int = 45) -> None:
+        """无 Popen 句柄时按 PID 杀进程组（start_new_session 保证 PID==PGID）。
+
+        SIGTERM 后留出收尾时间，让模拟优雅落盘 agent 记忆快照再退出；进程收尾即退出，
+        循环随即返回，放宽上限对正常停止无额外延迟。
+        """
         if IS_WINDOWS:
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, timeout=10
@@ -1114,14 +1118,16 @@ class SimulationRunner:
             pass
 
     @classmethod
-    def _terminate_process(cls, process: subprocess.Popen, simulation_id: str, timeout: int = 10):
+    def _terminate_process(cls, process: subprocess.Popen, simulation_id: str, timeout: int = 45):
         """
         跨平台终止进程及其子进程
 
         Args:
             process: 要终止的进程
             simulation_id: 模拟ID（用于日志）
-            timeout: 等待进程退出的超时时间（秒）
+            timeout: 等待进程退出的超时时间（秒）。SIGTERM 后给模拟留出收尾时间，让其
+                优雅跳出当前轮、落盘 agent 记忆快照（供唤醒采访）后再退出；进程一旦完成
+                收尾即刻退出，wait 随之返回，故放宽上限对正常停止无额外延迟。
         """
         if IS_WINDOWS:
             # Windows: 使用 taskkill 命令终止进程树
@@ -1212,6 +1218,10 @@ class SimulationRunner:
         state.owner_id = None
         state.owner_heartbeat = None
         cls._save_run_state(state)
+
+        # 进程已优雅退出并落盘 agent 记忆，主动同步一次到 S3（与 monitor 上传幂等），
+        # 确保用户对"提前结束"的推演也能按需唤醒采访。
+        cls._upload_run_artifacts(simulation_id, os.path.join(cls.RUN_STATE_DIR, simulation_id))
 
         # 停止图谱记忆更新器
         if cls._graph_memory_enabled.get(simulation_id, False):

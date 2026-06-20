@@ -1101,6 +1101,24 @@ class PlatformSimulation:
         self.total_actions = 0
 
 
+# 每隔多少轮持久化一次 agent 记忆。强停（SIGTERM→10s→SIGKILL）可能在某轮中途
+# 把进程杀掉，dump 若只放在循环之后就永远跑不到；周期性快照保证即便被硬杀，最多
+# 丢最近这几轮记忆，唤醒采访仍可用。
+MEMORY_DUMP_EVERY_ROUNDS = 10
+
+
+def _persist_memory(simulation_dir, platform, agent_graph, main_logger, tag=""):
+    """落盘某平台 agent 记忆，失败不抛（绝不能影响模拟主流程）。"""
+    try:
+        from agent_memory import dump_memories
+        n = dump_memories(simulation_dir, platform, agent_graph)
+        if main_logger:
+            main_logger.info(f"[memory] {platform} 记忆已持久化({tag}): {n} 个 agent")
+    except Exception as e:  # noqa: BLE001
+        if main_logger:
+            main_logger.info(f"[memory] {platform} 记忆持久化失败({tag})，不影响模拟: {e}")
+
+
 async def run_twitter_simulation(
     config: Dict[str, Any],
     simulation_dir: str,
@@ -1123,6 +1141,8 @@ async def run_twitter_simulation(
     """
     result = PlatformSimulation()
     
+    platform = "twitter"
+
     def log_info(msg):
         if main_logger:
             main_logger.info(f"[Twitter] {msg}")
@@ -1291,7 +1311,17 @@ async def run_twitter_simulation(
         if (round_num + 1) % 20 == 0:
             progress = (round_num + 1) / total_rounds * 100
             log_info(f"Day {simulated_day}, {simulated_hour:02d}:00 - Round {round_num + 1}/{total_rounds} ({progress:.1f}%)")
+
+        # 周期性快照：即便随后被 SIGKILL 硬杀，也已落盘最近一次记忆供唤醒采访
+        if (round_num + 1) % MEMORY_DUMP_EVERY_ROUNDS == 0:
+            _persist_memory(
+                simulation_dir, platform, result.agent_graph, main_logger,
+                tag=f"round{round_num + 1}",
+            )
     
+    # 循环结束后（含收到退出信号优雅 break）立即落盘最新记忆，保证强停也能采访
+    _persist_memory(simulation_dir, platform, result.agent_graph, main_logger, tag="loopend")
+
     # 注意：不关闭环境，保留给Interview使用
     
     if action_logger:
@@ -1326,6 +1356,8 @@ async def run_reddit_simulation(
     """
     result = PlatformSimulation()
     
+    platform = "reddit"
+
     def log_info(msg):
         if main_logger:
             main_logger.info(f"[Reddit] {msg}")
@@ -1501,7 +1533,17 @@ async def run_reddit_simulation(
         if (round_num + 1) % 20 == 0:
             progress = (round_num + 1) / total_rounds * 100
             log_info(f"Day {simulated_day}, {simulated_hour:02d}:00 - Round {round_num + 1}/{total_rounds} ({progress:.1f}%)")
+
+        # 周期性快照：即便随后被 SIGKILL 硬杀，也已落盘最近一次记忆供唤醒采访
+        if (round_num + 1) % MEMORY_DUMP_EVERY_ROUNDS == 0:
+            _persist_memory(
+                simulation_dir, platform, result.agent_graph, main_logger,
+                tag=f"round{round_num + 1}",
+            )
     
+    # 循环结束后（含收到退出信号优雅 break）立即落盘最新记忆，保证强停也能采访
+    _persist_memory(simulation_dir, platform, result.agent_graph, main_logger, tag="loopend")
+
     # 注意：不关闭环境，保留给Interview使用
     
     if action_logger:
@@ -1632,17 +1674,8 @@ async def main():
     log_manager.info("=" * 60)
     log_manager.info(f"模拟循环完成! 总耗时: {total_elapsed:.1f}秒")
 
-    # 持久化各平台 agent 的全程记忆（落本地，随后由后端同步到 S3），供唤醒采访时灌回。
-    # 恢复模式（--resume-env）本就是灌回快照、不跑模拟，无需也不应再 dump 覆盖。失败不阻断收尾。
-    if not args.resume_env:
-        try:
-            from agent_memory import dump_memories
-            if twitter_result:
-                dump_memories(simulation_dir, "twitter", twitter_result.agent_graph)
-            if reddit_result:
-                dump_memories(simulation_dir, "reddit", reddit_result.agent_graph)
-        except Exception as e:
-            log_manager.info(f"[memory] 记忆持久化失败（不影响模拟收尾）: {e}")
+    # 记忆持久化已下沉到各平台函数内部（循环中周期性快照 + 循环结束时 loopend 落盘），
+    # 强停/SIGKILL 也能保住记忆，故此处不再重复 dump。
 
     # 是否进入等待命令模式
     if wait_for_commands:
