@@ -119,7 +119,11 @@
     "chatGo": "Start predicting",
     "chatRestart": "Start over",
     "records": "History",
-    "noHistory": "Nothing here yet — go predict something first"
+    "noHistory": "Nothing here yet — go predict something first",
+    "jStage1": "Understand your world",
+    "jStage2": "Gather the people",
+    "jStage3": "Let them play it out",
+    "jStage4": "Give you the answer"
   },
   "main": {
     "layoutGraph": "Graph",
@@ -166,7 +170,19 @@
     "rebuildGraphHint": "Re-extract and rebuild the graph (recover stuck or unsatisfactory results)",
     "rebuildEnv": "Rebuild environment",
     "rebuildEnvHint": "Discard the existing simulation environment and build a fresh one from the current graph",
-    "rebuildEnvConfirm": "This will create a brand-new simulation environment from the current graph; the existing one will not be reused. Continue?"
+    "rebuildEnvConfirm": "This will create a brand-new simulation environment from the current graph; the existing one will not be reused. Continue?",
+    "cReading": "SuperFish is getting to know your world",
+    "cReadingSub": "Reading your material, learning the people and events in it…",
+    "cUnderstanding": "Sorting out who's who and how they connect",
+    "cUnderstood": "SuperFish now understands your world",
+    "cFound": "Met {nodes} people and mapped {edges} connections",
+    "cRoles": "It found these kinds of characters in your world",
+    "cRelations": "and the kinds of connections between them",
+    "cNext": "Next: gather the virtual people",
+    "cEntering": "Getting ready…",
+    "cBackstage": "Behind the scenes",
+    "cBackstageHint": "Technical details and raw logs — you rarely need these",
+    "cRebuildWorld": "Re-read the material"
   },
   "workflowStatus": {
     "ready": "Ready",
@@ -491,6 +507,9 @@
     "fieldValidFrom": "Valid From",
     "selfRelations": "Self Relations",
     "entityTypes": "Entity Types",
+    "nodesEdges": "{nodes} nodes · {edges} edges",
+    "propPlatform": "Platform",
+    "propActivityCount": "Activity count",
     "showEdgeLabels": "Show Edge Labels",
     "noData": "No graph data yet",
     "noDataDesc": "The graph visualization will appear here after graph construction completes",

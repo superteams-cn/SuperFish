@@ -26,7 +26,7 @@ export function GraphLegend({
         ))}
       </div>
       <div className="text-muted-foreground mt-1.5 border-t pt-1.5">
-        {nodeCount} nodes · {edgeCount} edges
+        {t('graph.nodesEdges', { nodes: nodeCount, edges: edgeCount })}
       </div>
     </div>
   )

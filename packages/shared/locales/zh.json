@@ -119,7 +119,11 @@
     "chatGo": "开始预测",
     "chatRestart": "重新说一件事",
     "records": "记录",
-    "noHistory": "这里还空着——先去预测点什么吧"
+    "noHistory": "这里还空着——先去预测点什么吧",
+    "jStage1": "读懂你的世界",
+    "jStage2": "召集虚拟的人",
+    "jStage3": "让他们演一遍",
+    "jStage4": "给你结论"
   },
   "main": {
     "layoutGraph": "图谱",
@@ -160,7 +164,19 @@
     "rebuildGraphHint": "重新抽取并构建图谱(可恢复卡住或不满意的结果)",
     "rebuildEnv": "重建环境",
     "rebuildEnvHint": "丢弃已有模拟环境，基于当前图谱重新搭建一个全新环境",
-    "rebuildEnvConfirm": "将基于当前图谱重新创建一个全新的模拟环境，已有环境不会被复用。确定继续吗？"
+    "rebuildEnvConfirm": "将基于当前图谱重新创建一个全新的模拟环境，已有环境不会被复用。确定继续吗？",
+    "cReading": "AI 正在读懂你的世界",
+    "cReadingSub": "正在读你给的材料，认识里面的人和事……",
+    "cUnderstanding": "正在理清人物和关系",
+    "cUnderstood": "AI 已经读懂了你的世界",
+    "cFound": "已经认识了 {nodes} 个人物、理清 {edges} 条关系",
+    "cRoles": "在你的世界里，它发现了这些角色",
+    "cRelations": "以及他们之间会发生的关系",
+    "cNext": "下一步：召集虚拟的人",
+    "cEntering": "正在准备……",
+    "cBackstage": "幕后数据",
+    "cBackstageHint": "技术细节与原始日志，一般用不到",
+    "cRebuildWorld": "重新读一遍材料"
   },
   "workflowStatus": {
     "ready": "就绪",
@@ -485,6 +501,9 @@
     "fieldValidFrom": "生效起始",
     "selfRelations": "自关联",
     "entityTypes": "实体类型",
+    "nodesEdges": "{nodes} 个节点 · {edges} 条关系",
+    "propPlatform": "平台",
+    "propActivityCount": "互动数",
     "showEdgeLabels": "显示关系标签",
     "noData": "暂无图谱数据",
     "noDataDesc": "完成图谱构建后将在此可视化展示",

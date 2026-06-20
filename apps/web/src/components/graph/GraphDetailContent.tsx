@@ -34,54 +34,55 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   )
 }
 
-/** 节点详情：名称 / UUID / 创建时间 / 属性 / 摘要 / 标签。 */
+/** 节点详情：名称 / 摘要（主内容）/ 关键属性（人话化）/ 创建时间。
+ *  隐藏对小白无用的工程信息：UUID、Entity 等技术标签、与类型徽章重复的 ontology_type。 */
 export function NodeDetail({ data, t }: { data: GraphNode; t: TFn }) {
   const attrs = (data.attributes ?? {}) as Record<string, unknown>
-  const attrEntries = Object.entries(attrs).filter(([k]) => k !== 'summary')
-  const labels = data.labels ?? []
+  // 属性名人话化；隐藏纯技术 / 与徽章重复的字段
+  const propLabel: Record<string, string> = {
+    platform: t('graph.propPlatform'),
+    activity_count: t('graph.propActivityCount'),
+  }
+  const hidden = new Set(['summary', 'ontology_type'])
+  const attrEntries = Object.entries(attrs).filter(([k]) => !hidden.has(k))
+
   return (
-    <div>
-      <Row label={t('graph.fieldName')} value={str(data.name)} />
-      <Row label="UUID" value={str(data.uuid ?? data.id)} mono />
-      <Row label={t('graph.fieldCreated')} value={formatDateTime(data.created_at)} />
+    <div className="space-y-4">
+      <div>
+        <div className="text-muted-foreground mb-0.5 text-xs">{t('graph.fieldName')}</div>
+        <div className="text-base font-semibold leading-tight">{str(data.name)}</div>
+      </div>
+
+      {data.summary && (
+        <div className="border-t pt-3">
+          <div className="text-muted-foreground mb-1.5 text-xs font-semibold">
+            {t('graph.fieldSummary')}
+          </div>
+          <p className="text-sm leading-relaxed">{str(data.summary)}</p>
+        </div>
+      )}
 
       {attrEntries.length > 0 && (
-        <div className="mt-4 border-t pt-3">
+        <div className="border-t pt-3">
           <div className="text-muted-foreground mb-2 text-xs font-semibold">
             {t('graph.fieldProperties')}
           </div>
           <div className="flex flex-col gap-2">
             {attrEntries.map(([k, v]) => (
               <div key={k} className="flex gap-2 text-xs">
-                <span className="text-muted-foreground min-w-[88px] font-medium">{k}:</span>
-                <span className="flex-1 break-words">{str(v) || 'None'}</span>
+                <span className="text-muted-foreground min-w-[72px] font-medium">
+                  {propLabel[k] ?? k}
+                </span>
+                <span className="flex-1 break-words">{str(v) || '—'}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {data.summary && (
-        <div className="mt-4 border-t pt-3">
-          <div className="text-muted-foreground mb-2 text-xs font-semibold">
-            {t('graph.fieldSummary')}
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed">{str(data.summary)}</p>
-        </div>
-      )}
-
-      {labels.length > 0 && (
-        <div className="mt-4 border-t pt-3">
-          <div className="text-muted-foreground mb-2 text-xs font-semibold">
-            {t('graph.fieldLabels')}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {labels.map((l) => (
-              <span key={l} className="bg-muted rounded-full border px-2.5 py-0.5 text-[11px]">
-                {l}
-              </span>
-            ))}
-          </div>
+      {data.created_at && (
+        <div className="text-muted-foreground border-t pt-3 text-xs">
+          {t('graph.fieldCreated')}：{formatDateTime(data.created_at)}
         </div>
       )}
     </div>
