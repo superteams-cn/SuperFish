@@ -13,10 +13,11 @@
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100% / 0.55;
     --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100% / 0.72;
+    --popover: 0 0% 100% / 0.62;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* 全站唯一强调色 = indigo（与主按钮渐变同源）；纯色主按钮/链接/进度等都用它 */
+    --primary: 243 75% 58%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96.1% / 0.5;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1% / 0.5;
@@ -26,11 +27,13 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 0 0% 100% / 0.5;
-    --input: 0 0% 100% / 0.5;
-    --ring: 222.2 84% 4.9%;
+    /* 表单控件边框（比通用 border 略实，让输入框在玻璃面上读得出轮廓） */
+    --input: 214.3 31.8% 91.4%;
+    /* 聚焦环 = 强调色 indigo，聚焦高亮与按钮/链接同色 */
+    --ring: 243 75% 58%;
     --radius: 0.75rem;
-    /* 品牌强调色（橙），暗色下略提亮以保证对比度 */
-    --brand: 14 100% 57%;
+    /* 品牌强调色 = 同一 indigo（不再有第二种强调色） */
+    --brand: 243 75% 58%;
     --brand-foreground: 0 0% 100%;
   }
 
@@ -39,10 +42,11 @@
     --foreground: 210 40% 98%;
     --card: 222.2 44% 11% / 0.55;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 44% 11% / 0.72;
+    --popover: 222.2 44% 11% / 0.62;
     --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* 暗色用略亮的 indigo，白字保证对比 */
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 217.2 32.6% 17.5% / 0.5;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5% / 0.5;
@@ -52,9 +56,11 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     --border: 0 0% 100% / 0.09;
-    --input: 0 0% 100% / 0.12;
-    --ring: 212.7 26.8% 83.9%;
-    --brand: 18 100% 62%;
+    /* 表单控件边框：暗色下用半透明白，保证在深色玻璃面上可见 */
+    --input: 0 0% 100% / 0.18;
+    /* 聚焦环 = 强调色 indigo */
+    --ring: 239 84% 67%;
+    --brand: 239 84% 67%;
     --brand-foreground: 0 0% 100%;
   }
 }
