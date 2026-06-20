@@ -26,6 +26,29 @@ from .neo4j_entity_reader import EntityNode
 logger = get_logger("superfish.oasis_profile")
 
 
+# OASIS 必需字段的默认值（OASIS 库会无条件读取这些字段，缺失会导致 KeyError 而整个模拟进程崩溃）
+_DEFAULT_AGE = 30
+_DEFAULT_MBTI = "ISTJ"
+_DEFAULT_GENDER = "other"
+
+_GENDER_MAP = {
+    "男": "male",
+    "女": "female",
+    "机构": "other",
+    "其他": "other",
+    "male": "male",
+    "female": "female",
+    "other": "other",
+}
+
+
+def normalize_gender(gender: str | None) -> str:
+    """标准化gender字段为OASIS要求的英文格式 (male/female/other)。"""
+    if not gender:
+        return _DEFAULT_GENDER
+    return _GENDER_MAP.get(gender.lower().strip(), _DEFAULT_GENDER)
+
+
 @dataclass
 class OasisAgentProfile:
     """OASIS Agent Profile数据结构"""
@@ -73,17 +96,14 @@ class OasisAgentProfile:
             "persona": self.persona,
             "karma": self.karma,
             "created_at": self.created_at,
+            # OASIS 必需字段：即使为空也必须输出，否则 generate_reddit_agent_graph 会 KeyError 崩溃
+            "age": self.age if self.age else _DEFAULT_AGE,
+            "gender": normalize_gender(self.gender),
+            "mbti": self.mbti if self.mbti else _DEFAULT_MBTI,
+            "country": self.country if self.country else "",
         }
 
         # 添加额外人设信息（如果有）
-        if self.age:
-            profile["age"] = self.age
-        if self.gender:
-            profile["gender"] = self.gender
-        if self.mbti:
-            profile["mbti"] = self.mbti
-        if self.country:
-            profile["country"] = self.country
         if self.profession:
             profile["profession"] = self.profession
         if self.interested_topics:
@@ -95,6 +115,8 @@ class OasisAgentProfile:
 
     def to_twitter_format(self) -> dict[str, Any]:
         """转换为Twitter平台格式"""
+        # 始终输出固定列集：纯 Twitter 配置下实时保存会「拿第一行当 CSV 表头」，
+        # 列不一致会导致 csv.DictWriter 抛 ValueError，故空值也填默认值，保证每行 keys 一致。
         profile = {
             "user_id": self.user_id,
             "username": self.user_name,  # OASIS 库要求字段名为 username（无下划线）
@@ -105,23 +127,14 @@ class OasisAgentProfile:
             "follower_count": self.follower_count,
             "statuses_count": self.statuses_count,
             "created_at": self.created_at,
+            "age": self.age if self.age else _DEFAULT_AGE,
+            "gender": normalize_gender(self.gender),
+            "mbti": self.mbti if self.mbti else _DEFAULT_MBTI,
+            "country": self.country if self.country else "",
+            "profession": self.profession or "",
+            "interested_topics": self.interested_topics or [],
+            "dimensions": self.dimensions or {},
         }
-
-        # 添加额外人设信息
-        if self.age:
-            profile["age"] = self.age
-        if self.gender:
-            profile["gender"] = self.gender
-        if self.mbti:
-            profile["mbti"] = self.mbti
-        if self.country:
-            profile["country"] = self.country
-        if self.profession:
-            profile["profession"] = self.profession
-        if self.interested_topics:
-            profile["interested_topics"] = self.interested_topics
-        if self.dimensions:
-            profile["dimensions"] = self.dimensions
 
         return profile
 
