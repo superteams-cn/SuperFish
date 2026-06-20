@@ -33,7 +33,15 @@ def _get_client() -> Any:
                     aws_access_key_id=Config.S3_ACCESS_KEY,
                     aws_secret_access_key=Config.S3_SECRET_KEY,
                     region_name=Config.S3_REGION,
-                    config=BotoConfig(signature_version="s3v4", s3={"addressing_style": "path"}),
+                    config=BotoConfig(
+                        signature_version="s3v4",
+                        s3={"addressing_style": "path"},
+                        # 止血：单次 S3 操作设连接/读取超时且不重试，避免回源卡死
+                        # 时累积阻塞线程（历史接口的 30s 墙钟超时依赖它释放工作线程）。
+                        connect_timeout=5,
+                        read_timeout=30,
+                        retries={"max_attempts": 1},
+                    ),
                 )
     return _client
 

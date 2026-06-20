@@ -697,6 +697,7 @@
     "requirePrompt": "请提供 prompt（采访问题）",
     "invalidInterviewPlatform": "platform 参数只能是 'twitter' 或 'reddit'",
     "envNotRunning": "模拟环境未运行或已关闭。请确保模拟已完成并进入等待命令模式。",
+    "historyTimeout": "加载历史超时，请稍后重试",
     "interviewTimeout": "等待Interview响应超时: {error}",
     "requireInterviews": "请提供 interviews（采访列表）",
     "interviewListMissingAgentId": "采访列表第{index}项缺少 agent_id",

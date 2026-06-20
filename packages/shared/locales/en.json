@@ -697,6 +697,7 @@
     "requirePrompt": "Please provide a prompt (interview question)",
     "invalidInterviewPlatform": "Platform must be either 'twitter' or 'reddit'",
     "envNotRunning": "Simulation environment not running or closed. Ensure simulation is complete and in command-wait mode.",
+    "historyTimeout": "Loading history timed out, please retry later",
     "interviewTimeout": "Interview response timed out: {error}",
     "requireInterviews": "Please provide interviews (interview list)",
     "interviewListMissingAgentId": "Interview list item {index} missing agent_id",

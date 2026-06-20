@@ -634,7 +634,10 @@ def get_simulation_history(limit: int = 20):
     Query 参数：
         limit: 返回数量限制（默认 20）
     """
-    try:
+    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import TimeoutError as _FutureTimeout
+
+    def _build():
         manager = SimulationManager()
         simulations = manager.list_simulations()[:limit]
 
@@ -727,11 +730,22 @@ def get_simulation_history(limit: int = 20):
 
         # 按创建时间倒序，统一截断到 limit
         enriched_simulations.sort(key=lambda x: x.get("created_at", "") or "", reverse=True)
-        enriched_simulations = enriched_simulations[:limit]
+        return enriched_simulations[:limit]
 
-        return {"success": True, "data": enriched_simulations, "count": len(enriched_simulations)}
-
+    # 止血：整页查询设 30s 墙钟超时，避免单条 S3 回源卡死时首页 spinner 永久转圈。
+    # 配合 object_store 的 read_timeout，卡住的工作线程也会在 ~30s 内自行释放，不会越积越多。
+    pool = ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(_build)
+    try:
+        data = future.result(timeout=30)
+        pool.shutdown(wait=False)
+        return {"success": True, "data": data, "count": len(data)}
+    except _FutureTimeout:
+        pool.shutdown(wait=False, cancel_futures=True)
+        logger.error("获取历史模拟超时（>30s）")
+        return _error(t("api.historyTimeout"), 504)
     except Exception as e:
+        pool.shutdown(wait=False)
         logger.error(f"获取历史模拟失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())
 
