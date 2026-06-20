@@ -33,16 +33,12 @@ export function Logo({ variant = 'full', className }: LogoProps) {
     return <span className="text-lg font-semibold tracking-tight">SuperFish</span>
   }
 
-  // logo 为白底 PNG：包成白卡（mark 圆形 / full 圆角），暗色下不至于是突兀白块
+  // logo 为透明 PNG：直接贴上，无需白底卡，自适应任意背景
   return (
     <img
       src={variant === 'mark' ? '/logo-mark.png' : '/logo.png'}
       alt="SuperFish"
-      className={cn(
-        'bg-white object-contain',
-        variant === 'mark' ? 'rounded-full' : 'rounded-lg px-2',
-        className,
-      )}
+      className={cn('object-contain', className)}
       onError={() => setFailed(true)}
     />
   )

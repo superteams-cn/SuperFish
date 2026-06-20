@@ -23,6 +23,7 @@ import {
 import { EmptyState } from '@/components/common/EmptyState'
 import { GraphLegend, GraphRealtimeHint } from '@/components/graph/GraphOverlays'
 import { GraphDetailShell } from '@/components/graph/GraphDetailShell'
+import { EdgeDetail, NodeDetail } from '@/components/graph/GraphDetailContent'
 import { buildGraphView, type GraphViewEdge } from '@/lib/graph-view'
 import type { GraphData, GraphNode } from '@/lib/graph-types'
 
@@ -73,6 +74,43 @@ function useDarkMode(): boolean {
   return dark
 }
 
+/** 读取全局主题 CSS 变量（形如 "243 75% 58%"）并解析为 HSL 分量；读不到时回退。 */
+function readHsl(name: string, fallback: [number, number, number]): [number, number, number] {
+  if (typeof document === 'undefined') return fallback
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  if (!raw) return fallback
+  const parts = raw.split('/')[0].trim().split(/\s+/)
+  const h = parseFloat(parts[0])
+  const s = parseFloat(parts[1])
+  const l = parseFloat(parts[2])
+  return [h, s, l].some(Number.isNaN) ? fallback : [h, s, l]
+}
+
+function hsl([h, s, l]: [number, number, number], a = 1): string {
+  return a >= 1 ? `hsl(${h}, ${s}%, ${l}%)` : `hsla(${h}, ${s}%, ${l}%, ${a})`
+}
+
+/**
+ * 从全局设计 token 解析图谱所需颜色，保证 G6 画布与「玻璃 + 单一 indigo 强调」主题一致：
+ * 画布底/标签取 --background/--foreground；选中/关联高亮统一收敛到 --primary（indigo），
+ * 关联态用提亮一档的浅 indigo 与选中态区分（同色相，不再用离题的橙/青）。
+ */
+function useGraphTheme(dark: boolean) {
+  return useMemo(() => {
+    const bg = readHsl('--background', dark ? [222.2, 84, 4.9] : [0, 0, 100])
+    const fg = readHsl('--foreground', dark ? [210, 40, 98] : [222.2, 84, 4.9])
+    const pri = readHsl('--primary', dark ? [239, 84, 67] : [243, 75, 58])
+    const accentSoft: [number, number, number] = [pri[0], Math.max(pri[1] - 8, 0), Math.min(pri[2] + 14, 90)]
+    return {
+      canvasBg: hsl(bg),
+      labelFill: hsl(fg),
+      accent: hsl(pri), // 选中态：强调 indigo
+      accentSoft: hsl(accentSoft), // 关联态：浅一档 indigo
+    }
+    // dark 切换时 <html> 已带上 .dark，重算即可读到对应模式的 token
+  }, [dark])
+}
+
 /** 知识图谱可视化面板（@antv/g6 引擎，移植自 kg-gen，适配 SuperFish 数据模型）。 */
 export function GraphPanelG6({
   graphData,
@@ -94,6 +132,7 @@ export function GraphPanelG6({
 
   const [selections, setSelections] = useState<Selection[]>([])
   const [selected, setSelected] = useState<Selected>(null)
+  const [expandedLoops, setExpandedLoops] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [layout, setLayout] = useState<LayoutKind>('d3-force')
   const [hideIsolated, setHideIsolated] = useState(true)
@@ -105,8 +144,8 @@ export function GraphPanelG6({
   const view = useMemo(() => buildGraphView(graphData), [graphData])
   const hasData = view.nodes.length > 0
 
-  const canvasBg = dark ? '#0d1018' : '#ffffff'
-  const labelFill = dark ? '#e6e8ee' : '#1f2430'
+  const theme = useGraphTheme(dark)
+  const { canvasBg, labelFill } = theme
 
   // 实体类型 → 颜色（图例用）
   const typeColors = useMemo(() => {
@@ -127,6 +166,19 @@ export function GraphPanelG6({
     setSelections([])
     setSelected(null)
   }
+
+  // 切换详情时收起所有自环展开项（与 d3 版 GraphPanel 行为一致）
+  useEffect(() => {
+    setExpandedLoops(new Set())
+  }, [selected])
+
+  const toggleLoop = (id: string) =>
+    setExpandedLoops((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const data = useMemo(() => {
     const isolated = new Set(view.isolatedEntities)
@@ -197,7 +249,7 @@ export function GraphPanelG6({
         style: {
           size: (d: Any) => d.data.size,
           fill: (d: Any) => d.data.color,
-          stroke: dark ? '#0d1018' : '#ffffff',
+          stroke: canvasBg,
           lineWidth: 1.5,
           shadowColor: (d: Any) => d.data.color,
           shadowBlur: isLarge ? 0 : dark ? 16 : 6,
@@ -210,14 +262,14 @@ export function GraphPanelG6({
         state: {
           active: {
             lineWidth: 3,
-            stroke: '#f59e0b',
+            stroke: theme.accentSoft,
             shadowBlur: 28,
             halo: true,
             labelText: (d: Any) => d.data.label,
           },
           selected: {
             lineWidth: 3,
-            stroke: '#22d3ee',
+            stroke: theme.accent,
             shadowBlur: 28,
             halo: true,
             labelText: (d: Any) => d.data.label,
@@ -240,7 +292,7 @@ export function GraphPanelG6({
         },
         state: {
           active: {
-            stroke: '#f59e0b',
+            stroke: theme.accent,
             strokeOpacity: 1,
             lineWidth: 2,
             labelOpacity: 1,
@@ -539,7 +591,7 @@ export function GraphPanelG6({
       graphRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, layout, dark])
+  }, [data, layout, dark, theme])
 
   // 选中项联动：高亮 + 聚焦
   useEffect(() => {
@@ -776,43 +828,21 @@ export function GraphPanelG6({
           className="z-30"
         >
           {selected.kind === 'node' ? (
-            <DetailRows
-              rows={[
-                [t('graph.fieldName'), selected.data.name],
-                ['UUID', selected.data.uuid ?? selected.data.id],
-                [t('graph.fieldSummary'), selected.data.summary],
-              ]}
-            />
+            <NodeDetail data={selected.data} t={t} />
           ) : (
-            <DetailRows
-              rows={[
-                [
-                  t('graph.relationship'),
-                  `${selected.edge.sourceLabel} —${selected.edge.predicate}→ ${selected.edge.targetLabel}`,
-                ],
-                ['UUID', selected.edge.raw.uuid],
-                [t('graph.fieldFact'), selected.edge.raw.fact],
-                [t('graph.fieldType'), selected.edge.raw.fact_type],
-              ]}
+            <EdgeDetail
+              data={{
+                ...selected.edge.raw,
+                source_name: selected.edge.sourceLabel,
+                target_name: selected.edge.targetLabel,
+              }}
+              expanded={expandedLoops}
+              onToggle={toggleLoop}
+              t={t}
             />
           )}
         </GraphDetailShell>
       )}
-    </div>
-  )
-}
-
-function DetailRows({ rows }: { rows: [string, string | undefined][] }) {
-  return (
-    <div>
-      {rows
-        .filter(([, v]) => v)
-        .map(([label, value]) => (
-          <div key={label} className="mb-2.5 flex flex-wrap gap-x-2">
-            <span className="text-muted-foreground min-w-[72px] text-xs font-medium">{label}:</span>
-            <span className="flex-1 break-words">{value}</span>
-          </div>
-        ))}
     </div>
   )
 }

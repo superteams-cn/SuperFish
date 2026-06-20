@@ -9,18 +9,21 @@
  */
 import type { GraphData, GraphEdge, GraphNode } from '@/components/GraphPanel'
 
-// 与 d3 版 GraphPanel 一致的实体类型配色，保证两种引擎视觉统一
+// 实体类型配色（d3 / G6 两种引擎 + 图例共用，保证视觉统一）。
+// 一组同明度的 jewel-tone 家族（Tailwind 500 级），以品牌 indigo 领衔——
+// 首个（也是最常见的）类型落在强调色上，整图主色调与「玻璃 + 单一 indigo」主题咬合；
+// 同饱和/明度让色板像「一家人」而非高饱和大杂烩，既保留类型辨识度又克制成体系。
 export const GRAPH_COLORS = [
-  '#FF6B35',
-  '#004E89',
-  '#7B2D8E',
-  '#1A936F',
-  '#C5283D',
-  '#E9724C',
-  '#3498db',
-  '#9b59b6',
-  '#27ae60',
-  '#f39c12',
+  '#6366f1', // indigo（品牌强调色）
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#0ea5e9', // sky
+  '#14b8a6', // teal
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#f43f5e', // rose
+  '#06b6d4', // cyan
+  '#f97316', // orange
 ]
 
 export interface GraphViewNode {

@@ -50,7 +50,9 @@
     --secondary: 217.2 32.6% 17.5% / 0.5;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5% / 0.5;
-    --muted-foreground: 215 20.2% 65.1%;
+    /* 次要文字（建议条/占位/hint/历史说明等）：比 shadcn 默认(65%)提亮，
+       因玻璃面半透明 + 极光底会拉低实际对比，深色下 65% 偏灰看不清 */
+    --muted-foreground: 217 18% 76%;
     --accent: 217.2 32.6% 17.5% / 0.6;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;

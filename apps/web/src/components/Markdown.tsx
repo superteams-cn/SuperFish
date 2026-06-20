@@ -18,7 +18,9 @@ export function Markdown({ content, className, stripLeadingH2 }: MarkdownProps) 
       className={cn(
         'prose prose-sm text-foreground max-w-none',
         'prose-headings:font-semibold prose-headings:text-foreground',
-        'prose-p:leading-relaxed prose-li:my-0.5',
+        // typography 插件默认把 <strong> 设为 gray-900，深色下近黑看不见；
+        // 报告小标题都转成了 **粗体**，故必须显式跟随 foreground
+        'prose-strong:text-foreground prose-p:leading-relaxed prose-li:my-0.5',
         'prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.85em] prose-code:before:content-none prose-code:after:content-none',
         'prose-pre:bg-muted prose-pre:text-foreground',
         'prose-blockquote:border-l-brand prose-blockquote:text-muted-foreground',

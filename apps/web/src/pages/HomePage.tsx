@@ -12,6 +12,7 @@ import { AuthButton } from '@/components/auth/AuthButton'
 import { HistoryDatabase } from '@/components/HistoryDatabase'
 import { Logo } from '@/components/common/Logo'
 import { setPendingUpload } from '@/stores/pendingUpload'
+import { useAuth } from '@/stores/auth'
 
 const ACCEPTED = ['pdf', 'md', 'txt']
 const THINK_MS = 750
@@ -66,6 +67,7 @@ function UserBubble({ children }: { children: ReactNode }) {
 export default function HomePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { isAuthenticated, openAuth } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<number>()
 
@@ -100,6 +102,11 @@ export default function HomePage() {
   const submitTopic = (text: string) => {
     const value = text.trim()
     if (!value) return
+    // 发起预测前必须登录：未登录直接唤起登录弹框
+    if (!isAuthenticated) {
+      openAuth('login')
+      return
+    }
     setRequirement(value)
     setDraft('')
     // 已经先传了材料 → 直接就绪；否则进入“邀请上传材料”一步
@@ -157,7 +164,7 @@ export default function HomePage() {
             variant="secondary"
             size="sm"
             className="gap-1.5 rounded-full"
-            onClick={() => setHistoryOpen(true)}
+            onClick={() => (isAuthenticated ? setHistoryOpen(true) : openAuth('login'))}
           >
             <History className="h-4 w-4" />
             <span className="hidden sm:inline">{t('home.records')}</span>
