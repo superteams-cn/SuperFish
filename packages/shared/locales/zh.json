@@ -558,7 +558,8 @@
     "cCrowdPlaceholder": "想问大家同一个什么问题？",
     "cCrowdSubmit": "问这 {count} 个人",
     "cCrowdResults": "大家的回答（{count}）",
-    "cAgentUnavailable": "没能直接联系上 TA —— 这场推演的虚拟环境已经结束了。你可以问问 SuperFish，它记得整场推演。"
+    "cAgentUnavailable": "没能直接联系上 TA —— 这场推演的虚拟环境已经结束了。你可以问问 SuperFish，它记得整场推演。",
+    "cWaking": "正在把虚拟人请回来（恢复记忆中）…"
   },
   "graph": {
     "panelTitle": "图谱关系可视化",

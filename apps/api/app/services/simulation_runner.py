@@ -833,6 +833,10 @@ class SimulationRunner:
                     state.runner_status = RunnerStatus.INTERRUPTED
                     logger.warning(f"接管的模拟进程已消失且未跑完，标记中断: {simulation_id}")
 
+            # 模拟完成 → 上传 agent 记忆快照到 S3，供后续按需唤醒环境采访时取回
+            if state.runner_status == RunnerStatus.COMPLETED:
+                cls._upload_run_artifacts(simulation_id, sim_dir)
+
             state.twitter_running = False
             state.reddit_running = False
             state.owner_id = None
@@ -1734,6 +1738,94 @@ class SimulationRunner:
         return running
 
     # ============== Interview 功能 ==============
+
+    @classmethod
+    def _upload_run_artifacts(cls, simulation_id: str, sim_dir: str) -> None:
+        """模拟完成后把 agent 记忆快照上传 S3，供后续按需唤醒环境采访时取回（失败不阻断）。"""
+        try:
+            from ..utils import object_store
+
+            mem_dir = os.path.join(sim_dir, "agent_memory")
+            if not os.path.isdir(mem_dir):
+                return
+            uploaded = 0
+            for fn in os.listdir(mem_dir):
+                if fn.endswith(".json"):
+                    object_store.upload_file(
+                        f"simulations/{simulation_id}/agent_memory/{fn}",
+                        os.path.join(mem_dir, fn),
+                        "application/json",
+                    )
+                    uploaded += 1
+            if uploaded:
+                logger.info(f"已上传 {uploaded} 份 agent 记忆到 S3: {simulation_id}")
+        except Exception as e:
+            logger.warning(f"上传 agent 记忆到 S3 失败（不影响）: {simulation_id}, {e}")
+
+    @classmethod
+    def wake_env(cls, simulation_id: str) -> dict[str, Any]:
+        """
+        按需唤醒模拟环境：环境已活则直接返回；否则从 S3 物化 sim_dir（配置/profiles/记忆快照），
+        以 --resume-env 重建环境并进入等待命令模式（不跑模拟循环），供采访使用。
+        起进程后立即返回 status=waking，由调用方轮询 check_env_alive 至 alive。
+        """
+        if cls.check_env_alive(simulation_id):
+            return {"success": True, "status": "alive"}
+
+        # 60s 内已发起过唤醒则不重复起进程（前端轮询期间防重）
+        if not hasattr(cls, "_waking_at"):
+            cls._waking_at = {}
+        now = time.monotonic()
+        last = cls._waking_at.get(simulation_id)
+        if last is not None and (now - last) < 60:
+            return {"success": True, "status": "waking"}
+
+        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        os.makedirs(sim_dir, exist_ok=True)
+        config_path = os.path.join(sim_dir, "simulation_config.json")
+        mem_dir = os.path.join(sim_dir, "agent_memory")
+
+        # 从 S3 物化缺失的输入（配置/profiles/记忆快照）
+        if not os.path.exists(config_path) or not os.path.isdir(mem_dir):
+            try:
+                from ..utils import object_store
+
+                object_store.download_prefix_to_dir(f"simulations/{simulation_id}/", sim_dir)
+            except Exception as e:
+                logger.warning(f"唤醒前从 S3 物化失败: {simulation_id}, {e}")
+
+        if not os.path.exists(config_path):
+            return {"success": False, "error": "缺少模拟配置，无法唤醒环境"}
+        if not os.path.isdir(mem_dir):
+            return {
+                "success": False,
+                "error": "缺少 agent 记忆快照，无法唤醒（该模拟可能在记忆持久化前就已结束）",
+            }
+
+        script_path = os.path.join(cls.SCRIPTS_DIR, "run_parallel_simulation.py")
+        cmd = [sys.executable, script_path, "--config", config_path, "--resume-env"]
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+        try:
+            log_file = open(os.path.join(sim_dir, "resume.log"), "w", encoding="utf-8")
+            subprocess.Popen(
+                cmd,
+                cwd=sim_dir,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                bufsize=1,
+                env=env,
+                start_new_session=True,
+            )
+        except Exception as e:
+            return {"success": False, "error": f"启动恢复进程失败: {e}"}
+
+        cls._waking_at[simulation_id] = now
+        logger.info(f"已发起环境唤醒（恢复模式）: {simulation_id}")
+        return {"success": True, "status": "waking"}
 
     @classmethod
     def check_env_alive(cls, simulation_id: str) -> bool:

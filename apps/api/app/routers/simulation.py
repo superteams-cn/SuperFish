@@ -1242,6 +1242,29 @@ def get_env_status(req: EnvStatusRequest):
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 
+@router.post("/ensure-env")
+def ensure_env(req: EnvStatusRequest):
+    """
+    确保模拟环境存活（采访前唤醒）。
+
+    环境已活则返回 status=alive；否则按需唤醒（恢复模式重建环境 + 灌回 agent 记忆，
+    不重跑模拟），返回 status=waking，由前端轮询 /env-status 至 env_alive 后再发起采访。
+    """
+    try:
+        simulation_id = req.simulation_id
+        if not simulation_id:
+            return _error(t("api.requireSimulationId"), 400)
+
+        result = SimulationRunner.wake_env(simulation_id)
+        if result.get("success"):
+            return {"success": True, "data": {"status": result.get("status", "waking")}}
+        return _error(result.get("error") or t("api.envNotRunningShort"), 400)
+
+    except Exception as e:
+        logger.error(f"唤醒环境失败: {str(e)}")
+        return _error(str(e), 500, traceback=traceback.format_exc())
+
+
 @router.post("/close-env")
 def close_simulation_env(req: CloseEnvRequest):
     """

@@ -1102,11 +1102,12 @@ class PlatformSimulation:
 
 
 async def run_twitter_simulation(
-    config: Dict[str, Any], 
+    config: Dict[str, Any],
     simulation_dir: str,
     action_logger: Optional[PlatformActionLogger] = None,
     main_logger: Optional[SimulationLogManager] = None,
-    max_rounds: Optional[int] = None
+    max_rounds: Optional[int] = None,
+    resume: bool = False
 ) -> PlatformSimulation:
     """运行Twitter模拟
     
@@ -1161,9 +1162,19 @@ async def run_twitter_simulation(
         database_path=db_path,
         semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
     )
-    
+
     await result.env.reset()
     log_info("环境已启动")
+
+    # 唤醒/恢复模式：灌回各 agent 全程记忆后直接返回，跳过初始事件与模拟循环（仅为接受采访）
+    if resume:
+        try:
+            from agent_memory import restore_memories
+            restore_memories(simulation_dir, "twitter", result.agent_graph)
+        except Exception as e:
+            log_info(f"[memory] 恢复记忆失败: {e}")
+        log_info("恢复模式：环境已重建并灌回记忆，跳过模拟循环")
+        return result
     
     if action_logger:
         action_logger.log_simulation_start(config)
@@ -1294,11 +1305,12 @@ async def run_twitter_simulation(
 
 
 async def run_reddit_simulation(
-    config: Dict[str, Any], 
+    config: Dict[str, Any],
     simulation_dir: str,
     action_logger: Optional[PlatformActionLogger] = None,
     main_logger: Optional[SimulationLogManager] = None,
-    max_rounds: Optional[int] = None
+    max_rounds: Optional[int] = None,
+    resume: bool = False
 ) -> PlatformSimulation:
     """运行Reddit模拟
     
@@ -1352,9 +1364,19 @@ async def run_reddit_simulation(
         database_path=db_path,
         semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
     )
-    
+
     await result.env.reset()
     log_info("环境已启动")
+
+    # 唤醒/恢复模式：灌回各 agent 全程记忆后直接返回，跳过初始事件与模拟循环（仅为接受采访）
+    if resume:
+        try:
+            from agent_memory import restore_memories
+            restore_memories(simulation_dir, "reddit", result.agent_graph)
+        except Exception as e:
+            log_info(f"[memory] 恢复记忆失败: {e}")
+        log_info("恢复模式：环境已重建并灌回记忆，跳过模拟循环")
+        return result
     
     if action_logger:
         action_logger.log_simulation_start(config)
@@ -1529,6 +1551,13 @@ async def main():
         help='等待命令模式下，模拟跑完后连续多少秒未收到任何 IPC 命令则自动退出并关闭环境，'
              '避免无人接管的孤儿进程长期空跑（默认 1800=30 分钟；设为 0 禁用，永久等待）'
     )
+    parser.add_argument(
+        '--resume-env',
+        action='store_true',
+        default=False,
+        help='恢复模式：用已有 profiles + 落盘的 agent 记忆重建环境并进入等待命令模式，'
+             '不跑模拟循环（用于模拟结束后按需唤醒环境以接受采访）'
+    )
 
     args = parser.parse_args()
     
@@ -1542,7 +1571,8 @@ async def main():
     
     config = load_config(args.config)
     simulation_dir = os.path.dirname(args.config) or "."
-    wait_for_commands = not args.no_wait
+    # 恢复模式天然需要进入等待命令模式（它存在的全部意义就是等采访），强制忽略 --no-wait
+    wait_for_commands = (not args.no_wait) or args.resume_env
     
     # 初始化日志配置（禁用 OASIS 日志，清理旧文件）
     init_logging_for_simulation(simulation_dir)
@@ -1587,21 +1617,33 @@ async def main():
     reddit_result: Optional[PlatformSimulation] = None
     
     if args.twitter_only:
-        twitter_result = await run_twitter_simulation(config, simulation_dir, twitter_logger, log_manager, args.max_rounds)
+        twitter_result = await run_twitter_simulation(config, simulation_dir, twitter_logger, log_manager, args.max_rounds, resume=args.resume_env)
     elif args.reddit_only:
-        reddit_result = await run_reddit_simulation(config, simulation_dir, reddit_logger, log_manager, args.max_rounds)
+        reddit_result = await run_reddit_simulation(config, simulation_dir, reddit_logger, log_manager, args.max_rounds, resume=args.resume_env)
     else:
         # 并行运行（每个平台使用独立的日志记录器）
         results = await asyncio.gather(
-            run_twitter_simulation(config, simulation_dir, twitter_logger, log_manager, args.max_rounds),
-            run_reddit_simulation(config, simulation_dir, reddit_logger, log_manager, args.max_rounds),
+            run_twitter_simulation(config, simulation_dir, twitter_logger, log_manager, args.max_rounds, resume=args.resume_env),
+            run_reddit_simulation(config, simulation_dir, reddit_logger, log_manager, args.max_rounds, resume=args.resume_env),
         )
         twitter_result, reddit_result = results
     
     total_elapsed = (datetime.now() - start_time).total_seconds()
     log_manager.info("=" * 60)
     log_manager.info(f"模拟循环完成! 总耗时: {total_elapsed:.1f}秒")
-    
+
+    # 持久化各平台 agent 的全程记忆（落本地，随后由后端同步到 S3），供唤醒采访时灌回。
+    # 恢复模式（--resume-env）本就是灌回快照、不跑模拟，无需也不应再 dump 覆盖。失败不阻断收尾。
+    if not args.resume_env:
+        try:
+            from agent_memory import dump_memories
+            if twitter_result:
+                dump_memories(simulation_dir, "twitter", twitter_result.agent_graph)
+            if reddit_result:
+                dump_memories(simulation_dir, "reddit", reddit_result.agent_graph)
+        except Exception as e:
+            log_manager.info(f"[memory] 记忆持久化失败（不影响模拟收尾）: {e}")
+
     # 是否进入等待命令模式
     if wait_for_commands:
         log_manager.info("")

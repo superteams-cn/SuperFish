@@ -558,7 +558,8 @@
     "cCrowdPlaceholder": "What do you want to ask everyone?",
     "cCrowdSubmit": "Ask these {count} people",
     "cCrowdResults": "Everyone's answers ({count})",
-    "cAgentUnavailable": "Couldn't reach them directly — this run's virtual environment has ended. Try asking SuperFish; it remembers the whole run."
+    "cAgentUnavailable": "Couldn't reach them directly — this run's virtual environment has ended. Try asking SuperFish; it remembers the whole run.",
+    "cWaking": "Bringing the virtual people back (restoring memory)…"
   },
   "graph": {
     "panelTitle": "Graph Relationship Visualization",

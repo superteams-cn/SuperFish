@@ -140,6 +140,12 @@ export const getEnvStatus = (
 ): Promise<ApiEnvelope<{ env_alive?: boolean }>> =>
   http.post<{ env_alive?: boolean }>('/api/simulation/env-status', data)
 
+/** 采访前确保环境存活：已活返回 alive，否则按需唤醒（恢复记忆）返回 waking。 */
+export const ensureEnv = (
+  data: Record<string, unknown>,
+): Promise<ApiEnvelope<{ status?: 'alive' | 'waking' }>> =>
+  http.post<{ status?: 'alive' | 'waking' }>('/api/simulation/ensure-env', data)
+
 /** 批量采访 Agent。 */
 export const interviewAgents = (
   data: Record<string, unknown>,

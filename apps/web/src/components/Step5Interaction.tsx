@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Sparkles, User, Users, ArrowLeft } from 'lucide-react'
+import { Sparkles, User, Users, ArrowLeft, Loader2 } from 'lucide-react'
 
 import { ChatPanel } from '@/components/step5/ChatPanel'
 import { SurveyPanel } from '@/components/step5/SurveyPanel'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
 import { Logo } from '@/components/common/Logo'
 import { chatWithReport, getReport, getReportSections } from '@/lib/api/report'
-import { interviewAgents, getSimulationProfilesRealtime } from '@/lib/api/simulation'
+import {
+  interviewAgents,
+  getSimulationProfilesRealtime,
+  ensureEnv,
+  getEnvStatus,
+} from '@/lib/api/simulation'
 import { cn } from '@/lib/utils'
 import type { Profile } from '@/lib/step2-types'
 import type { ReportOutline } from '@/lib/step4-types'
@@ -47,8 +52,31 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
   const [question, setQuestion] = useState('')
   const [isSurveying, setIsSurveying] = useState(false)
   const [surveyResults, setSurveyResults] = useState<SurveyResult[]>([])
+  // 采访需要模拟环境存活；推演结束后环境可能已回收，发起采访前按需唤醒（恢复记忆）
+  const [wakingEnv, setWakingEnv] = useState(false)
 
   const initedRef = useRef(false)
+
+  // 确保环境就绪：已活直接 true；否则触发唤醒并轮询至 alive（最多 ~90s）
+  const ensureEnvReady = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await ensureEnv({ simulation_id: simulationId })
+      if (!res.success) return false
+      if (res.data?.status === 'alive') return true
+      setWakingEnv(true)
+      const deadline = Date.now() + 90_000
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2000))
+        const s = await getEnvStatus({ simulation_id: simulationId })
+        if (s.success && s.data?.env_alive) return true
+      }
+      return false
+    } catch {
+      return false
+    } finally {
+      setWakingEnv(false)
+    }
+  }, [simulationId])
 
   const loadProfiles = useCallback(async () => {
     if (!simulationId) return
@@ -145,6 +173,9 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         addLog(t('log.reportAgentReplied'))
       } else {
         const idx = selectedAgentIndex as number
+        // 采访前确保环境就绪（必要时唤醒并恢复记忆）；唤醒失败则走人话兜底
+        const ready = await ensureEnvReady()
+        if (!ready) throw new Error('env-not-ready')
         addLog(
           t('log.sendToAgent', {
             name: selectedAgent?.name || selectedAgent?.username,
@@ -202,6 +233,12 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
     setIsSurveying(true)
     addLog(t('log.sendSurvey', { count: selected.size }))
     try {
+      // 群访同样需要环境就绪，必要时先唤醒
+      const ready = await ensureEnvReady()
+      if (!ready) {
+        addLog(t('step5.cAgentUnavailable'))
+        return
+      }
       const interviews = Array.from(selected).map((idx) => ({
         agent_id: idx,
         prompt: question.trim(),
@@ -285,58 +322,66 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         </div>
 
         {/* 内容区 */}
-        <div className="flex-1 overflow-hidden">
-          {tab === 'crowd' ? (
-            <SurveyPanel
-              profiles={profiles}
-              selected={selected}
-              onToggle={(idx) =>
-                setSelected((prev) => {
-                  const next = new Set(prev)
-                  if (next.has(idx)) next.delete(idx)
-                  else next.add(idx)
-                  return next
-                })
-              }
-              onSelectAll={() => setSelected(new Set(profiles.map((_, i) => i)))}
-              onClear={() => setSelected(new Set())}
-              question={question}
-              setQuestion={setQuestion}
-              isSurveying={isSurveying}
-              results={surveyResults}
-              onSubmit={submitSurvey}
-            />
-          ) : tab === 'one' && selectedAgentIndex === null ? (
-            <PeoplePicker profiles={profiles} onPick={pickAgent} />
-          ) : tab === 'one' ? (
-            <div className="flex h-full flex-col">
-              <button
-                type="button"
-                onClick={backToPicker}
-                className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 border-b px-4 py-2 text-xs transition-colors"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                {t('step5.cChangePerson')}
-              </button>
-              <div className="min-h-0 flex-1">
-                <ChatPanel
-                  target="agent"
-                  agent={selectedAgent}
-                  messages={currentMessages}
-                  isSending={isSending}
-                  onSend={sendMessage}
-                />
-              </div>
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {wakingEnv && (
+            <div className="flex items-center justify-center gap-2 border-b bg-indigo-500/10 px-4 py-2 text-xs text-indigo-600 dark:text-indigo-300">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t('step5.cWaking')}
             </div>
-          ) : (
-            <ChatPanel
-              target="report_agent"
-              agent={null}
-              messages={currentMessages}
-              isSending={isSending}
-              onSend={sendMessage}
-            />
           )}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {tab === 'crowd' ? (
+              <SurveyPanel
+                profiles={profiles}
+                selected={selected}
+                onToggle={(idx) =>
+                  setSelected((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(idx)) next.delete(idx)
+                    else next.add(idx)
+                    return next
+                  })
+                }
+                onSelectAll={() => setSelected(new Set(profiles.map((_, i) => i)))}
+                onClear={() => setSelected(new Set())}
+                question={question}
+                setQuestion={setQuestion}
+                isSurveying={isSurveying}
+                results={surveyResults}
+                onSubmit={submitSurvey}
+              />
+            ) : tab === 'one' && selectedAgentIndex === null ? (
+              <PeoplePicker profiles={profiles} onPick={pickAgent} />
+            ) : tab === 'one' ? (
+              <div className="flex h-full flex-col">
+                <button
+                  type="button"
+                  onClick={backToPicker}
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 border-b px-4 py-2 text-xs transition-colors"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  {t('step5.cChangePerson')}
+                </button>
+                <div className="min-h-0 flex-1">
+                  <ChatPanel
+                    target="agent"
+                    agent={selectedAgent}
+                    messages={currentMessages}
+                    isSending={isSending}
+                    onSend={sendMessage}
+                  />
+                </div>
+              </div>
+            ) : (
+              <ChatPanel
+                target="report_agent"
+                agent={null}
+                messages={currentMessages}
+                isSending={isSending}
+                onSend={sendMessage}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>
