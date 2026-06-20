@@ -37,6 +37,14 @@ class Config:
     # 本体生成的最大输出token。推理类模型（如 deepseek-v4-pro）的思考过程也计入此预算，
     # 设得过小会导致 JSON 输出被截断、解析失败。默认 16384 留足余量。
     ONTOLOGY_MAX_TOKENS = int(os.environ.get("ONTOLOGY_MAX_TOKENS", "16384"))
+    # 本体生成的实体类型总数（含「个人/组织」2 个兜底类型，故具体类型数 = 总数 - 2）。
+    # 同时作为后处理硬上限：LLM 多给会从末尾截断，缺兜底会补齐。最小 3（至少 1 具体 + 2 兜底）。
+    ONTOLOGY_ENTITY_TYPES = max(3, int(os.environ.get("ONTOLOGY_ENTITY_TYPES", "10")))
+    # 本体生成的关系类型数量范围（提示词建议区间）；上限同时作为后处理硬截断。
+    ONTOLOGY_EDGE_TYPES_MIN = max(1, int(os.environ.get("ONTOLOGY_EDGE_TYPES_MIN", "6")))
+    ONTOLOGY_EDGE_TYPES_MAX = max(
+        ONTOLOGY_EDGE_TYPES_MIN, int(os.environ.get("ONTOLOGY_EDGE_TYPES_MAX", "10"))
+    )
     # 图谱抽取每个文本块的最大输出token。块更大、三元组更多时需更高,避免 JSON 被截断。
     GRAPH_EXTRACT_MAX_TOKENS = int(os.environ.get("GRAPH_EXTRACT_MAX_TOKENS", "16384"))
     # LlamaIndex SchemaLLMPathExtractor 每个文本块最多抽取的三元组数量。
