@@ -11,6 +11,7 @@ import { ProfileModal } from '@/components/step2/ProfileModal'
 import {
   prepareSimulation,
   getPrepareStatus,
+  getSimulation,
   getSimulationProfilesRealtime,
   getSimulationConfigRealtime,
 } from '@/lib/api/simulation'
@@ -319,14 +320,60 @@ export function Step2EnvSetup({
     }
   }, [currentStage, startConfigPolling])
 
-  // 挂载时启动准备流程（仅一次）
+  // 进入/刷新时：先查后端真实状态再决定，避免无脑重新触发 prepare（后端 /prepare 对进行中不去重）。
+  const resumeOrStart = useCallback(async () => {
+    addLog(t('log.step2Init'))
+    if (!simulationId) return
+
+    let state: import('@/lib/api/types').SimulationData | null = null
+    try {
+      const res = await getSimulation(simulationId)
+      if (res.success && res.data) state = res.data
+    } catch {
+      // 拉状态失败 → 下面回退到首次准备
+    }
+
+    const status = state?.status
+
+    // 已准备完成 → 直接加载结果，不触发 prepare
+    if (status === 'ready' || state?.config_generated) {
+      await loadPreparedData()
+      return
+    }
+
+    // 准备进行中 → 仅恢复轮询（按 simulationId，不依赖内存 task_id），不重复触发
+    if (status === 'preparing') {
+      setPhase(1)
+      addLog(t('log.resumingPrepare'))
+      onUpdateStatus('processing')
+      if (state?.entities_count) {
+        expectedRef.current = state.entities_count
+        setExpectedTotal(state.entities_count)
+      }
+      await fetchProfilesRealtime()
+      pollTimer.current = setInterval(pollPrepareStatus, 2000)
+      profilesTimer.current = setInterval(fetchProfilesRealtime, 3000)
+      return
+    }
+
+    // created / failed / 无记录 → 才（重新）启动准备
+    void startPrepare(false)
+  }, [
+    addLog,
+    fetchProfilesRealtime,
+    loadPreparedData,
+    onUpdateStatus,
+    pollPrepareStatus,
+    simulationId,
+    startPrepare,
+    t,
+  ])
+
+  // 挂载时恢复或启动（仅一次）
   useEffect(() => {
     if (initedRef.current) return
     initedRef.current = true
-    if (simulationId) {
-      addLog(t('log.step2Init'))
-      void startPrepare()
-    }
+    if (simulationId) void resumeOrStart()
     return () => {
       stopPolling()
       stopProfilesPolling()

@@ -56,6 +56,8 @@ export interface SimulationData {
   project_id?: string
   graph_id?: string
   status?: string
+  config_generated?: boolean
+  entities_count?: number
   [k: string]: unknown
 }
 

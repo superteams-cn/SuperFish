@@ -731,6 +731,7 @@
     "configGenerating": "配置生成中，开始轮询等待...",
     "loadConfigFailed": "加载配置失败: {error}",
     "step2Init": "Step2 环境搭建初始化",
+    "resumingPrepare": "↻ 检测到准备进行中，已恢复监控（未重新触发准备）",
     "step3Init": "Step3 模拟运行初始化",
     "startingDualSim": "正在启动双平台并行模拟...",
     "setMaxRounds": "设置最大模拟轮数: {rounds}",

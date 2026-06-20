@@ -287,6 +287,11 @@ export default function ProcessPage() {
         setCurrentPhase(1)
         startPollingTask(res.data.graph_build_task_id)
         startGraphPolling()
+      } else if (status === 'graph_building') {
+        // 构建中但 task_id 丢失（服务重启，任务仅存内存）：提示并以 force 续建已落库图谱，避免静默卡住
+        setCurrentPhase(1)
+        addLog(t('log.buildTaskLostAutoResume', { taskId: res.data.graph_build_task_id || '-' }))
+        await startBuildGraph(true)
       } else if (status === 'graph_completed' && res.data.graph_id) {
         setCurrentPhase(2)
         await loadGraph(res.data.graph_id)

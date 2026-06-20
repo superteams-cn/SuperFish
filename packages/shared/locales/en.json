@@ -731,6 +731,7 @@
     "configGenerating": "Config generating, polling...",
     "loadConfigFailed": "Failed to load config: {error}",
     "step2Init": "Step 2 environment setup initialized",
+    "resumingPrepare": "↻ Detected an in-progress preparation, resumed monitoring (no re-trigger)",
     "step3Init": "Step 3 simulation run initialized",
     "startingDualSim": "Starting dual-platform parallel simulation...",
     "setMaxRounds": "Max simulation rounds set to: {rounds}",
