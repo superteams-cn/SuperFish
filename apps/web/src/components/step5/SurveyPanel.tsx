@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { Loader2, HelpCircle } from 'lucide-react'
+import { Loader2, MessageCircleQuestion } from 'lucide-react'
 
 import { Markdown } from '@/components/Markdown'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -22,7 +21,11 @@ interface Props {
   onSubmit: () => void
 }
 
-/** 问卷面板：多选 Agent + 提问 + 批量采访结果。 */
+const GRADIENT =
+  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-indigo-500/25 hover:shadow-lg'
+const initial = (name?: string) => (name || 'A').charAt(0).toUpperCase()
+
+/** 问一群人：挑几个人 + 同一个问题 → 收集每个人的回答。 */
 export function SurveyPanel({
   profiles,
   selected,
@@ -38,12 +41,12 @@ export function SurveyPanel({
   const { t } = useTranslation()
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
-      {/* Agent 多选 */}
+    <div className="flex h-full flex-col overflow-y-auto px-5 py-5">
+      {/* 挑人 */}
       <div className="mb-4">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-semibold">
-            {t('step5.selectAgents')} ({selected.size})
+          <span className="text-sm font-medium">
+            {t('step5.cCrowdPick', { count: selected.size })}
           </span>
           <div className="flex gap-1">
             <Button variant="ghost" size="sm" onClick={onSelectAll}>
@@ -55,65 +58,80 @@ export function SurveyPanel({
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {profiles.map((p, idx) => (
-            <button
-              key={idx}
-              onClick={() => onToggle(idx)}
-              className={cn(
-                'rounded-md border px-2 py-1.5 text-left text-xs transition',
-                selected.has(idx) ? 'border-brand bg-brand/10' : 'hover:bg-accent',
-              )}
-            >
-              <div className="truncate font-medium">{p.name || p.username || `Agent ${idx}`}</div>
-              <div className="text-muted-foreground truncate text-[10px]">{p.profession}</div>
-            </button>
-          ))}
+          {profiles.map((p, idx) => {
+            const on = selected.has(idx)
+            return (
+              <button
+                key={p.username || idx}
+                type="button"
+                onClick={() => onToggle(idx)}
+                className={cn(
+                  'flex items-center gap-2 rounded-xl border p-2 text-left transition',
+                  on ? 'border-indigo-400 bg-indigo-500/10' : 'bg-card hover:-translate-y-0.5',
+                )}
+              >
+                <div
+                  className={cn(
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                    on
+                      ? 'bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {initial(p.name || p.username)}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-medium">
+                    {p.name || p.username || `#${idx}`}
+                  </div>
+                  <div className="text-muted-foreground truncate text-[10px]">{p.profession}</div>
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      {/* 提问 */}
-      <div className="mb-4">
+      {/* 问题 */}
+      <div className="mb-5">
         <Textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           rows={3}
-          placeholder={t('step5.surveyPlaceholder')}
-          className="resize-none"
+          placeholder={t('step5.cCrowdPlaceholder')}
+          className="resize-none rounded-2xl"
         />
         <Button
-          className="mt-2"
-          size="sm"
+          className={cn('mt-2 gap-1.5 rounded-full', GRADIENT)}
           onClick={onSubmit}
           disabled={isSurveying || selected.size === 0 || !question.trim()}
         >
           {isSurveying && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {t('step5.submitSurvey')}
+          {t('step5.cCrowdSubmit', { count: selected.size })}
         </Button>
       </div>
 
-      {/* 结果 */}
+      {/* 大家的回答 */}
       {results.length > 0 && (
         <div className="space-y-3">
-          <span className="text-sm font-semibold">
-            {t('step5.surveyResults')} ({results.length})
+          <span className="text-sm font-medium">
+            {t('step5.cCrowdResults', { count: results.length })}
           </span>
           {results.map((r) => (
-            <div key={r.agent_id} className="rounded-md border p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="bg-brand text-[11px] font-semibold text-white">
-                    {(r.agent_name || 'A').charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+            <div key={r.agent_id} className="bg-card rounded-2xl border p-4">
+              <div className="mb-2 flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-[11px] font-semibold text-white">
+                  {initial(r.agent_name)}
+                </div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{r.agent_name}</div>
-                  <div className="text-muted-foreground truncate text-[10px]">
+                  <div className="truncate text-sm font-medium">{r.agent_name}</div>
+                  <div className="text-muted-foreground truncate text-[11px]">
                     {r.profession || t('step2.unknownProfession')}
                   </div>
                 </div>
               </div>
               <div className="text-muted-foreground mb-2 flex items-start gap-1.5 text-xs">
-                <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <MessageCircleQuestion className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>{r.question}</span>
               </div>
               <Markdown content={r.answer} className="text-[13px]" />

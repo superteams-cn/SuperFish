@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MessageSquare, Link2, User, ChevronDown, ClipboardCheck } from 'lucide-react'
+import { Sparkles, User, Users, ArrowLeft } from 'lucide-react'
 
 import { ChatPanel } from '@/components/step5/ChatPanel'
 import { SurveyPanel } from '@/components/step5/SurveyPanel'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Logo } from '@/components/common/Logo'
 import { chatWithReport, getReport, getReportSections } from '@/lib/api/report'
 import { interviewAgents, getSimulationProfilesRealtime } from '@/lib/api/simulation'
 import { cn } from '@/lib/utils'
@@ -20,17 +20,19 @@ interface Step5Props {
 }
 
 type TargetKey = 'report_agent' | `agent_${number}`
+/** 追问对象：问 SuperFish / 问一个人 / 问一群人 */
+type Tab = 'super' | 'one' | 'crowd'
 
 /** 采访接口对单个 Agent 的回复 */
 type AgentAnswer = { response?: string; answer?: string }
 
 const initial = (name?: string) => (name || 'A').charAt(0).toUpperCase()
 
-/** 步骤五：深度交互（左：报告正文 / 右：与 ReportAgent / 单个 Agent 对话 + 多 Agent 问卷）。 */
+/** 步骤五：深入追问（左：结论报告 / 右：问 SuperFish · 问一个人 · 问一群人）。 */
 export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props) {
   const { t } = useTranslation()
 
-  const [mode, setMode] = useState<'chat' | 'survey'>('chat')
+  const [tab, setTab] = useState<Tab>('super')
   const [targetKey, setTargetKey] = useState<TargetKey>('report_agent')
   const [histories, setHistories] = useState<Record<string, ChatMessage[]>>({})
   const [isSending, setIsSending] = useState(false)
@@ -39,10 +41,6 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
   // 左侧报告正文
   const [outline, setOutline] = useState<ReportOutline | null>(null)
   const [generatedSections, setGeneratedSections] = useState<Record<number, string>>({})
-
-  // 顶部 Agent 下拉
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
 
   // 问卷状态
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -116,18 +114,6 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
     void loadProfiles()
   }, [loadProfiles])
 
-  // 点击外部关闭下拉
-  useEffect(() => {
-    if (!dropdownOpen) return
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [dropdownOpen])
-
   const currentMessages = histories[targetKey] || []
   const selectedAgentIndex = targetKey.startsWith('agent_') ? Number(targetKey.slice(6)) : null
   const selectedAgent = selectedAgentIndex !== null ? profiles[selectedAgentIndex] : null
@@ -196,9 +182,14 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
       })
     } catch (err) {
       addLog(t('log.sendFailed', { error: (err as Error).message }))
+      // 直接追问某个人需要模拟环境仍在运行；推演结束后环境多半已回收 → 人话引导改问 SuperFish
+      const friendly =
+        key !== 'report_agent'
+          ? t('step5.cAgentUnavailable')
+          : t('step5.errorOccurred', { error: (err as Error).message })
       append(key, {
         role: 'assistant',
-        content: t('step5.errorOccurred', { error: (err as Error).message }),
+        content: friendly,
         timestamp: new Date().toISOString(),
       })
     } finally {
@@ -239,26 +230,24 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
     }
   }
 
-  const isReportAgentActive = mode === 'chat' && targetKey === 'report_agent'
-  const isAgentActive = mode === 'chat' && targetKey.startsWith('agent_')
-
-  const selectReportAgent = () => {
-    setMode('chat')
+  /* ── 追问对象切换 ─────────────────────────────────────── */
+  const selectSuper = () => {
+    setTab('super')
     setTargetKey('report_agent')
-    setDropdownOpen(false)
   }
+  const selectOne = () => setTab('one')
+  const selectCrowd = () => setTab('crowd')
 
-  const selectAgent = (idx: number) => {
-    setMode('chat')
+  const pickAgent = (idx: number) => {
     setTargetKey(`agent_${idx}`)
-    setDropdownOpen(false)
     addLog(t('log.selectChatTarget', { name: profiles[idx]?.name || profiles[idx]?.username }))
   }
+  const backToPicker = () => setTargetKey('report_agent')
 
   return (
-    <div className="bg-muted/30 flex h-full overflow-hidden">
-      {/* 左侧：报告正文 */}
-      <div className="bg-card w-[45%] min-w-[420px] max-w-[680px] flex-shrink-0 overflow-y-auto border-r px-8 py-6 xl:px-10">
+    <div className="flex h-full overflow-hidden">
+      {/* 左侧：结论报告（不透明「纸」，可对照追问；长滚动不卡） */}
+      <div className="bg-background w-[44%] min-w-[400px] max-w-[660px] flex-shrink-0 overflow-y-auto border-r px-8 py-6 xl:px-10">
         <ReportOutlinePanel
           outline={outline}
           generatedSections={generatedSections}
@@ -266,107 +255,38 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
         />
       </div>
 
-      {/* 右侧：交互区 */}
+      {/* 右侧：追问区（透出玻璃氛围，不用白底） */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* 顶部操作栏 */}
-        <div className="bg-card flex items-center justify-between gap-4 border-b px-5 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <MessageSquare className="text-foreground/80 h-6 w-6 shrink-0" />
-            <div className="flex min-w-0 flex-col">
-              <span className="text-sm font-semibold">{t('step5.interactiveTools')}</span>
-              <span className="text-muted-foreground font-mono text-[11px]">
-                {t('step5.agentsAvailable', { count: profiles.length })}
-              </span>
+        {/* 顶部：身份 + 三入口 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <Logo variant="mark" className="h-7 w-7 shrink-0 rounded-full" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">{t('step5.cTitle')}</div>
+              <div className="text-muted-foreground text-xs">{t('step5.cSubtitle')}</div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Report Agent 胶囊 */}
-            <Pill active={isReportAgentActive} onClick={selectReportAgent}>
-              <Link2 className="h-3.5 w-3.5 opacity-70" />
-              <span>{t('step5.chatWithReportAgent')}</span>
-            </Pill>
-
-            {/* Agent 下拉 */}
+          <div className="bg-muted/50 flex items-center gap-1 rounded-full border p-1">
+            <SegBtn active={tab === 'super'} onClick={selectSuper} icon={Sparkles}>
+              {t('step5.cAskSuper')}
+            </SegBtn>
             {profiles.length > 0 && (
-              <div className="relative" ref={dropdownRef}>
-                <Pill
-                  active={isAgentActive}
-                  onClick={() => {
-                    setDropdownOpen((v) => !v)
-                  }}
-                  className="w-[200px] justify-between"
-                >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <User className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                    <span className="truncate">
-                      {selectedAgent
-                        ? selectedAgent.name || selectedAgent.username
-                        : t('step5.chatWithAgent')}
-                    </span>
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      'h-3 w-3 shrink-0 opacity-60 transition-transform',
-                      dropdownOpen && 'rotate-180',
-                    )}
-                  />
-                </Pill>
-
-                {dropdownOpen && (
-                  <div className="bg-card absolute left-1/2 top-[calc(100%+6px)] z-50 max-h-80 w-60 -translate-x-1/2 overflow-y-auto rounded-xl border shadow-lg">
-                    <div className="text-muted-foreground border-b px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide">
-                      {t('step5.selectChatTarget')}
-                    </div>
-                    {profiles.map((agent, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => selectAgent(idx)}
-                        className={cn(
-                          'hover:bg-accent flex w-full items-center gap-3 border-l-[3px] border-transparent px-4 py-2.5 text-left transition',
-                          targetKey === `agent_${idx}` && 'border-brand bg-accent',
-                        )}
-                      >
-                        <Avatar className="h-8 w-8 shrink-0">
-                          <AvatarFallback className="bg-brand text-[11px] font-semibold text-white">
-                            {initial(agent.name || agent.username)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-semibold">
-                            {agent.name || agent.username || `Agent ${idx}`}
-                          </div>
-                          <div className="text-muted-foreground truncate text-[11px]">
-                            {agent.profession || t('step2.unknownProfession')}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <>
+                <SegBtn active={tab === 'one'} onClick={selectOne} icon={User}>
+                  {t('step5.cAskOne')}
+                </SegBtn>
+                <SegBtn active={tab === 'crowd'} onClick={selectCrowd} icon={Users}>
+                  {t('step5.cAskCrowd')}
+                </SegBtn>
+              </>
             )}
-
-            <div className="bg-border mx-1.5 h-6 w-px" />
-
-            {/* 问卷胶囊 */}
-            <Pill
-              active={mode === 'survey'}
-              onClick={() => {
-                setMode('survey')
-                setDropdownOpen(false)
-              }}
-              tone="survey"
-            >
-              <ClipboardCheck className="h-3.5 w-3.5 opacity-70" />
-              <span>{t('step5.sendSurvey')}</span>
-            </Pill>
           </div>
         </div>
 
         {/* 内容区 */}
         <div className="flex-1 overflow-hidden">
-          {mode === 'survey' ? (
+          {tab === 'crowd' ? (
             <SurveyPanel
               profiles={profiles}
               selected={selected}
@@ -386,10 +306,32 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
               results={surveyResults}
               onSubmit={submitSurvey}
             />
+          ) : tab === 'one' && selectedAgentIndex === null ? (
+            <PeoplePicker profiles={profiles} onPick={pickAgent} />
+          ) : tab === 'one' ? (
+            <div className="flex h-full flex-col">
+              <button
+                type="button"
+                onClick={backToPicker}
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 border-b px-4 py-2 text-xs transition-colors"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                {t('step5.cChangePerson')}
+              </button>
+              <div className="min-h-0 flex-1">
+                <ChatPanel
+                  target="agent"
+                  agent={selectedAgent}
+                  messages={currentMessages}
+                  isSending={isSending}
+                  onSend={sendMessage}
+                />
+              </div>
+            </div>
           ) : (
             <ChatPanel
-              target={targetKey === 'report_agent' ? 'report_agent' : 'agent'}
-              agent={selectedAgent}
+              target="report_agent"
+              agent={null}
               messages={currentMessages}
               isSending={isSending}
               onSend={sendMessage}
@@ -401,36 +343,72 @@ export function Step5Interaction({ reportId, simulationId, addLog }: Step5Props)
   )
 }
 
-/** 操作栏胶囊按钮（默认中性，tone="survey" 为绿色强调）。 */
-function Pill({
+/** 顶部三入口分段按钮 */
+function SegBtn({
   active,
   onClick,
+  icon: Icon,
   children,
-  className,
-  tone = 'default',
 }: {
   active?: boolean
   onClick: () => void
+  icon: typeof Sparkles
   children: React.ReactNode
-  className?: string
-  tone?: 'default' | 'survey'
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-1.5 whitespace-nowrap rounded-full border border-transparent px-3.5 py-2 text-xs font-medium transition',
-        tone === 'survey'
-          ? active
-            ? 'bg-emerald-600 text-white shadow-sm'
-            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
-          : active
-            ? 'bg-foreground text-background shadow-sm'
-            : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
-        className,
+        'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition',
+        active
+          ? 'bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white shadow-sm'
+          : 'text-muted-foreground hover:text-foreground',
       )}
     >
+      <Icon className="h-3.5 w-3.5" />
       {children}
     </button>
+  )
+}
+
+/** 选人墙：挑一个推演里的人来追问 */
+function PeoplePicker({
+  profiles,
+  onPick,
+}: {
+  profiles: Profile[]
+  onPick: (idx: number) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="h-full overflow-y-auto px-5 py-6">
+      <p className="text-muted-foreground mb-4 text-center text-sm">{t('step5.cPickPrompt')}</p>
+      <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-2">
+        {profiles.map((p, idx) => (
+          <button
+            key={p.username || idx}
+            type="button"
+            onClick={() => onPick(idx)}
+            className="bg-card flex items-start gap-3 rounded-2xl border p-4 text-left transition-transform duration-300 hover:-translate-y-0.5"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-medium text-white">
+              {initial(p.name || p.username)}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate font-medium">{p.name || p.username}</div>
+              <div className="text-muted-foreground truncate text-xs">
+                {p.profession || t('step2.unknownProfession')}
+              </div>
+              {p.bio && (
+                <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed">
+                  {p.bio}
+                </p>
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

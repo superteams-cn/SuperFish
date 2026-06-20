@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, User, ChevronDown, Brain, Globe, Zap, Users, Wrench } from 'lucide-react'
+import { ArrowUp, User } from 'lucide-react'
 
+import { Logo } from '@/components/common/Logo'
 import { Markdown } from '@/components/Markdown'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { ACCENT_SOFT } from '@/lib/ui-meta'
 import type { Profile } from '@/lib/step2-types'
-import type { ChatMessage, ToolCall } from '@/lib/step5-types'
+import type { ChatMessage } from '@/lib/step5-types'
 
 interface Props {
-  /** 对话对象：报告智能体 或 模拟世界中的某个 Agent */
+  /** 对话对象：SuperFish 分析师 或 推演里的某个人 */
   target: 'report_agent' | 'agent'
   /** target === 'agent' 时选中的个体 */
   agent?: Profile | null
@@ -21,32 +19,22 @@ interface Props {
   onSend: (text: string) => void
 }
 
-function formatTime(ts?: string) {
-  if (!ts) return ''
-  try {
-    return new Date(ts).toLocaleTimeString('en-US', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return ''
-  }
-}
+const GRADIENT = 'bg-gradient-to-br from-indigo-500 to-fuchsia-500'
+const initial = (name?: string) => (name || '?').charAt(0).toUpperCase()
 
-const initial = (name?: string) => (name || 'A').charAt(0).toUpperCase()
-
-/** 通用聊天面板：消息气泡列表 + 输入框（与 ReportAgent / 单个 Agent 复用）。 */
+/**
+ * C 端追问对话面板：和「SuperFish 分析师」或「推演里的某个人」对话。
+ * 延续首页对话气质——引导式空状态 + 示例问题 + 玻璃气泡 + 打字指示。
+ * 长滚动区用不透明背景，气泡用实色，避免透出动画背景导致卡顿。
+ */
 export function ChatPanel({ target, agent, messages, isSending, onSend }: Props) {
   const { t } = useTranslation()
   const [input, setInput] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
 
-  const isReportAgent = target === 'report_agent'
-  // 个体优先展示无数字后缀的真名(name)，缺失时回退到 username
-  const agentDisplayName = agent?.name || agent?.username
-  const senderName = isReportAgent ? t('step5.reportAgentName') : agentDisplayName || 'Agent'
-  const senderInitial = isReportAgent ? 'R' : initial(agentDisplayName)
+  const isReport = target === 'report_agent'
+  const agentName = agent?.name || agent?.username
+  const senderName = isReport ? t('step5.reportAgentName') : agentName || t('step5.someone')
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -59,76 +47,95 @@ export function ChatPanel({ target, agent, messages, isSending, onSend }: Props)
     setInput('')
   }
 
-  const assistantAvatar = (
-    <Avatar className="h-8 w-8">
-      <AvatarFallback className="bg-brand text-[11px] font-semibold text-white">
-        {senderInitial}
-      </AvatarFallback>
-    </Avatar>
-  )
+  const examples = isReport
+    ? [t('step5.exReportA'), t('step5.exReportB'), t('step5.exReportC')]
+    : [t('step5.exAgentA'), t('step5.exAgentB')]
+
+  const AssistantAvatar = () =>
+    isReport ? (
+      <Logo variant="mark" className="h-8 w-8 shrink-0 rounded-full shadow-sm" />
+    ) : (
+      <div
+        className={cn(
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white',
+          GRADIENT,
+        )}
+      >
+        {initial(agentName)}
+      </div>
+    )
 
   return (
     <div className="flex h-full flex-col">
-      {/* 对话对象信息卡 */}
-      {isReportAgent ? <ReportAgentToolsCard /> : agent && <AgentProfileCard agent={agent} />}
+      {/* 对话对象简介（人话，无工具黑话） */}
+      <div className="flex items-center gap-3 border-b px-4 py-3">
+        <AssistantAvatar />
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">{senderName}</div>
+          <div className="text-muted-foreground truncate text-xs">
+            {isReport
+              ? t('step5.reportAgentTagline')
+              : agent?.profession || t('step2.unknownProfession')}
+          </div>
+        </div>
+      </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      {/* 消息流 */}
+      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
         {messages.length === 0 && (
-          <p className="text-muted-foreground mt-8 text-center text-sm">
-            {isReportAgent ? t('step5.chatEmptyReportAgent') : t('step5.chatEmptyAgent')}
-          </p>
+          <div className="mx-auto mt-6 max-w-md text-center">
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              {isReport
+                ? t('step5.chatEmptyReportAgent')
+                : t('step5.chatEmptyAgent', { name: agentName || t('step5.someone') })}
+            </p>
+            <div className="mt-4 flex flex-col items-stretch gap-2">
+              {examples.map((ex) => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => !isSending && onSend(ex)}
+                  disabled={isSending}
+                  className="bg-muted hover:bg-accent rounded-full px-4 py-2 text-sm transition disabled:opacity-50"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
+
         {messages.map((msg, idx) => {
           const isUser = msg.role === 'user'
           return (
-            <div key={idx} className={cn('flex gap-2', isUser ? 'flex-row-reverse' : 'flex-row')}>
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback
-                  className={cn(
-                    'text-[11px] font-semibold',
-                    isUser ? 'bg-muted text-foreground' : 'bg-brand text-white',
-                  )}
-                >
-                  {isUser ? <User className="h-4 w-4" /> : senderInitial}
-                </AvatarFallback>
-              </Avatar>
-              <div className={cn('min-w-0 max-w-[80%]', isUser ? 'items-end' : 'items-start')}>
-                <div
-                  className={cn(
-                    'mb-1 flex items-baseline gap-2',
-                    isUser ? 'flex-row-reverse' : 'flex-row',
-                  )}
-                >
-                  <span className="text-xs font-semibold">
-                    {isUser ? t('step5.youName') : senderName}
-                  </span>
-                  <span className="text-muted-foreground text-[10px]">
-                    {formatTime(msg.timestamp)}
-                  </span>
+            <div key={idx} className={cn('flex gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
+              {isUser ? (
+                <div className="bg-muted text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+                  <User className="h-4 w-4" />
                 </div>
-                <div
-                  className={cn(
-                    'rounded-lg px-3 py-2 text-sm',
-                    isUser ? 'bg-brand text-white' : 'bg-card border',
-                  )}
-                >
-                  {isUser ? (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                  ) : (
-                    <Markdown content={msg.content} />
-                  )}
-                </div>
-                {!isUser && msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <ToolCallsLog calls={msg.toolCalls} />
+              ) : (
+                <AssistantAvatar />
+              )}
+              <div
+                className={cn(
+                  'max-w-[78%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
+                  isUser ? `${GRADIENT} text-white` : 'bg-muted text-foreground',
+                )}
+              >
+                {isUser ? (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                ) : (
+                  <Markdown content={msg.content} />
                 )}
               </div>
             </div>
           )
         })}
+
         {isSending && (
-          <div className="flex flex-row gap-2">
-            {assistantAvatar}
-            <div className="bg-card flex items-center rounded-lg border px-3 py-3">
+          <div className="flex gap-2.5">
+            <AssistantAvatar />
+            <div className="bg-muted flex items-center rounded-2xl px-3.5 py-3">
               <TypingIndicator />
             </div>
           </div>
@@ -136,8 +143,9 @@ export function ChatPanel({ target, agent, messages, isSending, onSend }: Props)
         <div ref={endRef} />
       </div>
 
+      {/* 输入 */}
       <div className="border-t p-3">
-        <div className="flex gap-2">
+        <div className="bg-muted/60 flex items-end gap-2 rounded-2xl border px-2 py-1.5">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -147,25 +155,29 @@ export function ChatPanel({ target, agent, messages, isSending, onSend }: Props)
                 send()
               }
             }}
-            rows={2}
+            rows={1}
             placeholder={t('step5.inputPlaceholder')}
-            className="flex-1 resize-none"
+            className="max-h-32 min-h-[2.25rem] flex-1 resize-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0"
           />
-          <Button
-            size="icon"
-            className="h-auto"
+          <button
+            type="button"
             onClick={send}
             disabled={isSending || !input.trim()}
+            className={cn(
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition',
+              GRADIENT,
+              (isSending || !input.trim()) && 'opacity-40',
+            )}
           >
-            <Send className="h-4 w-4" />
-          </Button>
+            <ArrowUp className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
-/** 三点跳动的“正在输入”指示器 */
+/** 三点跳动的「正在输入」指示器 */
 function TypingIndicator() {
   return (
     <span className="flex items-center gap-1">
@@ -177,151 +189,5 @@ function TypingIndicator() {
         />
       ))}
     </span>
-  )
-}
-
-const TOOLS = [
-  { key: 'InsightForge', icon: Brain, color: ACCENT_SOFT.violet },
-  { key: 'PanoramaSearch', icon: Globe, color: ACCENT_SOFT.blue },
-  { key: 'QuickSearch', icon: Zap, color: ACCENT_SOFT.orange },
-  { key: 'InterviewSubAgent', icon: Users, color: ACCENT_SOFT.green },
-] as const
-
-/** ReportAgent 工具说明卡（可折叠，展示 4 个专业工具） */
-function ReportAgentToolsCard() {
-  const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(true)
-
-  return (
-    <div className="from-muted/40 to-muted/10 border-b bg-gradient-to-br">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <Avatar className="h-10 w-10">
-          <AvatarFallback className="bg-brand text-sm font-semibold text-white">R</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">{t('step5.reportAgentChat')}</div>
-          <div className="text-muted-foreground truncate text-xs">{t('step5.reportAgentDesc')}</div>
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          onClick={() => setExpanded((v) => !v)}
-          aria-label={t('step5.toggleTools')}
-        >
-          <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
-        </Button>
-      </div>
-      {expanded && (
-        <div className="grid grid-cols-1 gap-2 px-4 pb-3 sm:grid-cols-2">
-          {TOOLS.map(({ key, icon: Icon, color }) => (
-            <div key={key} className="bg-card flex gap-2 rounded-lg border p-3">
-              <div
-                className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                  color,
-                )}
-              >
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-semibold">{t(`step5.tool${key}`)}</div>
-                <div className="text-muted-foreground line-clamp-2 text-[11px] leading-snug">
-                  {t(`step5.tool${key}Desc`)}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** 选中 Agent 的档案卡（username / @name / profession + 可展开 bio） */
-function AgentProfileCard({ agent }: { agent: Profile }) {
-  const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(true)
-  const hasBio = !!agent.bio
-
-  return (
-    <div className="from-muted/40 to-muted/10 border-b bg-gradient-to-br">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <Avatar className="h-10 w-10">
-          <AvatarFallback className="bg-brand text-sm font-semibold text-white">
-            {initial(agent.name || agent.username)}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">
-            {agent.name || agent.username || 'Agent'}
-          </div>
-          <div className="text-muted-foreground flex items-center gap-2 text-xs">
-            {agent.username && <span className="text-muted-foreground/70">@{agent.username}</span>}
-            <span className="bg-muted rounded px-1.5 py-0.5 text-[10px] font-medium">
-              {agent.profession || t('step2.unknownProfession')}
-            </span>
-          </div>
-        </div>
-        {hasBio && (
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            onClick={() => setExpanded((v) => !v)}
-            aria-label={t('step5.toggleProfile')}
-          >
-            <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
-          </Button>
-        )}
-      </div>
-      {expanded && hasBio && (
-        <div className="px-4 pb-3">
-          <div className="bg-card rounded-lg border p-3">
-            <div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
-              {t('step5.profileBio')}
-            </div>
-            <p className="text-foreground/80 text-[13px] leading-relaxed">{agent.bio}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** 工具调用日志（可折叠，展示本轮回复触发的工具调用） */
-function ToolCallsLog({ calls }: { calls: ToolCall[] }) {
-  const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(false)
-
-  return (
-    <div className="mt-1.5">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px] transition"
-      >
-        <Wrench className="h-3 w-3" />
-        {t('step5.toolCallsCount', { count: calls.length })}
-        <ChevronDown className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')} />
-      </button>
-      {expanded && (
-        <div className="mt-1 space-y-1">
-          {calls.map((c, i) => {
-            const name = c.tool_name || c.name || t('step5.unknownTool')
-            const params = c.parameters
-            return (
-              <div key={i} className="bg-muted/50 rounded-md border p-2 text-[11px]">
-                <div className="font-mono font-semibold">{name}</div>
-                {params && Object.keys(params).length > 0 && (
-                  <pre className="text-muted-foreground mt-1 overflow-x-auto whitespace-pre-wrap break-words">
-                    {JSON.stringify(params, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
   )
 }
