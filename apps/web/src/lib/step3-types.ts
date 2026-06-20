@@ -16,6 +16,7 @@ export interface RunStatus {
   runner_status?: string
   process_pid?: number
   force_restarted?: boolean
+  error?: string
   [key: string]: unknown
 }
 

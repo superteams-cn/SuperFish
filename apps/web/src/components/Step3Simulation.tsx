@@ -100,6 +100,13 @@ export function Step3Simulation({
     detailTimer.current = null
   }, [])
 
+  const startPolling = useCallback(() => {
+    stopPolling()
+    statusTimer.current = setInterval(fetchRunStatus, 2000)
+    detailTimer.current = setInterval(fetchRunStatusDetail, 3000)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopPolling])
+
   const checkPlatformsCompleted = (data: RunStatus) => {
     if (!data) return false
     const tc = data.twitter_completed === true
@@ -204,8 +211,7 @@ export function Step3Simulation({
         addLog(`  ├─ PID: ${res.data.process_pid || '-'}`)
         setPhase(1)
         setRunStatus(res.data)
-        statusTimer.current = setInterval(fetchRunStatus, 2000)
-        detailTimer.current = setInterval(fetchRunStatusDetail, 3000)
+        startPolling()
       } else {
         addLog(t('log.startFailed', { error: res.error || t('common.unknownError') }))
         onUpdateStatus('error')
@@ -214,22 +220,59 @@ export function Step3Simulation({
       addLog(t('log.startException', { error: (err as Error).message }))
       onUpdateStatus('error')
     }
-  }, [
-    addLog,
-    fetchRunStatus,
-    fetchRunStatusDetail,
-    maxRounds,
-    onUpdateStatus,
-    simulationId,
-    stopPolling,
-    t,
-  ])
+  }, [addLog, startPolling, maxRounds, onUpdateStatus, simulationId, stopPolling, t])
+
+  // 进入页面/刷新时：先查后端真实状态再决定，避免无脑 force 重启把进行中的模拟从第0轮重来。
+  const resumeOrStart = useCallback(async () => {
+    addLog(t('log.step3Init'))
+    if (!simulationId) return
+
+    let data: RunStatus | null = null
+    try {
+      const res = await getRunStatus(simulationId)
+      if (res.success && res.data) data = res.data
+    } catch {
+      // 拉状态失败，下面回退到首次启动
+    }
+
+    const status = data?.runner_status
+
+    // 运行中：仅恢复监控，不重启、不清日志/进度
+    if (status === 'running' || status === 'starting') {
+      addLog(t('log.resumingSim'))
+      setPhase(1)
+      setRunStatus(data!)
+      prevTwitter.current = data!.twitter_current_round ?? 0
+      prevReddit.current = data!.reddit_current_round ?? 0
+      onUpdateStatus('processing')
+      void fetchRunStatusDetail()
+      startPolling()
+      return
+    }
+
+    // 已结束：载入最终结果，进入可生成报告态
+    if (status === 'completed' || status === 'stopped') {
+      addLog(t('log.simAlreadyCompleted'))
+      setPhase(2)
+      setRunStatus(data!)
+      void fetchRunStatusDetail()
+      onUpdateStatus('completed')
+      return
+    }
+
+    // 上次失败：提示错误但仍允许重新启动（页面无独立启动按钮）
+    if (status === 'failed') {
+      addLog(t('log.simPreviouslyFailed', { error: data?.error || t('common.unknownError') }))
+    }
+
+    // ready / idle / 无运行记录 / failed → 首次（或重新）启动
+    void doStart()
+  }, [addLog, doStart, fetchRunStatusDetail, onUpdateStatus, simulationId, startPolling, t])
 
   useEffect(() => {
     if (initedRef.current) return
     initedRef.current = true
-    addLog(t('log.step3Init'))
-    if (simulationId) void doStart()
+    void resumeOrStart()
     return () => stopPolling()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
