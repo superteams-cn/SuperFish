@@ -235,7 +235,9 @@
     "noPendingFiles": "没找到待处理的材料，请回首页重新上传并填写预测需求。（提示：刷新本页会丢失已选材料）正在返回首页…",
     "buildInterrupted": "图谱构建任务已丢失，构建可能被中断（通常是后端重启导致）。请从首页重新发起构建。",
     "stepProgress": "步骤 {current}/{total}",
-    "goToStage": "回到「{stage}」"
+    "goToStage": "回到「{stage}」",
+    "quotaChip": "推演名额 {running}/{limit}",
+    "quotaHint": "为保证每场推演的算力，同一账号最多同时运行 {limit} 场。名额满时，需等其中一场结束（或在运行页提前结束）才能再开新的一场。"
   },
   "step1": {
     "ontologyGeneration": "本体生成",
@@ -306,6 +308,9 @@
     "cGatheredCount": "已召集 {count} / {total} 人",
     "cGatheredDone": "{count} 个虚拟的人已就位",
     "cNext": "下一步：让他们演一遍",
+    "quotaFullTitle": "推演名额已满",
+    "quotaFullBody": "你已有 {running}/{limit} 场推演在运行。为保证每场的算力，同一账号最多同时运行 {limit} 场。请等其中一场结束，或在它的运行页点「提前结束」，再回来开始这一场。",
+    "quotaFullOk": "我知道了",
     "cCustomRounds": "自定义推演时长（轮）",
     "cRegenerate": "重新召集一批",
     "cBackstage": "幕后数据",
@@ -459,6 +464,8 @@
     "cNext": "下一步：给你结论",
     "cGenerating": "正在整理结论……",
     "cStopEarly": "够了，提前结束这一遍",
+    "cStartBlocked": "这一遍没能开始",
+    "cRetry": "再试一次",
     "cWaiting": "他们正在登场，马上开始……",
     "cBackstage": "幕后数据",
     "cBackstageHint": "双平台轮次、运行进程、原始日志，一般用不到",

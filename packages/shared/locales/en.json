@@ -235,7 +235,9 @@
     "noPendingFiles": "No pending materials found. Go back to the home page to re-upload and enter your prediction request. (Note: refreshing this page clears the selected materials.) Redirecting to home…",
     "buildInterrupted": "The graph build task was lost and the build may have been interrupted (usually due to a backend restart). Please start a new build from the home page.",
     "stepProgress": "Step {current}/{total}",
-    "goToStage": "Back to “{stage}”"
+    "goToStage": "Back to “{stage}”",
+    "quotaChip": "Runs {running}/{limit}",
+    "quotaHint": "To guarantee compute for each run, one account can run at most {limit} simulations at once. When full, wait for one to finish (or end it early on its run page) before starting another."
   },
   "step1": {
     "ontologyGeneration": "Ontology Generation",
@@ -306,6 +308,9 @@
     "cGatheredCount": "{count} / {total} gathered",
     "cGatheredDone": "{count} virtual people are ready",
     "cNext": "Next: let them play it out",
+    "quotaFullTitle": "No run slots available",
+    "quotaFullBody": "You already have {running}/{limit} simulations running. To guarantee compute for each one, an account can run at most {limit} at once. Wait for one to finish, or click “end early” on its run page, then come back to start this one.",
+    "quotaFullOk": "Got it",
     "cCustomRounds": "Custom duration (rounds)",
     "cRegenerate": "Gather a new batch",
     "cBackstage": "Behind the scenes",
@@ -459,6 +464,8 @@
     "cNext": "Next: give me the conclusion",
     "cGenerating": "Putting it together…",
     "cStopEarly": "Enough — end this run early",
+    "cStartBlocked": "This run couldn't start",
+    "cRetry": "Try again",
     "cWaiting": "They're stepping on stage, starting soon…",
     "cBackstage": "Behind the scenes",
     "cBackstageHint": "Per-platform rounds, process, raw logs — rarely needed",

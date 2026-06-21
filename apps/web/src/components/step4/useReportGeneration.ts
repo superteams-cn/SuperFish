@@ -9,6 +9,7 @@ import {
   getReportSections,
 } from '@/lib/api/report'
 import { usePolling } from '@/hooks/usePolling'
+import { useDedupedLog } from '@/hooks/useDedupedLog'
 import type { AgentLogEntry, ReportOutline } from '@/lib/step4-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
 
@@ -54,6 +55,27 @@ export function useReportGeneration({ reportId, addLog, onUpdateStatus }: Option
     consolePoll.stop()
   }, [snapshotPoll, agentPoll, consolePoll])
 
+  // 完成收口：无论由哪路轮询（report / sections / progress / agent-log）先判定完成，
+  // 都统一置完成态并立即停轮询。修复「停轮询只挂在 agent-log report_complete 单点上、
+  // 该路一旦被打断（401 窗口 / 连接池风暴）就永不停轮询」的缺陷。
+  const markComplete = useCallback(() => {
+    setIsComplete(true)
+    setCurrentSectionIndex(null)
+    onUpdateStatus('completed')
+    stopPolling()
+  }, [onUpdateStatus, stopPolling])
+
+  // 轮询错误日志去重：相同错误只记一次，成功即复位。避免持续失败时
+  // 每个失败请求都 addLog → setState → 整页高频重渲染（界面抖动的放大器）。
+  const errDeduper = useDedupedLog<string>()
+  const logErrorOnce = useCallback(
+    (msg: string) => {
+      if (errDeduper.isNew(msg)) addLog(msg)
+    },
+    [addLog, errDeduper],
+  )
+  const clearErr = errDeduper.reset
+
   const mergeSectionContent = useCallback((sectionIndex: number | undefined, content: unknown) => {
     if (!sectionIndex || typeof content !== 'string' || !content.trim()) return
     setGeneratedSections((prev) => {
@@ -89,11 +111,7 @@ export function useReportGeneration({ reportId, addLog, onUpdateStatus }: Option
       if (reportRes.status === 'fulfilled' && reportRes.value.success && reportRes.value.data) {
         const report = reportRes.value.data
         if (report.outline) applyOutline(report.outline)
-        if (report.status === 'completed') {
-          setIsComplete(true)
-          setCurrentSectionIndex(null)
-          onUpdateStatus('completed')
-        }
+        if (report.status === 'completed') markComplete()
       }
 
       if (
@@ -114,11 +132,7 @@ export function useReportGeneration({ reportId, addLog, onUpdateStatus }: Option
           })
           return changed ? next : prev
         })
-        if (sectionsRes.value.data.is_complete) {
-          setIsComplete(true)
-          setCurrentSectionIndex(null)
-          onUpdateStatus('completed')
-        }
+        if (sectionsRes.value.data.is_complete) markComplete()
       }
 
       if (
@@ -128,19 +142,37 @@ export function useReportGeneration({ reportId, addLog, onUpdateStatus }: Option
       ) {
         const progress = progressRes.value.data
         if (progress.stage === 'completed' || progress.status === 'completed') {
-          setIsComplete(true)
-          setCurrentSectionIndex(null)
-          onUpdateStatus('completed')
+          markComplete()
         } else if (progress.current_section) {
           updateCurrentSectionFromTitle(progress.current_section)
         }
       }
+
+      // 三路全失败（如 401 窗口 / 网络抖动）才算本轮失败 → 抛出以触发 usePolling 退避；
+      // 任一成功即视为正常并复位错误去重。
+      if (
+        reportRes.status === 'rejected' &&
+        sectionsRes.status === 'rejected' &&
+        progressRes.status === 'rejected'
+      ) {
+        throw new Error(t('log.loadException', { error: (reportRes.reason as Error)?.message }))
+      }
+      clearErr()
     } catch (err) {
-      addLog(t('log.loadException', { error: (err as Error).message }))
+      logErrorOnce(t('log.loadException', { error: (err as Error).message }))
+      throw err
     } finally {
       fetchingSnapshot.current = false
     }
-  }, [addLog, applyOutline, onUpdateStatus, reportId, t, updateCurrentSectionFromTitle])
+  }, [
+    applyOutline,
+    clearErr,
+    logErrorOnce,
+    markComplete,
+    reportId,
+    t,
+    updateCurrentSectionFromTitle,
+  ])
 
   const fetchAgentLog = useCallback(async () => {
     if (!reportId) return
@@ -165,18 +197,15 @@ export function useReportGeneration({ reportId, addLog, onUpdateStatus }: Option
           mergeSectionContent(log.section_index, log.details.content)
           setCurrentSectionIndex(null)
         }
-        if (log.action === 'report_complete') {
-          setIsComplete(true)
-          setCurrentSectionIndex(null)
-          onUpdateStatus('completed')
-          stopPolling()
-        }
+        if (log.action === 'report_complete') markComplete()
       })
       agentLine.current = res.data.total_lines ?? res.data.from_line + newLogs.length
+      clearErr()
     } catch (err) {
-      addLog(t('log.fetchAgentLogFailed', { error: (err as Error).message }))
+      logErrorOnce(t('log.fetchAgentLogFailed', { error: (err as Error).message }))
+      throw err
     }
-  }, [addLog, applyOutline, mergeSectionContent, onUpdateStatus, reportId, stopPolling, t])
+  }, [applyOutline, clearErr, logErrorOnce, markComplete, mergeSectionContent, reportId, t])
 
   const fetchConsoleLog = useCallback(async () => {
     if (!reportId) return
@@ -187,10 +216,12 @@ export function useReportGeneration({ reportId, addLog, onUpdateStatus }: Option
       if (!newLogs.length) return
       setConsoleLogs((prev) => [...prev, ...newLogs])
       consoleLine.current = res.data.total_lines ?? res.data.from_line + newLogs.length
+      clearErr()
     } catch (err) {
-      addLog(t('log.fetchConsoleLogFailed', { error: (err as Error).message }))
+      logErrorOnce(t('log.fetchConsoleLogFailed', { error: (err as Error).message }))
+      throw err
     }
-  }, [addLog, reportId, t])
+  }, [clearErr, logErrorOnce, reportId, t])
 
   // 清空展示态与行号、停止轮询（重新生成前的乐观重置）。
   const resetView = useCallback(() => {
@@ -205,7 +236,8 @@ export function useReportGeneration({ reportId, addLog, onUpdateStatus }: Option
     agentLine.current = 0
     consoleLine.current = 0
     fetchingSnapshot.current = false
-  }, [stopPolling])
+    clearErr()
+  }, [clearErr, stopPolling])
 
   // 让 usePolling 的稳定回调始终指向最新的 fetch 实现
   fetchSnapshotRef.current = fetchReportSnapshot

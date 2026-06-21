@@ -22,7 +22,12 @@ from ...services.oasis_profile_generator import OasisProfileGenerator
 from ...services.simulation_manager import SimulationManager, SimulationStatus
 from ...services.simulation_runner import SimulationRunner
 from ...utils.locale import get_locale, set_locale, t
-from ._shared import _check_simulation_prepared, _owned_simulation, logger
+from ._shared import (
+    _check_simulation_prepared,
+    _owned_simulation,
+    count_running_simulations,
+    logger,
+)
 
 router = APIRouter()
 
@@ -401,6 +406,27 @@ def list_simulations(project_id: str | None = None, current=Depends(get_current_
 
     except Exception as e:
         logger.error(f"列出模拟失败: {str(e)}")
+        return _error(str(e), 500, traceback=traceback.format_exc())
+
+
+@router.get("/quota")
+def get_simulation_quota(current=Depends(get_current_user)):
+    """当前用户的并发推演配额：上限 + 真正在跑的数量。
+
+    供前端在「进入推演」前显式告知名额占用，并在已满时拦截，避免用户点了才失败。
+    running 经实时对账，不含异常结束的僵尸。
+    """
+    try:
+        from ...core.settings import settings
+
+        limit = settings.max_concurrent_simulations
+        running = count_running_simulations(current["user_id"])
+        return {
+            "success": True,
+            "data": {"limit": limit, "running": running, "available": max(limit - running, 0)},
+        }
+    except Exception as e:
+        logger.error(f"查询并发配额失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())
 
 

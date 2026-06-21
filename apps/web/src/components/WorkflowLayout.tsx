@@ -9,6 +9,7 @@ import { GraphPanel, type GraphData } from '@/components/GraphPanel'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { Brand } from '@/components/common/Brand'
+import { QuotaChip } from '@/components/common/QuotaChip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
@@ -119,6 +120,9 @@ export function WorkflowLayout({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* 并发推演名额：顶栏长驻，让用户进入推演前就知道还能不能开 */}
+          <QuotaChip />
+
           {/* 视图切换（图谱 / 分屏 / 内容） */}
           <ToggleGroup
             type="single"

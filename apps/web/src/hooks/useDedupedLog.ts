@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 
 interface Deduper<T> {
   /** 若 key 与上次不同则返回 true 并记下它；相同返回 false。用于「同一内容不重复打日志」。 */
@@ -29,5 +29,7 @@ export function useDedupedLog<T>(initial?: T): Deduper<T> {
     lastRef.current = initial
   }, [initial])
 
-  return { isNew, reset }
+  // 返回稳定 handle：与 usePolling 同理，调用方常把 deduper 放进 useCallback/useEffect
+  // 依赖；若每渲染返回新对象会让那些依赖链每渲染失效，埋下渲染循环/无效重算的隐患。
+  return useMemo(() => ({ isNew, reset }), [isNew, reset])
 }

@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 
 import { AuroraBackground } from '@/components/AuroraBackground'
+import { RouteErrorElement } from '@/components/RouteErrorElement'
 
 // 路由级代码分割：每个页面单独打包，按需加载，减小首屏体积
 const HomePage = lazy(() => import('@/pages/HomePage'))
@@ -37,13 +38,18 @@ function withSuspense(node: ReactNode) {
   )
 }
 
-export const router = createBrowserRouter([
-  { path: '/', element: withSuspense(<HomePage />) },
-  { path: '/process/:projectId', element: withSuspense(<ProcessPage />) },
-  { path: '/simulation/:simulationId', element: withSuspense(<SimulationPage />) },
-  { path: '/simulation/:simulationId/start', element: withSuspense(<SimulationRunPage />) },
-  { path: '/report/:reportId', element: withSuspense(<ReportPage />) },
-  { path: '/interaction/:reportId', element: withSuspense(<InteractionPage />) },
-  { path: '/reset-password', element: withSuspense(<ResetPasswordPage />) },
-  { path: '/verify-email', element: withSuspense(<VerifyEmailPage />) },
-])
+// 所有路由共享同一玻璃质感错误兜底页，替换 React Router 默认白底报错页。
+const errorElement = <RouteErrorElement />
+
+export const router = createBrowserRouter(
+  [
+    { path: '/', element: withSuspense(<HomePage />) },
+    { path: '/process/:projectId', element: withSuspense(<ProcessPage />) },
+    { path: '/simulation/:simulationId', element: withSuspense(<SimulationPage />) },
+    { path: '/simulation/:simulationId/start', element: withSuspense(<SimulationRunPage />) },
+    { path: '/report/:reportId', element: withSuspense(<ReportPage />) },
+    { path: '/interaction/:reportId', element: withSuspense(<InteractionPage />) },
+    { path: '/reset-password', element: withSuspense(<ResetPasswordPage />) },
+    { path: '/verify-email', element: withSuspense(<VerifyEmailPage />) },
+  ].map((route) => ({ ...route, errorElement })),
+)
