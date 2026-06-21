@@ -23,6 +23,16 @@ from . import process_control as pc
 logger = get_logger("superfish.simulation.monitor")
 
 
+def _sync_sim_terminal(simulation_id: str, runner_status: Any) -> None:
+    """落 runner 终态后，把 sim 级 SimulationStatus 同步到一致，避免僵尸泄漏配额。
+
+    懒加载 SimulationManager 以规避导入环；失败仅告警(已在 manager 内部吞)。
+    """
+    from ..simulation_manager import SimulationManager
+
+    SimulationManager().sync_terminal_status(simulation_id, runner_status)
+
+
 def run_monitor_loop(runner: Any, simulation_id: str, locale: str = "zh") -> None:
     """监控一个模拟运行直至其进程结束，并落终态、清理资源。
 
@@ -138,12 +148,14 @@ def run_monitor_loop(runner: Any, simulation_id: str, locale: str = "zh") -> Non
         state.owner_id = None
         state.owner_heartbeat = None
         runner._save_run_state(state)
+        _sync_sim_terminal(simulation_id, new_status)
 
     except Exception as e:
         logger.error(f"监控线程异常: {simulation_id}, error={str(e)}")
         state.runner_status = RunnerStatus.FAILED
         state.error = str(e)
         runner._save_run_state(state)
+        _sync_sim_terminal(simulation_id, RunnerStatus.FAILED)
 
     finally:
         # 停止图谱记忆更新器

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Sparkles, ArrowRight, Code, Radio } from 'lucide-react'
+import { Loader2, Sparkles, ArrowRight, Code, Radio, AlertTriangle, RotateCcw } from 'lucide-react'
 
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { Button } from '@/components/ui/button'
@@ -61,8 +61,16 @@ export function Step3Simulation({
   const navigate = useNavigate()
 
   // 双平台运行状态 + 实时动作流两路轮询、恢复/启动状态机收拢在编排 hook 内。
-  const { phase, runStatus, meaningfulActions, feedActions, elapsed, markCompleted } =
-    useSimulationRun({ simulationId, maxRounds, minutesPerRound, addLog, onUpdateStatus })
+  const {
+    phase,
+    runStatus,
+    meaningfulActions,
+    feedActions,
+    elapsed,
+    markCompleted,
+    startError,
+    retry,
+  } = useSimulationRun({ simulationId, maxRounds, minutesPerRound, addLog, onUpdateStatus })
 
   // 纯视图态
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
@@ -125,73 +133,98 @@ export function Step3Simulation({
   const cur = (runStatus.twitter_current_round || 0) + (runStatus.reddit_current_round || 0)
   const softProgress = done ? 100 : tot > 0 ? Math.min(Math.round((cur / (2 * tot)) * 100), 99) : 6
 
+  // 启动被阻断（如并发配额已满）：用明确的错误态替代乐观「登场」动画，附重试入口。
+  const blocked = !!startError
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="relative flex h-full flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">
           <div className="mx-auto max-w-2xl">
-            {/* 舞台标题 */}
-            <div className="animate-rise-in text-center">
-              <StageIcon done={done} />
-              <h2 className="text-2xl font-semibold tracking-tight">
-                {done ? t('step3.cActed') : t('step3.cActing')}
-              </h2>
-              <p className="text-muted-foreground mt-2">
-                {done ? t('step3.cActedDone', { count: interactions }) : t('step3.cActingSub')}
-              </p>
-            </div>
-
-            {/* 进展：软进度 + 互动计数 */}
-            <div className="mt-6">
-              <p className="text-muted-foreground mb-2 text-center text-sm">
-                {t('step3.cInteractions', { count: interactions })}
-              </p>
-              <SoftProgress value={softProgress} floor={6} />
-            </div>
-
-            {/* 完成 → 给你结论 CTA；运行中 → 提前结束 */}
-            <div className="animate-rise-in mt-7 flex flex-col items-center gap-3">
-              {done ? (
+            {blocked ? (
+              <div className="animate-rise-in mx-auto mt-6 max-w-md text-center">
+                <div className="bg-destructive/10 text-destructive mx-auto flex h-14 w-14 items-center justify-center rounded-full">
+                  <AlertTriangle className="h-7 w-7" />
+                </div>
+                <h2 className="mt-4 text-xl font-semibold tracking-tight">
+                  {t('step3.cStartBlocked')}
+                </h2>
+                <p className="text-muted-foreground mt-2 text-sm leading-relaxed">{startError}</p>
                 <Button
-                  variant="gradient"
-                  className="h-12 gap-2 rounded-full px-8 text-base"
-                  onClick={handleGenerateReport}
-                  disabled={isGeneratingReport}
+                  variant="outline"
+                  className="mt-5 gap-2 rounded-full px-6"
+                  onClick={() => void retry()}
                 >
-                  {isGeneratingReport ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-5 w-5" />
-                  )}
-                  {isGeneratingReport ? t('step3.cGenerating') : t('step3.cNext')}
-                  {!isGeneratingReport && <ArrowRight className="h-5 w-5" />}
+                  <RotateCcw className="h-4 w-4" />
+                  {t('step3.cRetry')}
                 </Button>
-              ) : (
-                <TextButton
-                  onClick={() => setStopConfirmOpen(true)}
-                  disabled={isStopping}
-                  className="text-xs"
-                >
-                  {t('step3.cStopEarly')}
-                </TextButton>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                {/* 舞台标题 */}
+                <div className="animate-rise-in text-center">
+                  <StageIcon done={done} />
+                  <h2 className="text-2xl font-semibold tracking-tight">
+                    {done ? t('step3.cActed') : t('step3.cActing')}
+                  </h2>
+                  <p className="text-muted-foreground mt-2">
+                    {done ? t('step3.cActedDone', { count: interactions }) : t('step3.cActingSub')}
+                  </p>
+                </div>
 
-            {/* 实况流（人话）：谁·做了什么·内容 */}
-            <div className="mt-8">
-              {feedActions.length > 0 ? (
-                <div className="space-y-3">
-                  {feedActions.map((action) => (
-                    <LiveActionItem key={action._uniqueId || action.id} action={action} />
-                  ))}
+                {/* 进展：软进度 + 互动计数 */}
+                <div className="mt-6">
+                  <p className="text-muted-foreground mb-2 text-center text-sm">
+                    {t('step3.cInteractions', { count: interactions })}
+                  </p>
+                  <SoftProgress value={softProgress} floor={6} />
                 </div>
-              ) : (
-                <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-3 text-sm">
-                  <Radio className="h-6 w-6 animate-pulse text-indigo-500" />
-                  {t('step3.cWaiting')}
+
+                {/* 完成 → 给你结论 CTA；运行中 → 提前结束 */}
+                <div className="animate-rise-in mt-7 flex flex-col items-center gap-3">
+                  {done ? (
+                    <Button
+                      variant="gradient"
+                      className="h-12 gap-2 rounded-full px-8 text-base"
+                      onClick={handleGenerateReport}
+                      disabled={isGeneratingReport}
+                    >
+                      {isGeneratingReport ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-5 w-5" />
+                      )}
+                      {isGeneratingReport ? t('step3.cGenerating') : t('step3.cNext')}
+                      {!isGeneratingReport && <ArrowRight className="h-5 w-5" />}
+                    </Button>
+                  ) : (
+                    <TextButton
+                      onClick={() => setStopConfirmOpen(true)}
+                      disabled={isStopping}
+                      className="text-xs"
+                    >
+                      {t('step3.cStopEarly')}
+                    </TextButton>
+                  )}
                 </div>
-              )}
-            </div>
+
+                {/* 实况流（人话）：谁·做了什么·内容 */}
+                <div className="mt-8">
+                  {feedActions.length > 0 ? (
+                    <div className="space-y-3">
+                      {feedActions.map((action) => (
+                        <LiveActionItem key={action._uniqueId || action.id} action={action} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-3 text-sm">
+                      <Radio className="h-6 w-6 animate-pulse text-indigo-500" />
+                      {t('step3.cWaiting')}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* 幕后：双平台技术状态 / 原始日志 */}
             <div className="mt-10">

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, Network, Columns2, PanelRight } from 'lucide-react'
+import { CheckCircle2, Network, Columns2, PanelRight, Clapperboard } from 'lucide-react'
 
 import { readJourney, recordStage, stageUrl, type JourneyIds } from '@/lib/journey'
 
@@ -10,6 +10,7 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { Brand } from '@/components/common/Brand'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export type ViewMode = 'graph' | 'split' | 'workbench'
@@ -31,6 +32,8 @@ interface WorkflowLayoutProps {
   initialViewMode?: ViewMode
   /** 当前页已知的旅程 ID（项目/模拟/报告），用于驱动进度条上已到达阶段的跳转 */
   journeyIds?: JourneyIds
+  /** 并发推演名额（在跑/上限）。传入时在顶栏展示占用，让用户进入推演前心里有数 */
+  quota?: { running: number; limit: number } | null
   /** 右侧工作区内容 */
   children: ReactNode
 }
@@ -46,6 +49,7 @@ export function WorkflowLayout({
   onRefreshGraph,
   initialViewMode = 'split',
   journeyIds,
+  quota,
   children,
 }: WorkflowLayoutProps) {
   const { t } = useTranslation()
@@ -119,6 +123,30 @@ export function WorkflowLayout({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* 并发推演名额：让用户进入推演前就知道还能不能开 */}
+          {quota && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={cn(
+                      'mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium sm:inline-flex',
+                      quota.running >= quota.limit
+                        ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                        : 'border-border bg-muted/50 text-muted-foreground',
+                    )}
+                  >
+                    <Clapperboard className="h-3.5 w-3.5" />
+                    {t('main.quotaChip', { running: quota.running, limit: quota.limit })}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  {t('main.quotaHint', { limit: quota.limit })}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
           {/* 视图切换（图谱 / 分屏 / 内容） */}
           <ToggleGroup
             type="single"

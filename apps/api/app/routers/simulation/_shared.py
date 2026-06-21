@@ -10,10 +10,32 @@ from fastapi import Depends, HTTPException, Request
 
 from ...core.deps import get_current_user
 from ...core.logger import get_logger
+from ...domain.run_state import RunnerStatus
 from ...services.simulation_manager import SimulationManager, SimulationStatus
+from ...services.simulation_runner import SimulationRunner
 from ...utils.locale import t
 
 logger = get_logger("superfish.api.simulation")
+
+
+def count_running_simulations(user_id: str, exclude_id: str | None = None) -> int:
+    """统计某用户「真正在跑」的模拟数（并发配额用）。
+
+    仅按 sim 级 RUNNING 统计会把异常结束的僵尸算进来而泄漏配额，故对每个候选做实时对账：
+    SimulationRunner.get_run_state 内部判进程存活，并把僵尸回写终态 + 同步 sim 级状态，
+    所以这里既得到真实计数，又顺带清理了脏状态。exclude_id 用于排除「重启自身」。
+    """
+    candidates = [
+        s
+        for s in SimulationManager().list_simulations(user_id=user_id)
+        if s.status == SimulationStatus.RUNNING and s.simulation_id != exclude_id
+    ]
+    running = 0
+    for s in candidates:
+        rs = SimulationRunner.get_run_state(s.simulation_id)
+        if rs is not None and rs.runner_status in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
+            running += 1
+    return running
 
 
 def _enforce_sim_ownership(request: Request, current=Depends(get_current_user)):

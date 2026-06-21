@@ -22,6 +22,13 @@ from ..graph_memory_updater import GraphMemoryManager
 logger = get_logger("superfish.simulation.reconciler")
 
 
+def _sync_sim_terminal(simulation_id: str, runner_status: Any) -> None:
+    """对账落 runner 终态后，把 sim 级 SimulationStatus 同步到一致，避免僵尸泄漏配额。"""
+    from ..simulation_manager import SimulationManager
+
+    SimulationManager().sync_terminal_status(simulation_id, runner_status)
+
+
 def reconcile_state(runner: Any, state: SimulationRunState) -> SimulationRunState:
     """对从 PG 读出的快照做实时校正：running/starting 但进程已死 → 据日志判终态回写。
 
@@ -53,6 +60,7 @@ def reconcile_state(runner: Any, state: SimulationRunState) -> SimulationRunStat
             runner._save_run_state(state)
         except Exception as e:
             logger.warning(f"回写启动超时状态失败: {state.simulation_id}, error={e}")
+        _sync_sim_terminal(state.simulation_id, state.runner_status)
         return state
 
     # 进程已死但快照仍 running → 据 actions.jsonl 判终态
@@ -71,6 +79,7 @@ def reconcile_state(runner: Any, state: SimulationRunState) -> SimulationRunStat
         runner._save_run_state(state)
     except Exception as e:
         logger.warning(f"回写校正后的运行状态失败: {state.simulation_id}, error={e}")
+    _sync_sim_terminal(state.simulation_id, state.runner_status)
     return state
 
 
@@ -153,6 +162,7 @@ def reconcile_running_simulations(
         state.owner_id = None
         state.owner_heartbeat = None
         runner._save_run_state(state)
+        _sync_sim_terminal(sid, state.runner_status)
         finalized.append(sid)
         logger.info(f"终结已死的模拟: {sid} -> {state.runner_status.value}")
 

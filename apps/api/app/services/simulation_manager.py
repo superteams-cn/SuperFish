@@ -359,6 +359,40 @@ class SimulationManager:
         """获取模拟状态"""
         return self._load_simulation_state(simulation_id)
 
+    # RunnerStatus(运行态) → SimulationStatus(sim 级) 的终态映射。
+    # SimulationStatus 无 INTERRUPTED，被外部杀死/崩溃但可重启者归入 STOPPED。
+    _RUNNER_TO_SIM_TERMINAL = {
+        "completed": SimulationStatus.COMPLETED,
+        "failed": SimulationStatus.FAILED,
+        "interrupted": SimulationStatus.STOPPED,
+        "stopped": SimulationStatus.STOPPED,
+    }
+
+    def sync_terminal_status(self, simulation_id: str, runner_status: Any) -> None:
+        """把 sim 级 SimulationStatus 同步到与 runner 终态一致。
+
+        监控线程/对账器把运行态判成终态(COMPLETED/INTERRUPTED/FAILED)时只回写 run_state，
+        历史上不动 sim 级状态——导致异常结束的模拟在 Postgres 永远停留 RUNNING，配额闸门
+        (run.py)把僵尸算作"在跑"而泄漏配额。此方法补上这一步，失败仅告警(非关键路径)。
+        """
+        target = self._RUNNER_TO_SIM_TERMINAL.get(
+            str(getattr(runner_status, "value", runner_status))
+        )
+        if target is None:
+            return
+        try:
+            state = self._load_simulation_state(simulation_id)
+            if state is None or state.status == target:
+                return
+            # 仅从"活跃态"降级，避免覆盖用户显式置位(如 PAUSED 不在此列、已是终态则上面已返回)
+            if state.status not in (SimulationStatus.RUNNING, SimulationStatus.PREPARING):
+                return
+            state.status = target
+            self._save_simulation_state(state)
+            logger.info(f"[{simulation_id}] sim 级状态同步终态: {target.value}")
+        except Exception as exc:
+            logger.warning(f"[{simulation_id}] 同步 sim 级终态失败(忽略): {exc}")
+
     def list_simulations(
         self, project_id: str | None = None, user_id: str | None = None
     ) -> list[SimulationState]:

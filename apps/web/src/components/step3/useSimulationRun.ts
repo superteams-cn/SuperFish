@@ -32,6 +32,9 @@ export function useSimulationRun({
   const [phase, setPhase] = useState(0) // 0 未开始 / 1 运行中 / 2 已完成
   const [runStatus, setRunStatus] = useState<RunStatus>({})
   const [actions, setActions] = useState<ActionItem[]>([])
+  // 启动失败的本地化文案（如并发配额已满）。非空时组件展示明确的阻断态而非乐观「登场」动画，
+  // 让用户一眼看清「为什么没开始」，而不是盯着假的「马上就开始」干等。
+  const [startError, setStartError] = useState<string | null>(null)
 
   // 两路轮询的实际回调存入 ref，供 usePolling 调用最新实现（打破定义顺序的循环依赖）
   const fetchRunStatusRef = useRef<() => void | Promise<void>>(() => {})
@@ -151,6 +154,7 @@ export function useSimulationRun({
     }
     // 重置
     setPhase(0)
+    setStartError(null)
     setRunStatus({})
     setActions([])
     actionIds.current = new Set()
@@ -181,11 +185,15 @@ export function useSimulationRun({
         setRunStatus(res.data)
         startPolling()
       } else {
-        addLog(t('log.startFailed', { error: res.error || t('common.unknownError') }))
+        const msg = res.error || t('common.unknownError')
+        addLog(t('log.startFailed', { error: msg }))
+        setStartError(msg)
         onUpdateStatus('error')
       }
     } catch (err) {
-      addLog(t('log.startException', { error: (err as Error).message }))
+      const msg = (err as Error).message
+      addLog(t('log.startException', { error: msg }))
+      setStartError(msg)
       onUpdateStatus('error')
     }
   }, [addLog, startPolling, maxRounds, onUpdateStatus, simulationId, stopPolling, t])
@@ -259,5 +267,7 @@ export function useSimulationRun({
     feedActions,
     elapsed,
     markCompleted,
+    startError,
+    retry: doStart,
   }
 }

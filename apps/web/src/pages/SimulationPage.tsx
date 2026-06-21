@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { WorkflowLayout, type WorkflowStatus } from '@/components/WorkflowLayout'
 import { Step2EnvSetup } from '@/components/Step2EnvSetup'
+import { useSimulationQuota } from '@/hooks/useSimulationQuota'
 import { getProject, getGraphData } from '@/lib/api/graph'
 import {
   getSimulation,
@@ -24,6 +25,7 @@ export default function SimulationPage() {
   const [graphLoading, setGraphLoading] = useState(false)
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([])
   const [status, setStatus] = useState<WorkflowStatus>('processing')
+  const { quota, refresh: refreshQuota } = useSimulationQuota()
   const initedRef = useRef(false)
 
   const addLog = useCallback((msg: string) => {
@@ -179,6 +181,7 @@ export default function SimulationPage() {
       graphLoading={graphLoading}
       onRefreshGraph={refreshGraph}
       journeyIds={{ simulationId, projectId: projectData?.project_id }}
+      quota={quota}
     >
       <Step2EnvSetup
         simulationId={simulationId}
@@ -188,6 +191,8 @@ export default function SimulationPage() {
         onUpdateStatus={setStatus}
         onGoBack={handleGoBack}
         onNextStep={handleNextStep}
+        quota={quota}
+        refreshQuota={refreshQuota}
       />
     </WorkflowLayout>
   )

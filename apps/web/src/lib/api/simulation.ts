@@ -78,6 +78,17 @@ export const startSimulation = (
 ): Promise<ApiEnvelope<StartSimulationData>> =>
   requestWithRetry(() => http.post<StartSimulationData>('/api/simulation/start', data), 3, 1000)
 
+/** 当前用户的并发推演配额（上限 / 在跑 / 剩余）。 */
+export interface SimulationQuota {
+  limit: number
+  running: number
+  available: number
+}
+
+/** 查询并发推演配额：用于进入推演前显式告知名额并在已满时拦截。 */
+export const getSimulationQuota = (): Promise<ApiEnvelope<SimulationQuota>> =>
+  http.get<SimulationQuota>('/api/simulation/quota')
+
 /** 停止模拟。 */
 export const stopSimulation = (
   data: Record<string, unknown>,

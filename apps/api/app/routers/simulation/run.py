@@ -17,7 +17,12 @@ from ...schemas.simulation import StartSimulationRequest, StopSimulationRequest
 from ...services.simulation_manager import SimulationManager, SimulationStatus
 from ...services.simulation_runner import SimulationRunner
 from ...utils.locale import get_locale, t
-from ._shared import _check_simulation_prepared, _owned_simulation, logger
+from ._shared import (
+    _check_simulation_prepared,
+    _owned_simulation,
+    count_running_simulations,
+    logger,
+)
 
 router = APIRouter()
 
@@ -53,13 +58,10 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
             _start_lock = None
             return _error("模拟正在启动中，请稍候重试", 409)
 
-        # 配额：同时运行中的模拟数上限（重启自身不计入）
-        running = [
-            s
-            for s in SimulationManager().list_simulations(user_id=current["user_id"])
-            if s.status == SimulationStatus.RUNNING and s.simulation_id != simulation_id
-        ]
-        if len(running) >= settings.max_concurrent_simulations:
+        # 配额：同时运行中的模拟数上限（重启自身不计入；count_running_simulations 内部做实时
+        # 对账，僵尸不计数）。
+        running = count_running_simulations(current["user_id"], exclude_id=simulation_id)
+        if running >= settings.max_concurrent_simulations:
             return _error(
                 t("api.concurrentSimQuota", limit=settings.max_concurrent_simulations), 403
             )
