@@ -9,7 +9,6 @@
 import traceback
 
 from .core.logger import get_logger
-from .core.settings import settings
 from .models.project import ProjectManager, ProjectStatus
 from .models.task import TaskManager, TaskStatus
 from .utils.locale import set_locale, t
@@ -52,7 +51,7 @@ def run_graph_build(
             ProjectManager.save_project(project)
             return
 
-        builder = GraphBuilderService(api_key=settings.neo4j_uri)
+        builder = GraphBuilderService()
         builder.build_graph(
             task_id=task_id,
             text=text,
@@ -96,6 +95,76 @@ def run_graph_build(
             message=t("progress.buildFailed", error=str(e)),
             error=traceback.format_exc(),
         )
+
+
+def run_simulation_launch(
+    *,
+    simulation_id: str,
+    platform: str = "parallel",
+    max_rounds: int | None = None,
+    enable_graph_memory_update: bool = False,
+    graph_id: str | None = None,
+    locale: str = "zh",
+) -> None:
+    """在 worker 进程拉起 OASIS 模拟子进程（原 API 进程内 Popen，迁移为可入队作业）。
+
+    前置：API 已调 SimulationRunner._init_run_state 持久化 STARTING 运行态。本作业
+    调 _spawn_process 真正 Popen + 启动监控线程，worker 进程据此成为该模拟监控 owner。
+    成功后把所属模拟状态置 RUNNING；失败置 FAILED（运行态由 _spawn_process 兜底回写）。
+    """
+    from .domain.simulation import SimulationStatus
+    from .services.simulation_manager import SimulationManager
+    from .services.simulation_runner import SimulationRunner
+
+    set_locale(locale)
+    try:
+        SimulationRunner._spawn_process(
+            simulation_id=simulation_id,
+            platform=platform,
+            max_rounds=max_rounds,
+            enable_graph_memory_update=enable_graph_memory_update,
+            graph_id=graph_id,
+        )
+        try:
+            manager = SimulationManager()
+            sim = manager.get_simulation(simulation_id)
+            if sim and sim.status != SimulationStatus.RUNNING:
+                sim.status = SimulationStatus.RUNNING
+                manager._save_simulation_state(sim)
+        except Exception as exc:
+            logger.warning(f"[{simulation_id}] 置模拟状态 RUNNING 失败（忽略）: {exc}")
+        logger.info(f"[{simulation_id}] 模拟子进程已在 worker 拉起")
+    except Exception as e:
+        logger.error(f"[{simulation_id}] 拉起模拟子进程失败: {e}")
+        logger.debug(traceback.format_exc())
+        try:
+            manager = SimulationManager()
+            sim = manager.get_simulation(simulation_id)
+            if sim:
+                sim.status = SimulationStatus.FAILED
+                sim.error = str(e)
+                manager._save_simulation_state(sim)
+        except Exception as exc:
+            logger.warning(f"[{simulation_id}] 置模拟状态 FAILED 失败（忽略）: {exc}")
+
+
+def run_reconcile(*, locale: str = "zh") -> None:
+    """周期对账：接管本机仍在跑的孤儿、终结真正已死的运行。
+
+    由 worker cron 周期调用。使「持有某模拟的 worker 崩溃/重启」后，该模拟能被及时
+    终结（其 Redis 心跳随进程消失而过期）或在本机重启场景被重新接管 —— 实现任意
+    worker 经 DB 状态对账接管，而非依赖单一进程存活。reset_detach=False 不打断优雅退出。
+    """
+    from .services.simulation_runner import SimulationRunner
+
+    set_locale(locale)
+    try:
+        result = SimulationRunner.reconcile_running_simulations(locale=locale, reset_detach=False)
+        if result.get("adopted") or result.get("finalized"):
+            logger.info(f"周期对账: 接管={result['adopted']}, 终结={result['finalized']}")
+    except Exception as e:
+        logger.error(f"周期对账失败: {e}")
+        logger.debug(traceback.format_exc())
 
 
 def run_report_generate(

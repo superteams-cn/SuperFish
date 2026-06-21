@@ -1,0 +1,64 @@
+# 可扩展部署拓扑：nginx(静态前端 + 反代) + 3 个 API server + 5 个 worker。
+#
+# 复用已在运行的中间件（postgres/redis/rustfs，见 docker-compose.yml），通过
+# 外部网络 superfish_default 连接，按服务名访问。中间件不在此重复定义/不再额外发布端口。
+#
+# 用法（独立 project，避免与基础 compose 的 superfish/worker 定义冲突）：
+#   先确保中间件在跑：   docker compose up -d redis postgres rustfs
+#   构建并起扩展栈：     docker compose -p sf-scale -f docker-compose.scale.yml up -d --build
+#   访问：               http://localhost:8080
+#   扩缩：               docker compose -p sf-scale -f docker-compose.scale.yml up -d --scale worker=8
+#
+# 若要完全独立部署（自带中间件），把本文件的 networks.default 改为内部网络并补回中间件定义。
+
+x-app-env: &app-env
+  # 容器内按中间件服务名访问（覆盖 .env 中的 localhost 默认值）
+  REDIS_URL: redis://redis:6379/0
+  DATABASE_URL: postgresql+psycopg://superfish:superfish_pg@postgres:5432/superfish
+  S3_ENDPOINT_URL: http://rustfs:9000
+  S3_ACCESS_KEY: superfish
+  S3_SECRET_KEY: superfish_secret
+  S3_BUCKET: superfish
+
+services:
+  api:
+    build: .
+    image: superfish-local:dev
+    working_dir: /app/apps/api
+    command: ["uv", "run", "python", "run.py"]
+    env_file:
+      - .env
+    environment: *app-env
+    deploy:
+      replicas: 3
+    restart: unless-stopped
+
+  worker:
+    build: .
+    image: superfish-local:dev
+    working_dir: /app/apps/api
+    command: ["uv", "run", "arq", "app.worker.WorkerSettings"]
+    env_file:
+      - .env
+    environment: *app-env
+    deploy:
+      replicas: 5
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/nginx/Dockerfile
+      args:
+        # 前端构建期写入：所有 /api 请求打到 nginx 对外地址，由其反代到 api 副本
+        VITE_API_BASE_URL: http://localhost:8080
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+networks:
+  default:
+    name: superfish_default
+    external: true

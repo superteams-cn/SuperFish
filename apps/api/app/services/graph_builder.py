@@ -1,6 +1,6 @@
 """
 图谱构建服务
-使用严格本体约束的 LLM 抽取 + Neo4j 存储。
+使用严格本体约束的 LLM 抽取 + Postgres 存储。
 """
 
 import asyncio
@@ -24,14 +24,14 @@ from pydantic import PrivateAttr
 from ..core.logger import get_logger
 from ..core.settings import settings
 from ..models.task import TaskManager, TaskStatus
-from ..utils.llm_client import LLMClient
-from ..utils.locale import get_locale, set_locale, t
-from ..utils.neo4j_graph_utils import (
+from ..utils.graph_store import (
     delete_group,
     fetch_all_edges,
     fetch_all_nodes,
-    get_neo4j_graph_client,
+    get_graph_store,
 )
+from ..utils.llm_client import LLMClient
+from ..utils.locale import get_locale, set_locale, t
 from .entity_resolution import (
     candidate_clusters,
     resolve_entities,
@@ -207,14 +207,14 @@ class GraphBuilderService:
 
     该实现不依赖开放式图谱抽取，而是在每个文本块上用项目生成的
     ontology 作为严格 schema，让 LLM 只返回允许的实体类型、关系类型和
-    source/target 组合，再写入 Neo4j。
+    source/target 组合，再写入图谱存储。
     """
 
     def __init__(self, api_key: str | None = None, llm_client: Any | None = None):
-        # api_key 参数保留以兼容现有调用；Neo4j 配置从 Config 读取。
+        # api_key 参数保留以兼容现有调用。
         self.task_manager = TaskManager()
         self.llm = llm_client or self._make_llamaindex_llm()
-        self.client = get_neo4j_graph_client()
+        self.client = get_graph_store()
 
     def _make_llamaindex_llm(self) -> OpenAILike:
         return SuperFishStructuredLLM()
@@ -327,7 +327,7 @@ class GraphBuilderService:
                 message=t("progress.textSplit", count=total_chunks),
             )
 
-            # 每抽取一个文本块就把已累积的节点/边增量写入 Neo4j，
+            # 每抽取一个文本块就把已累积的节点/边增量写入图谱，
             # 让前端轮询 /api/graph/data 时能实时看到图谱逐步生长。
             nodes, edges = self._extract_chunks(
                 chunks=chunks,
@@ -512,7 +512,7 @@ class GraphBuilderService:
                         list(edges_by_key.values()),
                     )
                 except Exception as exc:  # 增量写失败不应中断整体抽取
-                    logger.warning(f"增量写入 Neo4j 失败（块 {idx + 1}/{total}）: {exc}")
+                    logger.warning(f"增量写入图谱失败（块 {idx + 1}/{total}）: {exc}")
 
             if idx < total - 1:
                 time.sleep(0.2)
@@ -899,7 +899,7 @@ class GraphBuilderService:
                 "source_node_name": node_map.get(e["source_node_uuid"], ""),
                 "target_node_name": node_map.get(e["target_node_uuid"], ""),
                 "attributes": e["attributes"],
-                "created_at": str(e["created_at"]) if e["created_at"] else None,
+                "created_at": str(e["created_at"]) if e.get("created_at") else None,
                 "valid_at": str(e["valid_at"]) if e.get("valid_at") else None,
                 "invalid_at": str(e["invalid_at"]) if e.get("invalid_at") else None,
                 "expired_at": str(e["expired_at"]) if e.get("expired_at") else None,

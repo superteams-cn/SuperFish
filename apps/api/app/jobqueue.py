@@ -22,11 +22,13 @@ logger = get_logger("superfish.jobqueue")
 
 # 作业名 → (arq worker 函数名, 同步业务函数)
 # arq 函数名与 worker.py 中注册的协程名一致。
-# 注：模拟启动未入队 —— 其控制面(stop/interview/IPC)与子进程同进程绑定，
-# 拆到独立 worker 需要跨进程命令路由层，故模拟仍在拥有子进程的进程内执行。
+# 模拟启动已入队：控制面(stop/interview/IPC)走 Redis 总线（见 simulation_ipc），
+# 故子进程可由独立 worker 持有，API 任意副本仍能控制 —— 实现计算面横向扩展。
+# 队列不可用时回退本地线程（_run_inline），等价于早期 API 进程内 Popen 的单机行为。
 _JOBS = {
     "graph_build": ("graph_build_job", jobs.run_graph_build),
     "report_generate": ("report_generate_job", jobs.run_report_generate),
+    "simulation_run": ("simulation_run_job", jobs.run_simulation_launch),
 }
 
 

@@ -14,6 +14,25 @@ from .core.db import Base
 from .core.settings import settings
 
 
+class GraphRow(Base):
+    """知识图谱存储表：整张图以两段 JSONB 存放。
+
+    访问模式全是「取整张图」+ 应用层朴素打分（无多跳遍历），且单图极小（百级节点），
+    故 Postgres JSONB 一行存下即可，无需独立图数据库、无在线单点。
+    nodes: [{uuid,name,summary,labels,attributes}]；edges: [{uuid,name,fact,
+    source_node_uuid,target_node_uuid,source_node_name,target_node_name,attributes,...}]。
+    """
+
+    __tablename__ = "graphs"
+
+    graph_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True, default="")
+    nodes: Mapped[list] = mapped_column(JSONB, default=list)
+    edges: Mapped[list] = mapped_column(JSONB, default=list)
+    created_at: Mapped[str] = mapped_column(String(40), default="")
+    updated_at: Mapped[str] = mapped_column(String(40), default="")
+
+
 class UserRow(Base):
     """用户账户表（邮箱+密码，纯个人账户）。
 

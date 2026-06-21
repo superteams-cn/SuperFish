@@ -15,8 +15,6 @@ dependencies = [
     "python-multipart>=0.0.9",
     # LLM 相关
     "openai>=1.0.0",
-    # Neo4j 知识图谱（schema 约束抽取）
-    "neo4j>=5.0.0",
     # Redis（任务状态持久化，跨进程/重启不丢失）
     "redis>=5.0.0",
     # OASIS 社交媒体模拟

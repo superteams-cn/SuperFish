@@ -1,5 +1,5 @@
 """
-Neo4j 检索工具服务
+图谱检索工具服务
 封装图谱搜索、节点读取、边查询等工具，供 Report Agent 使用
 
 核心检索工具：
@@ -17,16 +17,17 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..core.logger import get_logger
-from ..utils.llm_client import LLMClient
-from ..utils.locale import get_locale, t
-from ..utils.neo4j_graph_utils import (
+from ..utils.graph_store import (
     fetch_all_edges,
     fetch_all_nodes,
-    get_neo4j_graph_client,
+    fetch_node,
+    get_graph_store,
     run_async,
 )
+from ..utils.llm_client import LLMClient
+from ..utils.locale import get_locale, t
 
-logger = get_logger("superfish.neo4j_tools")
+logger = get_logger("superfish.graph_tools")
 
 
 def _search_terms(query: str) -> list[str]:
@@ -372,9 +373,9 @@ class _SubQueriesOutput(BaseModel):
 # ─── 主服务类 ────────────────────────────────────────────────────────────────
 
 
-class Neo4jToolsService:
+class GraphToolsService:
     """
-    Neo4j 检索工具服务
+    图谱检索工具服务
 
     【核心检索工具】
     1. insight_forge - 深度洞察检索（自动生成子问题，多维度检索）
@@ -393,9 +394,9 @@ class Neo4jToolsService:
 
     def __init__(self, api_key: str | None = None, llm_client: LLMClient | None = None):
         # api_key 参数保留以兼容现有调用
-        self._client = get_neo4j_graph_client()
+        self._client = get_graph_store()
         self._llm_client = llm_client
-        logger.info(t("console.neo4jToolsInitialized"))
+        logger.info(t("console.graphToolsInitialized"))
 
     @property
     def llm(self) -> LLMClient:
@@ -602,25 +603,20 @@ class Neo4jToolsService:
 
     # ── 单节点详情 ────────────────────────────────────────────────────────────
 
-    def get_node_detail(self, node_uuid: str) -> NodeInfo | None:
+    def get_node_detail(self, node_uuid: str, graph_id: str = "") -> NodeInfo | None:
         logger.info(t("console.fetchingNodeDetail", uuid=node_uuid[:8]))
+        if not graph_id:
+            return None
         try:
-            cypher = """
-            MATCH (n:Entity) WHERE n.uuid = $uuid
-            RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary,
-                   labels(n) AS labels, n.attributes_json AS attributes_json
-            """
-
-            records = self._client.read(cypher, {"uuid": node_uuid})
-            if not records:
+            r = fetch_node(graph_id, node_uuid)
+            if not r:
                 return None
-            r = records[0]
             return NodeInfo(
                 uuid=r.get("uuid") or "",
                 name=r.get("name") or "",
                 labels=list(r.get("labels") or []),
                 summary=r.get("summary") or "",
-                attributes=json.loads(r.get("attributes_json") or "{}"),
+                attributes=r.get("attributes") or {},
             )
         except Exception as e:
             logger.error(t("console.fetchNodeDetailFailed", error=str(e)))
@@ -761,7 +757,7 @@ class Neo4jToolsService:
 
         for uid in entity_uuids:
             try:
-                node = self.get_node_detail(uid)
+                node = self.get_node_detail(uid, graph_id)
                 if node:
                     node_map[uid] = node
                     entity_type = next(

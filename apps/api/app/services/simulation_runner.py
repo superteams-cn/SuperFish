@@ -20,10 +20,10 @@ from ..core.logger import get_logger
 from ..domain.run_state import AgentAction, RoundSummary, RunnerStatus, SimulationRunState
 from ..repositories.run_state_repo import RunStateRepository
 from ..utils.locale import get_locale, set_locale
-from .neo4j_graph_memory_updater import Neo4jGraphMemoryManager
+from .graph_memory_updater import GraphMemoryManager
 from .simulation import log_reader
 from .simulation import process_control as pc
-from .simulation_ipc import SimulationIPCClient
+from .simulation_ipc import CommandType, SimulationIPCClient
 
 logger = get_logger("superfish.simulation_runner")
 
@@ -76,6 +76,8 @@ class SimulationRunner:
     _instance_id: str | None = None
     # owner 心跳超时（秒）：超过则视为旧 owner 已失联，可被接管
     OWNER_TTL = 15.0
+    # 启动宽限期（秒）：STARTING 但尚无 PID（已入队待 worker 拉起）的容忍窗口，超期判失败
+    LAUNCH_GRACE = 120.0
     # 退出/热重载时「松手」标志，让监控线程尽快退出（不杀子进程）
     _detaching: bool = False
     _detached: bool = False
@@ -135,16 +137,29 @@ class SimulationRunner:
             logger.warning(f"释放监控所有权失败: {simulation_id}, error={e}")
 
     @classmethod
+    def _owns_locally(cls, simulation_id: str) -> bool:
+        """本进程是否确实在监控该模拟（持有监控线程或子进程句柄）。
+
+        用于判定内存缓存 `_run_states` 是否可信：仅 owner（拉起或接管者）的缓存是实时的，
+        非 owner（如 API 入队后）的缓存是过期快照，必须改读 DB。
+        """
+        return simulation_id in cls._monitor_threads or simulation_id in cls._processes
+
+    @classmethod
     def get_run_state(cls, simulation_id: str) -> SimulationRunState | None:
         """获取运行状态。
 
         拥有子进程的进程（worker/本进程）持有 `_run_states` 里的实时对象；
-        其他副本（如另一个 API 进程）则从 Postgres 读取最新快照（不缓存，保证新鲜）。
+        其他副本（如 API 入队后并不监控的进程）则从 Postgres 读取最新快照（保证新鲜）。
+
+        关键：仅当本进程【确实在监控】该模拟（有监控线程或子进程句柄）时才信任内存缓存。
+        否则（如 API 调 _init_run_state 入队后缓存了 STARTING 快照、但拉起在 worker）必须读
+        DB —— 不然 API 会一直返回自己缓存的 STARTING，看不到 worker 写入的 running/completed。
 
         返回前做实时校正：若标记 running/starting 但进程已死，则据 actions.jsonl
         终态回写 completed/interrupted，消除「进程已退出但快照仍 running」的脏状态。
         """
-        if simulation_id in cls._run_states:
+        if cls._owns_locally(simulation_id):
             return cls._run_states[simulation_id]
         state = cls._load_run_state(simulation_id)
         if state is None:
@@ -159,8 +174,31 @@ class SimulationRunner:
         """
         if state.runner_status not in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
             return state
+        # 存活性优先以 host-independent 信号为准（模拟可能跑在另一台 worker，本机 PID 探活
+        # 对异机进程无意义，会把存活的远端模拟误判为已死）：
+        #  1) owner 心跳新鲜 → 其监控线程在整个运行期（含活跃轮次）每 2s 刷新，最可靠；
+        #  2) Redis IPC 心跳在 → 子进程存活（活跃轮次中可能因 TTL 短暂缺失，故配合 owner 心跳）。
+        if cls._owner_fresh(state):
+            return state
+        if cls._env_alive(state.simulation_id):
+            return state
         if cls._pid_alive(state.process_pid, state.process_start_time):
-            return state  # 进程仍活，快照由 owner 监控线程保持新鲜
+            return state  # 进程在本机仍活（owner 视角；心跳偶发缺失时的兜底）
+
+        # 尚未拿到 PID 的 STARTING：已入队但 worker 还没真正 Popen（跨进程/副本的排队窗口）。
+        # 在宽限期内视为「启动中」保持原样，避免被误判为 INTERRUPTED；超期才判失败。
+        if state.process_pid is None and state.runner_status == RunnerStatus.STARTING:
+            if cls._within_launch_grace(state):
+                return state
+            state.runner_status = RunnerStatus.FAILED
+            state.error = state.error or "启动超时：worker 未在宽限期内拉起模拟进程"
+            state.twitter_running = False
+            state.reddit_running = False
+            try:
+                cls._save_run_state(state)
+            except Exception as e:
+                logger.warning(f"回写启动超时状态失败: {state.simulation_id}, error={e}")
+            return state
 
         # 进程已死但快照仍 running → 据 actions.jsonl 判终态
         sim_dir = os.path.join(cls.RUN_STATE_DIR, state.simulation_id)
@@ -179,6 +217,41 @@ class SimulationRunner:
         except Exception as e:
             logger.warning(f"回写校正后的运行状态失败: {state.simulation_id}, error={e}")
         return state
+
+    @classmethod
+    def _env_alive(cls, simulation_id: str) -> bool:
+        """模拟是否存活（以 Redis IPC 心跳为准，host-independent）。
+
+        模拟子进程每轮循环刷新 sim:ipc:alive:{sid}（TTL 过期即失效），故无论模拟跑在
+        哪台 worker，任意副本都能据此判活 —— 取代「本机 PID 探活」对异机进程的无效判断。
+        """
+        try:
+            from .simulation_ipc import read_env_status
+
+            return read_env_status(simulation_id).get("status") == "alive"
+        except Exception:
+            return False
+
+    @classmethod
+    def _owner_fresh(cls, state: SimulationRunState) -> bool:
+        """是否有新鲜 owner 正在监控（owner 心跳在 OWNER_TTL 内）。"""
+        if not state.owner_id or not state.owner_heartbeat:
+            return False
+        return (time.time() - state.owner_heartbeat) < cls.OWNER_TTL
+
+    @classmethod
+    def _within_launch_grace(cls, state: SimulationRunState) -> bool:
+        """STARTING 但尚无 PID 的状态是否仍在启动宽限期内（据 started_at 判断）。
+
+        解析失败时保守返回 True（视为刚入队），避免把正常排队的模拟误杀。
+        """
+        if not state.started_at:
+            return True
+        try:
+            started = datetime.fromisoformat(state.started_at)
+        except (ValueError, TypeError):
+            return True
+        return (datetime.now() - started).total_seconds() < cls.LAUNCH_GRACE
 
     @classmethod
     def _load_run_state(cls, simulation_id: str) -> SimulationRunState | None:
@@ -201,7 +274,8 @@ class SimulationRunner:
         result: dict[str, SimulationRunState] = {}
         to_load: list[str] = []
         for sid in simulation_ids:
-            if sid in cls._run_states:
+            # 仅信任本进程确实在监控的内存态；非 owner 缓存可能过期，改读 DB（见 get_run_state）
+            if cls._owns_locally(sid):
                 result[sid] = cls._run_states[sid]
             else:
                 to_load.append(sid)
@@ -234,37 +308,13 @@ class SimulationRunner:
         cls._run_states[state.simulation_id] = state
 
     @classmethod
-    def start_simulation(
-        cls,
-        simulation_id: str,
-        platform: str = "parallel",  # twitter / reddit / parallel
-        max_rounds: int | None = None,  # 最大模拟轮数（可选，用于截断过长的模拟）
-        enable_graph_memory_update: bool = False,  # 是否将活动更新到Neo4j图谱
-        graph_id: str | None = None,  # Neo4j图谱ID（启用图谱更新时必需）
-    ) -> SimulationRunState:
+    def _materialize_sim_dir(cls, simulation_id: str) -> str:
+        """确保模拟目录与配置在本机存在：本地缺失时从对象存储物化准备阶段产物。
+
+        支持 prepare / start / 运行进程分处不同节点（API 副本入队、worker 拉起）。
         """
-        启动模拟
-
-        Args:
-            simulation_id: 模拟ID
-            platform: 运行平台 (twitter/reddit/parallel)
-            max_rounds: 最大模拟轮数（可选，用于截断过长的模拟）
-            enable_graph_memory_update: 是否将Agent活动动态更新到Neo4j图谱
-            graph_id: Neo4j图谱ID（启用图谱更新时必需）
-
-        Returns:
-            SimulationRunState
-        """
-        # 检查是否已在运行
-        existing = cls.get_run_state(simulation_id)
-        if existing and existing.runner_status in [RunnerStatus.RUNNING, RunnerStatus.STARTING]:
-            raise ValueError(f"模拟已在运行中: {simulation_id}")
-
-        # 加载模拟配置
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         config_path = os.path.join(sim_dir, "simulation_config.json")
-
-        # 本地缺少配置时，从对象存储物化准备阶段产物（支持 prepare 与 start 在不同节点）
         if not os.path.exists(config_path):
             try:
                 from ..utils import object_store
@@ -275,7 +325,30 @@ class SimulationRunner:
                     logger.info(f"已从对象存储物化模拟文件: {simulation_id}（{n} 个）")
             except Exception as exc:
                 logger.warning(f"从对象存储物化模拟文件失败: {exc}")
+        return sim_dir
 
+    @classmethod
+    def _init_run_state(
+        cls,
+        simulation_id: str,
+        platform: str = "parallel",
+        max_rounds: int | None = None,
+        enable_graph_memory_update: bool = False,
+        graph_id: str | None = None,
+    ) -> SimulationRunState:
+        """初始化并持久化 STARTING 运行态（不拉起进程）。
+
+        API 路由调用本方法拿到可立即返回前端的 STARTING 快照，再把实际拉起入队给
+        worker（由 _spawn_process 续接）—— 从而把计算（OASIS 子进程）从 API 进程
+        移到可横向扩展的 worker 进程。
+        """
+        # 检查是否已在运行
+        existing = cls.get_run_state(simulation_id)
+        if existing and existing.runner_status in [RunnerStatus.RUNNING, RunnerStatus.STARTING]:
+            raise ValueError(f"模拟已在运行中: {simulation_id}")
+
+        sim_dir = cls._materialize_sim_dir(simulation_id)
+        config_path = os.path.join(sim_dir, "simulation_config.json")
         if not os.path.exists(config_path):
             raise ValueError("模拟配置不存在，请先调用 /prepare 接口")
 
@@ -304,8 +377,61 @@ class SimulationRunner:
             total_simulation_hours=total_hours,
             started_at=datetime.now().isoformat(),
         )
+        # 平台运行标记（让 STARTING 快照即带正确平台，前端立即正确显示）
+        if platform == "twitter":
+            state.twitter_running = True
+        elif platform == "reddit":
+            state.reddit_running = True
+        else:
+            state.twitter_running = True
+            state.reddit_running = True
 
         cls._save_run_state(state)
+        return state
+
+    @classmethod
+    def start_simulation(
+        cls,
+        simulation_id: str,
+        platform: str = "parallel",  # twitter / reddit / parallel
+        max_rounds: int | None = None,  # 最大模拟轮数（可选，用于截断过长的模拟）
+        enable_graph_memory_update: bool = False,  # 是否将活动更新到图谱
+        graph_id: str | None = None,  # 图谱ID（启用图谱更新时必需）
+    ) -> SimulationRunState:
+        """启动模拟（同步整链路：初始化 STARTING + 本进程拉起子进程）。
+
+        保留给内联兜底（队列不可用时）与集成测试；常规路径由 API 调 _init_run_state
+        入队、worker 调 _spawn_process。Returns: SimulationRunState。
+        """
+        cls._init_run_state(
+            simulation_id, platform, max_rounds, enable_graph_memory_update, graph_id
+        )
+        return cls._spawn_process(
+            simulation_id, platform, max_rounds, enable_graph_memory_update, graph_id
+        )
+
+    @classmethod
+    def _spawn_process(
+        cls,
+        simulation_id: str,
+        platform: str = "parallel",
+        max_rounds: int | None = None,
+        enable_graph_memory_update: bool = False,
+        graph_id: str | None = None,
+    ) -> SimulationRunState:
+        """在本进程拉起 OASIS 子进程并启动监控线程（假设 STARTING 运行态已存在）。
+
+        由 worker 作业（jobs.run_simulation_launch）或 start_simulation 调用；本进程
+        据此成为该模拟的监控 owner。
+        """
+        state = cls.get_run_state(simulation_id)
+        if state is None:
+            raise ValueError(f"运行态不存在，无法拉起进程: {simulation_id}")
+
+        sim_dir = cls._materialize_sim_dir(simulation_id)
+        config_path = os.path.join(sim_dir, "simulation_config.json")
+        if not os.path.exists(config_path):
+            raise ValueError("模拟配置不存在，请先调用 /prepare 接口")
 
         # 如果启用图谱记忆更新，创建更新器
         if enable_graph_memory_update:
@@ -313,7 +439,7 @@ class SimulationRunner:
                 raise ValueError("启用图谱记忆更新时必须提供 graph_id")
 
             try:
-                Neo4jGraphMemoryManager.create_updater(simulation_id, graph_id)
+                GraphMemoryManager.create_updater(simulation_id, graph_id)
                 cls._graph_memory_enabled[simulation_id] = True
                 logger.info(
                     f"已启用图谱记忆更新: simulation_id={simulation_id}, graph_id={graph_id}"
@@ -557,7 +683,7 @@ class SimulationRunner:
             # 停止图谱记忆更新器
             if cls._graph_memory_enabled.get(simulation_id, False):
                 try:
-                    Neo4jGraphMemoryManager.stop_updater(simulation_id)
+                    GraphMemoryManager.stop_updater(simulation_id)
                     logger.info(f"已停止图谱记忆更新: simulation_id={simulation_id}")
                 except Exception as e:
                     logger.error(f"停止图谱记忆更新器失败: {e}")
@@ -602,7 +728,7 @@ class SimulationRunner:
         graph_memory_enabled = cls._graph_memory_enabled.get(state.simulation_id, False)
         graph_updater = None
         if graph_memory_enabled:
-            graph_updater = Neo4jGraphMemoryManager.get_updater(state.simulation_id)
+            graph_updater = GraphMemoryManager.get_updater(state.simulation_id)
 
         try:
             with open(log_path, encoding="utf-8") as f:
@@ -683,7 +809,7 @@ class SimulationRunner:
                             if action.round_num and action.round_num > state.current_round:
                                 state.current_round = action.round_num
 
-                            # 如果启用了图谱记忆更新，将活动发送到Neo4j图谱
+                            # 如果启用了图谱记忆更新，将活动发送到图谱
                             if graph_updater:
                                 graph_updater.add_activity_from_dict(action_data, platform)
 
@@ -722,18 +848,23 @@ class SimulationRunner:
         return twitter_enabled or reddit_enabled
 
     @classmethod
-    def reconcile_running_simulations(cls, locale: str = "zh") -> dict[str, Any]:
-        """启动时对账：接管孤儿、终结已死的运行。
+    def reconcile_running_simulations(
+        cls, locale: str = "zh", reset_detach: bool = True
+    ) -> dict[str, Any]:
+        """对账：接管本机仍在跑的孤儿、终结真正已死的运行（存活性以 Redis 心跳为准）。
 
         扫描 PG 中标记 running/starting 的模拟：
-        - PID 仍存活且本进程未在监控 → 抢占所有权 + 重建图谱 updater + 重起监控线程续读。
-        - PID 已死 → 据 actions.jsonl 判 completed/interrupted 回写。
+        - Redis 心跳在或本机 PID 存活 → 仍在运行；本机存活且无人监控时抢占所有权 + 重建
+          图谱 updater + 重起监控线程续读（异机运行则交给其 worker，不跨机抢监控、不误判）。
+        - 心跳与本机 PID 皆无、且无新鲜 owner → 据 actions.jsonl 判 completed/interrupted 回写。
 
-        在 FastAPI lifespan startup 调用，使「服务重启/热重载」后进行中的模拟自动恢复。
+        两处调用：FastAPI/worker 启动时（reset_detach=True，复位松手标志使重启后自动恢复），
+        以及 worker 周期 cron（reset_detach=False，使任一 worker 死亡后其在跑模拟被及时终结/接管）。
         """
-        # 新进程生命周期开始：复位松手标志
-        cls._detaching = False
-        cls._detached = False
+        # 新进程生命周期开始：复位松手标志（周期对账不复位，避免打断正在进行的优雅退出）
+        if reset_detach:
+            cls._detaching = False
+            cls._detached = False
 
         adopted, finalized = [], []
         try:
@@ -751,42 +882,49 @@ class SimulationRunner:
             if not state:
                 continue
 
-            if cls._pid_alive(state.process_pid, state.process_start_time):
-                # 孤儿仍在跑 → 接管监控
-                if sid in cls._monitor_threads:
-                    continue
-                if not cls._try_claim_ownership(sid):
-                    continue  # 别的进程已接管
-                cls._run_states[sid] = state
-                cls._graph_memory_enabled[sid] = bool(state.graph_memory_enabled)
-                if state.graph_memory_enabled and state.graph_id:
-                    try:
-                        Neo4jGraphMemoryManager.create_updater(sid, state.graph_id)
-                    except Exception as e:
-                        logger.error(f"接管时重建图谱记忆更新器失败: {sid}, error={e}")
-                th = threading.Thread(
-                    target=cls._monitor_simulation, args=(sid, locale), daemon=True
-                )
-                th.start()
-                cls._monitor_threads[sid] = th
-                adopted.append(sid)
-                logger.info(f"已接管运行中的模拟: {sid}, pid={state.process_pid}")
+            local_alive = cls._pid_alive(state.process_pid, state.process_start_time)
+            env_alive = cls._env_alive(sid)
+
+            if env_alive or local_alive:
+                # 仍在运行（本机或他机）。仅当进程在【本机】存活且无人监控时由本进程接管监控；
+                # 进程在异机时不跨机抢监控（无法 poll 异机 PID / tail 其本地日志），交给运行它的
+                # worker 自行监控 —— 但绝不在此把存活的远端模拟误判为已死。
+                if local_alive and sid not in cls._monitor_threads and cls._try_claim_ownership(sid):
+                    cls._run_states[sid] = state
+                    cls._graph_memory_enabled[sid] = bool(state.graph_memory_enabled)
+                    if state.graph_memory_enabled and state.graph_id:
+                        try:
+                            GraphMemoryManager.create_updater(sid, state.graph_id)
+                        except Exception as e:
+                            logger.error(f"接管时重建图谱记忆更新器失败: {sid}, error={e}")
+                    th = threading.Thread(
+                        target=cls._monitor_simulation, args=(sid, locale), daemon=True
+                    )
+                    th.start()
+                    cls._monitor_threads[sid] = th
+                    adopted.append(sid)
+                    logger.info(f"已接管运行中的模拟: {sid}, pid={state.process_pid}")
+                continue
+
+            # 既无 Redis 心跳、本机也无存活 PID。若仍有新鲜 owner（其 worker 暂时探测不到但
+            # 心跳未过期），让它自己终结，避免争用；否则视为真正已死，据 actions.jsonl 终结。
+            if cls._owner_fresh(state):
+                continue
+
+            sim_dir = os.path.join(cls.RUN_STATE_DIR, sid)
+            if cls._has_simulation_end(sim_dir):
+                state.runner_status = RunnerStatus.COMPLETED
+                if not state.completed_at:
+                    state.completed_at = datetime.now().isoformat()
             else:
-                # 进程已死 → 据日志终结
-                sim_dir = os.path.join(cls.RUN_STATE_DIR, sid)
-                if cls._has_simulation_end(sim_dir):
-                    state.runner_status = RunnerStatus.COMPLETED
-                    if not state.completed_at:
-                        state.completed_at = datetime.now().isoformat()
-                else:
-                    state.runner_status = RunnerStatus.INTERRUPTED
-                state.twitter_running = False
-                state.reddit_running = False
-                state.owner_id = None
-                state.owner_heartbeat = None
-                cls._save_run_state(state)
-                finalized.append(sid)
-                logger.info(f"终结已死的模拟: {sid} -> {state.runner_status.value}")
+                state.runner_status = RunnerStatus.INTERRUPTED
+            state.twitter_running = False
+            state.reddit_running = False
+            state.owner_id = None
+            state.owner_heartbeat = None
+            cls._save_run_state(state)
+            finalized.append(sid)
+            logger.info(f"终结已死的模拟: {sid} -> {state.runner_status.value}")
 
         if adopted or finalized:
             logger.info(f"模拟对账完成: 接管={adopted}, 终结={finalized}")
@@ -890,6 +1028,15 @@ class SimulationRunner:
                 cls._kill_pid_group(state.process_pid)
             except Exception as e:
                 logger.error(f"按 PID 终止失败: {simulation_id}, error={e}")
+        else:
+            # 既无本机句柄、PID 也不在本机存活：子进程可能跑在另一台 worker 上。
+            # 经 Redis IPC 投递 close_env，让其优雅自关（位置无关，不阻塞等响应）。
+            try:
+                sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+                SimulationIPCClient(sim_dir).post_command(CommandType.CLOSE_ENV, {})
+                logger.info(f"已经 Redis 投递 close_env 停止远端模拟: {simulation_id}")
+            except Exception as e:
+                logger.warning(f"投递 close_env 失败: {simulation_id}, error={e}")
 
         state.runner_status = RunnerStatus.STOPPED
         state.twitter_running = False
@@ -906,7 +1053,7 @@ class SimulationRunner:
         # 停止图谱记忆更新器
         if cls._graph_memory_enabled.get(simulation_id, False):
             try:
-                Neo4jGraphMemoryManager.stop_updater(simulation_id)
+                GraphMemoryManager.stop_updater(simulation_id)
                 logger.info(f"已停止图谱记忆更新: simulation_id={simulation_id}")
             except Exception as e:
                 logger.error(f"停止图谱记忆更新器失败: {e}")
@@ -1091,7 +1238,7 @@ class SimulationRunner:
 
         # 停止本进程的图谱记忆 updater 线程（不影响子进程；接管进程会重建）
         try:
-            Neo4jGraphMemoryManager.stop_all()
+            GraphMemoryManager.stop_all()
         except Exception as e:
             logger.error(f"停止图谱记忆更新器失败: {e}")
         cls._graph_memory_enabled.clear()
@@ -1321,30 +1468,9 @@ class SimulationRunner:
         Returns:
             状态详情字典，包含 status, twitter_available, reddit_available, timestamp
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
-        status_file = os.path.join(sim_dir, "env_status.json")
+        from .simulation_ipc import read_env_status
 
-        default_status = {
-            "status": "stopped",
-            "twitter_available": False,
-            "reddit_available": False,
-            "timestamp": None,
-        }
-
-        if not os.path.exists(status_file):
-            return default_status
-
-        try:
-            with open(status_file, encoding="utf-8") as f:
-                status = json.load(f)
-            return {
-                "status": status.get("status", "stopped"),
-                "twitter_available": status.get("twitter_available", False),
-                "reddit_available": status.get("reddit_available", False),
-                "timestamp": status.get("timestamp"),
-            }
-        except (json.JSONDecodeError, OSError):
-            return default_status
+        return read_env_status(simulation_id)
 
     @classmethod
     def interview_agent(

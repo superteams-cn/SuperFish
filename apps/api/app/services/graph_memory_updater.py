@@ -1,21 +1,20 @@
 """
-Neo4j 图谱记忆更新服务
+图谱记忆更新服务
 将模拟中的 Agent 活动动态更新到当前项目图谱中。
 """
 
-import json
 import threading
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from queue import Empty, Queue
 from typing import Any
 
 from ..core.logger import get_logger
+from ..utils.graph_store import get_graph_store
 from ..utils.locale import get_locale, set_locale
-from ..utils.neo4j_graph_utils import get_neo4j_graph_client
 
-logger = get_logger("superfish.neo4j_graph_memory_updater")
+logger = get_logger("superfish.graph_memory_updater")
 
 
 @dataclass
@@ -158,11 +157,11 @@ class AgentActivity:
         return f"执行了{self.action_type}操作"
 
 
-class Neo4jGraphMemoryUpdater:
+class GraphMemoryUpdater:
     """
-    Neo4j 图谱记忆更新器
+    图谱记忆更新器
 
-    监控模拟的 actions 日志，将新的 Agent 活动实时写入 Neo4j 图谱。
+    监控模拟的 actions 日志，将新的 Agent 活动实时写入 图谱。
     按平台分组，每累积 BATCH_SIZE 条活动后批量合并为一个 episode 写入。
     """
 
@@ -175,7 +174,7 @@ class Neo4jGraphMemoryUpdater:
     def __init__(self, graph_id: str, api_key: str | None = None):
         # api_key 参数保留以兼容现有调用
         self.graph_id = graph_id
-        self._client = get_neo4j_graph_client()
+        self._client = get_graph_store()
 
         self._activity_queue: Queue = Queue()
         self._platform_buffers: dict[str, list[AgentActivity]] = {
@@ -273,64 +272,14 @@ class Neo4jGraphMemoryUpdater:
     def _send_batch_activities(self, activities: list[AgentActivity], platform: str):
         if not activities:
             return
-
-        combined_text = "\n".join(a.to_episode_text() for a in activities)
-        platform_label = self._get_platform_label(platform)
-
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                activity_uuid = (
-                    f"activity_{platform}_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}"
-                )
-                self._client.write(
-                    """
-                        MERGE (a:Entity:SimulationActivity {uuid: $uuid})
-                        SET a.name = $name,
-                            a.summary = $summary,
-                            a.group_id = $group_id,
-                            a.attributes_json = $attributes_json,
-                            a.created_at = $created_at
-                        WITH a
-                        UNWIND $agent_names AS agent_name
-                        MATCH (agent:Entity {group_id: $group_id})
-                        WHERE agent.name = agent_name
-                        MERGE (agent)-[r:RELATES_TO {uuid: $uuid + '_' + agent.uuid}]->(a)
-                        SET r.name = 'POSTED_ACTIVITY',
-                            r.fact = $summary,
-                            r.group_id = $group_id,
-                            r.attributes_json = '{}',
-                            r.created_at = $created_at
-                        """,
-                    {
-                        "uuid": activity_uuid,
-                        "name": f"{platform_label}模拟活动",
-                        "summary": combined_text,
-                        "group_id": self.graph_id,
-                        "attributes_json": json.dumps(
-                            {
-                                "platform": platform,
-                                "activity_count": len(activities),
-                            },
-                            ensure_ascii=False,
-                        ),
-                        "created_at": datetime.now(UTC).isoformat(),
-                        "agent_names": list({a.agent_name for a in activities if a.agent_name}),
-                    },
-                )
-                self._total_sent += 1
-                self._total_items_sent += len(activities)
-                logger.info(
-                    f"成功写入 {len(activities)} 条{platform_label}活动到图谱 {self.graph_id}"
-                )
-                return
-
-            except Exception as e:
-                if attempt < self.MAX_RETRIES - 1:
-                    logger.warning(f"写入失败 (尝试 {attempt + 1}/{self.MAX_RETRIES}): {e}")
-                    time.sleep(self.RETRY_DELAY * (attempt + 1))
-                else:
-                    logger.error(f"写入失败，已重试 {self.MAX_RETRIES} 次: {e}")
-                    self._failed_count += 1
+        # 模拟期图谱记忆增量写：图数据库移除后暂未在 Postgres 后端实现（上线先关，默认即关闭）。
+        # enable_graph_memory_update 默认 False，故正常路径不会进到这里；若被显式开启则安全跳过，
+        # 不影响模拟本身。后续如需该功能，可改为往图谱增量表追加 activity，避免反复重写大 JSONB。
+        self._failed_count += len(activities)
+        logger.warning(
+            f"图谱记忆增量写已禁用（Postgres 后端暂未实现），跳过 {len(activities)} 条"
+            f"{self._get_platform_label(platform)}活动 graph={self.graph_id}"
+        )
 
     def _flush_remaining(self):
         while not self._activity_queue.empty():
@@ -369,26 +318,26 @@ class Neo4jGraphMemoryUpdater:
         }
 
 
-class Neo4jGraphMemoryManager:
+class GraphMemoryManager:
     """管理多个模拟的图谱记忆更新器（接口与原版完全兼容）"""
 
-    _updaters: dict[str, Neo4jGraphMemoryUpdater] = {}
+    _updaters: dict[str, GraphMemoryUpdater] = {}
     _lock = threading.Lock()
     _stop_all_done = False
 
     @classmethod
-    def create_updater(cls, simulation_id: str, graph_id: str) -> Neo4jGraphMemoryUpdater:
+    def create_updater(cls, simulation_id: str, graph_id: str) -> GraphMemoryUpdater:
         with cls._lock:
             if simulation_id in cls._updaters:
                 cls._updaters[simulation_id].stop()
-            updater = Neo4jGraphMemoryUpdater(graph_id)
+            updater = GraphMemoryUpdater(graph_id)
             updater.start()
             cls._updaters[simulation_id] = updater
             logger.info(f"创建图谱记忆更新器: simulation_id={simulation_id}, graph_id={graph_id}")
             return updater
 
     @classmethod
-    def get_updater(cls, simulation_id: str) -> Neo4jGraphMemoryUpdater | None:
+    def get_updater(cls, simulation_id: str) -> GraphMemoryUpdater | None:
         return cls._updaters.get(simulation_id)
 
     @classmethod

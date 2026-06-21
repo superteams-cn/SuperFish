@@ -21,7 +21,7 @@ from ..core.logger import get_logger
 from ..core.settings import settings
 from ..utils.llm_client import LLMClient
 from ..utils.locale import get_language_instruction, t
-from .neo4j_entity_reader import EntityNode
+from .graph_entity_reader import EntityNode
 
 logger = get_logger("superfish.simulation_config")
 

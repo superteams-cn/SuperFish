@@ -3,6 +3,8 @@
 拆分自 routers/simulation.py。共享件见 _shared.py。
 """
 
+from ...core.redis_lock import LockBusy, redis_lock  # noqa: E402
+from ...jobqueue import enqueue  # noqa: E402
 from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 ruff 裁剪)
     INTERVIEW_PROMPT_PREFIX,
     APIRouter,
@@ -17,7 +19,7 @@ from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 r
     InterviewAllRequest,
     InterviewBatchRequest,
     InterviewHistoryRequest,
-    Neo4jEntityReader,
+    GraphEntityReader,
     OasisProfileGenerator,
     PrepareSimulationRequest,
     PrepareStatusRequest,
@@ -62,16 +64,26 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
             "simulation_id": "sim_xxxx",          // 必填，模拟ID
             "platform": "parallel",                // 可选: twitter / reddit / parallel (默认)
             "max_rounds": 100,                     // 可选: 最大模拟轮数，用于截断过长的模拟
-            "enable_graph_memory_update": false,   // 可选: 是否将 Agent 活动动态更新到 Neo4j 图谱记忆
+            "enable_graph_memory_update": false,   // 可选: 是否将 Agent 活动动态更新到 图谱记忆
             "force": false                         // 可选: 强制重新开始（会停止运行中的模拟并清理日志）
         }
     """
+    _start_lock = None
     try:
         simulation_id = req.simulation_id
         if not simulation_id:
             return _error(t("api.requireSimulationId"), 400)
         if _owned_simulation(simulation_id, current) is None:
             return _error(t("api.simulationNotFound", id=simulation_id), 404)
+
+        # per-sim 互斥锁：把「查是否在跑 → 写 STARTING → 入队」临界区在多 API 副本间串行化，
+        # 避免两个副本并发 /start 同一模拟各自入队、两个 worker 各拉起一个子进程。
+        try:
+            _start_lock = redis_lock(f"sim:start:{simulation_id}", ttl=60)
+            _start_lock.__enter__()
+        except LockBusy:
+            _start_lock = None
+            return _error("模拟正在启动中，请稍候重试", 409)
 
         # 配额：同时运行中的模拟数上限（重启自身不计入）
         running = [
@@ -166,16 +178,28 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
 
             logger.info(f"启用图谱记忆更新: simulation_id={simulation_id}, graph_id={graph_id}")
 
-        # 启动模拟
-        run_state = SimulationRunner.start_simulation(
+        # 初始化 STARTING 运行态（快速、可立即返回前端），实际拉起子进程入队给 worker。
+        # 控制面（stop/interview/IPC）走 Redis 总线，故子进程可由独立 worker 持有、横向扩展。
+        # 队列不可用时回退本地线程执行（等价早期 API 进程内 Popen 的单机行为）。
+        run_state = SimulationRunner._init_run_state(
             simulation_id=simulation_id,
             platform=platform,
             max_rounds=max_rounds,
             enable_graph_memory_update=enable_graph_memory_update,
             graph_id=graph_id,
         )
+        job_id = enqueue(
+            "simulation_run",
+            simulation_id=simulation_id,
+            platform=platform,
+            max_rounds=max_rounds,
+            enable_graph_memory_update=enable_graph_memory_update,
+            graph_id=graph_id,
+            locale=get_locale(),
+        )
+        logger.info(f"模拟拉起已入队: simulation_id={simulation_id}, job_id={job_id}")
 
-        # 更新模拟状态
+        # 更新模拟状态（乐观置 RUNNING，供配额/列表语义；worker 失败时回写 FAILED）
         state.status = SimulationStatus.RUNNING
         manager._save_simulation_state(state)
 
@@ -195,6 +219,10 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
     except Exception as e:
         logger.error(f"启动模拟失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())
+
+    finally:
+        if _start_lock is not None:
+            _start_lock.__exit__(None, None, None)
 
 
 @router.post("/stop")

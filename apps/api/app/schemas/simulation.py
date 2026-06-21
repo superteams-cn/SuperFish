@@ -53,7 +53,7 @@ class StartSimulationRequest(BaseModel):
     platform: str = Field(default="parallel", description="平台: twitter / reddit / parallel")
     max_rounds: Any | None = Field(default=None, description="最大模拟轮数，可选")
     enable_graph_memory_update: bool = Field(
-        default=False, description="是否将 Agent 活动更新到 Neo4j 图谱记忆"
+        default=False, description="是否将 Agent 活动更新到 图谱记忆"
     )
     force: bool = Field(default=False, description="是否强制重新开始")
 

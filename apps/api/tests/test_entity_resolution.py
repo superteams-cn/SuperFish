@@ -1,4 +1,4 @@
-"""通用实体消解算法的单元测试（不依赖 neo4j / LLM，名称为抽象占位符）。"""
+"""通用实体消解算法的单元测试（不依赖 图谱存储 / LLM，名称为抽象占位符）。"""
 
 from app.services.entity_resolution import (
     candidate_clusters,

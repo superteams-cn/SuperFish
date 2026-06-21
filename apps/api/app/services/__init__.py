@@ -3,11 +3,11 @@
 """
 
 from .graph_builder import GraphBuilderService
-from .neo4j_entity_reader import EntityNode, FilteredEntities, Neo4jEntityReader
-from .neo4j_graph_memory_updater import (
+from .graph_entity_reader import EntityNode, FilteredEntities, GraphEntityReader
+from .graph_memory_updater import (
     AgentActivity,
-    Neo4jGraphMemoryManager,
-    Neo4jGraphMemoryUpdater,
+    GraphMemoryManager,
+    GraphMemoryUpdater,
 )
 from .oasis_profile_generator import OasisAgentProfile, OasisProfileGenerator
 from .ontology_generator import OntologyGenerator
@@ -41,7 +41,7 @@ __all__ = [
     "OntologyGenerator",
     "GraphBuilderService",
     "TextProcessor",
-    "Neo4jEntityReader",
+    "GraphEntityReader",
     "EntityNode",
     "FilteredEntities",
     "OasisProfileGenerator",
@@ -60,8 +60,8 @@ __all__ = [
     "RunnerStatus",
     "AgentAction",
     "RoundSummary",
-    "Neo4jGraphMemoryUpdater",
-    "Neo4jGraphMemoryManager",
+    "GraphMemoryUpdater",
+    "GraphMemoryManager",
     "AgentActivity",
     "SimulationIPCClient",
     "SimulationIPCServer",

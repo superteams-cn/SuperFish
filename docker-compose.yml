@@ -1,24 +1,4 @@
 services:
-  neo4j:
-    image: neo4j:5.26-community
-    container_name: superfish-neo4j
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    environment:
-      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-superfish_neo4j}
-      NEO4J_PLUGINS: '["apoc"]'
-      NEO4J_dbms_security_procedures_unrestricted: apoc.*
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER:-neo4j}", "-p", "${NEO4J_PASSWORD:-superfish_neo4j}", "RETURN 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     container_name: superfish-redis
@@ -86,8 +66,6 @@ services:
       - "5001:5001"
     restart: unless-stopped
     depends_on:
-      neo4j:
-        condition: service_healthy
       redis:
         condition: service_healthy
       postgres:
@@ -114,8 +92,6 @@ services:
       S3_BUCKET: ${S3_BUCKET:-superfish}
     restart: unless-stopped
     depends_on:
-      neo4j:
-        condition: service_healthy
       redis:
         condition: service_healthy
       postgres:
@@ -126,8 +102,6 @@ services:
       - ./apps/api/uploads:/app/apps/api/uploads
 
 volumes:
-  neo4j_data:
-  neo4j_logs:
   redis_data:
   postgres_data:
   rustfs_data:

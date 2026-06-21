@@ -1,6 +1,6 @@
 """
 图谱实体读取与过滤服务
-从 Neo4j 图谱中读取节点，筛选出符合预定义实体类型的节点
+从 图谱中读取节点，筛选出符合预定义实体类型的节点
 """
 
 import json
@@ -8,9 +8,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..core.logger import get_logger
-from ..utils.neo4j_graph_utils import fetch_all_edges, fetch_all_nodes, get_neo4j_graph_client
+from ..utils.graph_store import (
+    fetch_all_edges,
+    fetch_all_nodes,
+    fetch_node,
+    fetch_node_edges,
+    get_graph_store,
+)
 
-logger = get_logger("superfish.neo4j_entity_reader")
+logger = get_logger("superfish.graph_entity_reader")
 
 
 def _parse_attrs(value: Any) -> dict[str, Any]:
@@ -73,9 +79,9 @@ class FilteredEntities:
         }
 
 
-class Neo4jEntityReader:
+class GraphEntityReader:
     """
-    图谱实体读取与过滤服务（Neo4j 实现）
+    图谱实体读取与过滤服务（Postgres 实现）
 
     公共接口与原 旧图谱 版本完全相同，调用方无需修改。
     """
@@ -86,7 +92,7 @@ class Neo4jEntityReader:
 
     def _get_client(self):
         if self._client is None:
-            self._client = get_neo4j_graph_client()
+            self._client = get_graph_store()
         return self._client
 
     def get_all_nodes(self, graph_id: str) -> list[dict[str, Any]]:
@@ -104,32 +110,11 @@ class Neo4jEntityReader:
         return edges
 
     def get_node_edges(self, node_uuid: str, graph_id: str = "") -> list[dict[str, Any]]:
-        """获取指定节点的所有相关边（graph_id 可选，有 Neo4j 直接查询时更高效）"""
+        """获取指定节点的所有相关边（按 graph_id 取图后在内存过滤）。"""
+        if not graph_id:
+            return []
         try:
-            # 通过 Cypher 查询该节点相关的边（比全量过滤快）
-            client = self._get_client()
-            cypher = """
-            MATCH (s:Entity)-[r:RELATES_TO]->(t:Entity)
-            WHERE (s.uuid = $uuid OR t.uuid = $uuid)
-            RETURN r.uuid AS uuid, r.name AS name, r.fact AS fact,
-                   s.uuid AS source_node_uuid, t.uuid AS target_node_uuid,
-                   r.valid_at AS valid_at, r.invalid_at AS invalid_at,
-                   r.expired_at AS expired_at
-            """
-
-            records = client.read(cypher, {"uuid": node_uuid})
-            return [
-                {
-                    "uuid": r.get("uuid") or "",
-                    "name": r.get("name") or "",
-                    "fact": r.get("fact") or "",
-                    "source_node_uuid": r.get("source_node_uuid") or "",
-                    "target_node_uuid": r.get("target_node_uuid") or "",
-                    "attributes": {},
-                }
-                for r in records
-            ]
-
+            return fetch_node_edges(graph_id, node_uuid)
         except Exception as e:
             logger.warning(f"获取节点 {node_uuid} 的边失败: {str(e)}")
             return []
@@ -239,18 +224,10 @@ class Neo4jEntityReader:
     ) -> EntityNode | None:
         """获取单个实体及其完整上下文"""
         try:
-            client = self._get_client()
-            cypher = """
-            MATCH (n:Entity) WHERE n.uuid = $uuid
-            RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary,
-                   labels(n) AS labels, n.attributes_json AS attributes_json
-            """
-
-            records = client.read(cypher, {"uuid": entity_uuid})
-            if not records:
+            r = fetch_node(graph_id, entity_uuid)
+            if not r:
                 return None
 
-            r = records[0]
             edges = self.get_node_edges(entity_uuid, graph_id)
             all_nodes = self.get_all_nodes(graph_id)
             node_map = {n["uuid"]: n for n in all_nodes}
@@ -284,7 +261,7 @@ class Neo4jEntityReader:
                 name=r.get("name") or "",
                 labels=list(r.get("labels") or []),
                 summary=r.get("summary") or "",
-                attributes=_parse_attrs(r.get("attributes_json")),
+                attributes=r.get("attributes") or {},
                 related_edges=related_edges,
                 related_nodes=[
                     {

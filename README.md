@@ -1,24 +1,10 @@
 <div align="center">
 
-<img src="./static/image/SuperFish_logo_compressed.jpeg" alt="SuperFish Logo" width="75%"/>
-
-<a href="https://trendshift.io/repositories/16144" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16144" alt="superteams-cn%2FSuperFish | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<img src="./static/image/superfish-logo-compressed.jpeg" alt="SuperFish Logo" width="75%"/>
 
 简洁通用的群体智能引擎，预测万物
 </br>
 <em>A Simple and Universal Swarm Intelligence Engine, Predicting Anything</em>
-
-<a href="https://www.shanda.com/" target="_blank"><img src="./static/image/shanda_logo.png" alt="superteams-cn%2FSuperFish | Shanda" height="40"/></a>
-
-[![GitHub Stars](https://img.shields.io/github/stars/superteams-cn/SuperFish?style=flat-square&color=DAA520)](https://github.com/superteams-cn/SuperFish/stargazers)
-[![GitHub Watchers](https://img.shields.io/github/watchers/superteams-cn/SuperFish?style=flat-square)](https://github.com/superteams-cn/SuperFish/watchers)
-[![GitHub Forks](https://img.shields.io/github/forks/superteams-cn/SuperFish?style=flat-square)](https://github.com/superteams-cn/SuperFish/network)
-[![Docker](https://img.shields.io/badge/Docker-Build-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/superteams-cn/SuperFish)
-
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](http://discord.gg/ePf5aPaHnA)
-[![X](https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/superfish_ai)
-[![Instagram](https://img.shields.io/badge/Instagram-Follow-E4405F?style=flat-square&logo=instagram&logoColor=white)](https://www.instagram.com/superfish_ai/)
 
 [English](./README.md) | [中文文档](./README-ZH.md)
 
@@ -26,7 +12,7 @@
 
 ## ⚡ Overview
 
-**SuperFish** is a next-generation AI prediction engine powered by multi-agent technology. By extracting seed information from the real world (such as breaking news, policy drafts, or financial signals), it automatically constructs a high-fidelity parallel digital world. Within this space, thousands of intelligent agents with independent personalities, long-term memory, and behavioral logic freely interact and undergo social evolution. You can inject variables dynamically from a "God's-eye view" to precisely deduce future trajectories — **rehearse the future in a digital sandbox, and win decisions after countless simulations**.
+**SuperFish (超级章鱼)** is a next-generation AI prediction engine powered by multi-agent technology. By extracting seed information from the real world (such as breaking news, policy drafts, or financial signals), it automatically constructs a high-fidelity parallel digital world. Within this space, thousands of intelligent agents with independent personalities, long-term memory, and behavioral logic freely interact and undergo social evolution. You can inject variables dynamically from a "God's-eye view" to precisely deduce future trajectories — **rehearse the future in a digital sandbox, and win decisions after countless simulations**.
 
 > You only need to: Upload seed materials (data analysis reports or interesting novel stories) and describe your prediction requirements in natural language</br>
 > SuperFish will return: A detailed prediction report and a deeply interactive high-fidelity digital world
@@ -40,65 +26,41 @@ SuperFish is dedicated to creating a swarm intelligence mirror that maps reality
 
 From serious predictions to playful simulations, we let every "what if" see its outcome, making it possible to predict anything.
 
-## 🌐 Live Demo
-
-Welcome to visit our online demo environment and experience a prediction simulation on trending public opinion events we've prepared for you: [superfish-live-demo](https://666ghj.github.io/superfish-demo/)
-
 ## 📸 Screenshots
 
 <div align="center">
 <table>
 <tr>
-<td><img src="./static/image/Screenshot/运行截图1.png" alt="Screenshot 1" width="100%"/></td>
-<td><img src="./static/image/Screenshot/运行截图2.png" alt="Screenshot 2" width="100%"/></td>
+<td><img src="./static/image/Screenshot/screenshot-1.png" alt="Screenshot 1" width="100%"/></td>
+<td><img src="./static/image/Screenshot/screenshot-2.png" alt="Screenshot 2" width="100%"/></td>
 </tr>
 <tr>
-<td><img src="./static/image/Screenshot/运行截图3.png" alt="Screenshot 3" width="100%"/></td>
-<td><img src="./static/image/Screenshot/运行截图4.png" alt="Screenshot 4" width="100%"/></td>
+<td><img src="./static/image/Screenshot/screenshot-3.png" alt="Screenshot 3" width="100%"/></td>
+<td><img src="./static/image/Screenshot/screenshot-4.png" alt="Screenshot 4" width="100%"/></td>
 </tr>
 <tr>
-<td><img src="./static/image/Screenshot/运行截图5.png" alt="Screenshot 5" width="100%"/></td>
-<td><img src="./static/image/Screenshot/运行截图6.png" alt="Screenshot 6" width="100%"/></td>
+<td><img src="./static/image/Screenshot/screenshot-5.png" alt="Screenshot 5" width="100%"/></td>
+<td><img src="./static/image/Screenshot/screenshot-6.png" alt="Screenshot 6" width="100%"/></td>
 </tr>
 </table>
 </div>
 
-## 🎬 Demo Videos
-
-### 1. Wuhan University Public Opinion Simulation + SuperFish Project Introduction
-
-<div align="center">
-<a href="https://www.bilibili.com/video/BV1VYBsBHEMY/" target="_blank"><img src="./static/image/武大模拟演示封面.png" alt="SuperFish Demo Video" width="75%"/></a>
-
-Click the image to watch the complete demo video for prediction using BettaFish-generated "Wuhan University Public Opinion Report"
-</div>
-
-### 2. Dream of the Red Chamber Lost Ending Simulation
-
-<div align="center">
-<a href="https://www.bilibili.com/video/BV1cPk3BBExq" target="_blank"><img src="./static/image/红楼梦模拟推演封面.jpg" alt="SuperFish Demo Video" width="75%"/></a>
-
-Click the image to watch SuperFish's deep prediction of the lost ending based on hundreds of thousands of words from the first 80 chapters of "Dream of the Red Chamber"
-</div>
-
-> **Financial Prediction**, **Political News Prediction** and more examples coming soon...
-
 ## 🔄 Workflow
 
-1. **Ontology & Graph Building**: LLM-generated ontology, strict LlamaIndex path extraction, and Neo4j property-graph storage
-2. **Environment Setup**: Neo4j entity reading, persona generation, and agent configuration injection
+1. **Ontology & Graph Building**: LLM-generated ontology, strict LlamaIndex path extraction, and graph storage in Postgres
+2. **Environment Setup**: graph entity reading, persona generation, and agent configuration injection
 3. **Simulation**: Dual-platform parallel simulation, automatic requirement parsing, and dynamic graph memory updates
-4. **Report Generation**: ReportAgent with Neo4j graph search, panorama search, insight retrieval, and interview tools
+4. **Report Generation**: ReportAgent with graph search, panorama search, insight retrieval, and interview tools
 5. **Deep Interaction**: Chat with any agent in the simulated world & Interact with ReportAgent
 
 ## 🧠 Knowledge Graph Backend
 
-SuperFish now uses a self-hosted Neo4j property graph as the GraphRAG backend:
+SuperFish stores each project's knowledge graph as JSONB in Postgres (no separate graph database):
 
 - The ontology generator creates entity and relationship type names directly in the selected UI language; Chinese projects use Chinese schema names, English projects use English schema names.
 - Graph building uses `LlamaIndex SchemaLLMPathExtractor(strict=True)` to extract only ontology-valid entities and relations.
-- Extracted nodes and edges are stored in Neo4j with `group_id` isolation per project.
-- ReportAgent and simulation setup read/search the same Neo4j graph through local graph search tools.
+- Extracted nodes and edges are stored in the `graphs` table (one JSONB row per graph), isolated by `graph_id`.
+- ReportAgent and simulation setup read/search the same graph through local graph tools. Access is "fetch the whole graph + app-side scoring" — no multi-hop traversal — so JSONB fits and there is no online graph-DB single point.
 
 ## 🏗️ Architecture
 
@@ -114,7 +76,7 @@ SuperFish/
 └── docker-compose.yml
 ```
 
-The backend is **stateless and horizontally scalable**: metadata lives in **PostgreSQL**, uploaded files / extracted text live in an **S3-compatible store (RustFS)**, and the Neo4j property graph is the GraphRAG backend. Long-running jobs (graph building, report generation) are pushed onto a **Redis-backed [arq](https://arq-docs.helpmanual.io/) queue** and executed by a **separate worker process** (`apps/api/app/worker.py`). If Redis is unreachable, `enqueue` transparently falls back to an in-process thread, so a dedicated worker is **optional in development** but recommended for production and scaling.
+The backend is **stateless and horizontally scalable**: metadata and knowledge graphs live in **PostgreSQL**, uploaded files / extracted text live in an **S3-compatible store (RustFS)**. Long-running jobs (graph building, report generation) are pushed onto a **Redis-backed [arq](https://arq-docs.helpmanual.io/) queue** and executed by a **separate worker process** (`apps/api/app/worker.py`). If Redis is unreachable, `enqueue` transparently falls back to an in-process thread, so a dedicated worker is **optional in development** but recommended for production and scaling.
 
 ## 🚀 Quick Start
 
@@ -128,10 +90,10 @@ The backend is **stateless and horizontally scalable**: metadata lives in **Post
 | **pnpm** | 9+ | Monorepo package manager | `pnpm -v` |
 | **Python** | ≥3.11, ≤3.12 | Backend runtime | `python --version` |
 | **uv** | Latest | Python package manager | `uv --version` |
-| **Docker** | Latest | Runs bundled infra (Neo4j / PostgreSQL / Redis / RustFS) | `docker -v` |
+| **Docker** | Latest | Runs bundled infra (PostgreSQL / Redis / RustFS) | `docker -v` |
 
 > Don't have pnpm? Install with `npm install -g pnpm` or `corepack enable`.
-> The four infra services (Neo4j 5.x, PostgreSQL 16, Redis 7, RustFS) are all bundled in `docker-compose.yml` — no manual install needed. You may also point the env vars at your own instances.
+> The three infra services (PostgreSQL 16, Redis 7, RustFS) are all bundled in `docker-compose.yml` — no manual install needed. You may also point the env vars at your own instances.
 
 #### 1. Configure Environment Variables
 
@@ -152,15 +114,8 @@ LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
 LLM_REQUEST_TIMEOUT=120
-GRAPH_EXTRACT_MAX_TOKENS=8192
-GRAPH_EXTRACT_MAX_TRIPLETS=20
 
-# ── Neo4j (knowledge graph) ──
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your_neo4j_password
-
-# ── PostgreSQL (project/task/report metadata) ──
+# ── PostgreSQL (project/task/report metadata + knowledge graphs) ──
 DATABASE_URL=postgresql+psycopg://superfish:superfish_pg@localhost:5432/superfish
 
 # ── Redis (arq job queue) ──
@@ -172,11 +127,20 @@ S3_ACCESS_KEY=superfish
 S3_SECRET_KEY=superfish_secret
 S3_BUCKET=superfish
 S3_REGION=us-east-1
+
+# ── Auth (email + password / JWT) ──
+# A dev default exists so the app boots, but ALWAYS override in production
+# (e.g. `openssl rand -hex 32`).
+JWT_SECRET=dev-insecure-change-me
 ```
 
-> The `localhost` values above are for source deployment. For full Docker Compose deployment, use the service names instead (`bolt://neo4j:7687`, `postgres`, `redis://redis:6379/0`, `http://rustfs:9000`) — the `worker` and `superfish` services already set these.
+> The `localhost` values above are for source deployment. For full Docker Compose deployment, use the service names instead (`postgres`, `redis://redis:6379/0`, `http://rustfs:9000`) — the `worker` and `superfish` services already set these.
 
-Optional acceleration LLM variables are also supported: `LLM_BOOST_API_KEY`, `LLM_BOOST_BASE_URL`, and `LLM_BOOST_MODEL_NAME`. (If you don't use them, omit these lines entirely rather than leaving placeholders.)
+`.env.example` is the source of truth and documents every option, including:
+- **Graph tuning** — `GRAPH_EXTRACT_MAX_TOKENS`, `GRAPH_EXTRACT_MAX_TRIPLETS`, `DEFAULT_CHUNK_SIZE`, ontology type counts (sensible defaults built in).
+- **Auth guardrails** — token TTLs, `ADMIN_EMAILS` allowlist, per-user quotas, rate limiting.
+- **Email (SMTP)** — password reset / email verification. Without `SMTP_HOST` it falls back to a dev stub that prints emails to the backend log.
+- **Acceleration LLM** (optional) — `LLM_BOOST_API_KEY`, `LLM_BOOST_BASE_URL`, `LLM_BOOST_MODEL_NAME`. (If you don't use them, omit these lines entirely rather than leaving placeholders.)
 
 #### 2. Install Dependencies
 
@@ -189,10 +153,10 @@ pnpm setup
 
 #### 3. Start Infrastructure
 
-Bring up the four backing services (the app itself runs from source, not in Docker):
+Bring up the three backing services (the app itself runs from source, not in Docker):
 
 ```bash
-docker compose up -d neo4j postgres redis rustfs
+docker compose up -d postgres redis rustfs
 ```
 
 #### 4. Start the App
@@ -227,29 +191,31 @@ cd apps/api && uv run arq app.worker.WorkerSettings
 # 1. Configure environment variables (same as source deployment)
 cp .env.example .env
 # For full Docker Compose deployment, the bundled services already use container names
-# (neo4j / postgres / redis / rustfs) — no localhost overrides needed.
+# (postgres / redis / rustfs) — no localhost overrides needed.
 
 # 2. Pull images and start the entire stack (app + worker + all infra)
 docker compose up -d
 ```
 
-This starts everything: `superfish` (web + api), `worker` (arq), plus Neo4j / PostgreSQL / Redis / RustFS. Reads `.env` from the root by default and maps ports `3000 (frontend) / 5001 (backend)`.
+This starts everything: `superfish` (web + api), `worker` (arq), plus PostgreSQL / Redis / RustFS. Reads `.env` from the root by default and maps ports `3000 (frontend) / 5001 (backend)`.
 
 > A faster mirror address is provided as comments in `docker-compose.yml` — replace if needed.
 
-## 📬 Join the Conversation
+#### Horizontal Scaling (Production)
 
-<div align="center">
-<img src="./static/image/QQ群.png" alt="QQ Group" width="60%"/>
-</div>
+Because the backend is stateless, you can run multiple API and worker replicas behind a load balancer. `docker-compose.scale.yml` ships a ready-made topology — **nginx (static frontend + reverse proxy) + 3 API replicas + 5 workers** — under its own Compose project:
 
-&nbsp;
+```bash
+# Start the scaled stack (separate project name avoids clashing with the base compose)
+docker compose -p sf-scale -f docker-compose.scale.yml up -d
 
-The SuperFish team is recruiting full-time/internship positions. If you're interested in multi-agent simulation and LLM applications, feel free to send your resume to: **superfish@shanda.com**
+# Scale a tier up or down on demand
+docker compose -p sf-scale -f docker-compose.scale.yml up -d --scale worker=8
+```
+
+nginx resolves API upstreams at request time, so adding/removing replicas needs no config change.
 
 ## 📄 Acknowledgments
-
-**SuperFish has received strategic support and incubation from Shanda Group!**
 
 SuperFish's simulation engine is powered by **[OASIS (Open Agent Social Interaction Simulations)](https://github.com/camel-ai/oasis)**, We sincerely thank the CAMEL-AI team for their open-source contributions!
 

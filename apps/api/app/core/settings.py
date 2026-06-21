@@ -52,10 +52,8 @@ class Settings(BaseSettings):
     # LlamaIndex SchemaLLMPathExtractor 每个文本块最多抽取的三元组数量。
     graph_extract_max_triplets: int = 20
 
-    # ===== Neo4j（schema 约束知识图谱）=====
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "superfish_neo4j"
+    # ===== 知识图谱 =====
+    # 图谱存于 Postgres（见 graphs 表 / repositories/graph_repo.py），无需独立图数据库配置。
 
     # ===== 用户体系 / 鉴权（JWT）=====
     # 上线前务必通过环境变量 JWT_SECRET 覆盖为高强度随机值；默认值仅供本地开发。
@@ -179,8 +177,6 @@ class Settings(BaseSettings):
         errors: list[str] = []
         if not self.llm_api_key:
             errors.append("LLM_API_KEY 未配置")
-        if not self.neo4j_uri:
-            errors.append("NEO4J_URI 未配置")
         return errors
 
 

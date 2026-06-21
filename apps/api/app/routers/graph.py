@@ -223,11 +223,6 @@ def build_graph(req: BuildGraphRequest, current=Depends(require_verified_user)):
     try:
         logger.info("=== 开始构建图谱 ===")
 
-        # 检查配置
-        if not settings.neo4j_uri:
-            logger.error("配置错误: 缺少 NEO4J 配置")
-            return _error(t("api.configError", details=t("api.neo4jConfigMissing")), 500)
-
         project_id = req.project_id
         logger.debug(f"请求参数: project_id={project_id}")
 
@@ -254,15 +249,15 @@ def build_graph(req: BuildGraphRequest, current=Depends(require_verified_user)):
             ProjectStatus.FAILED,
             ProjectStatus.GRAPH_COMPLETED,
         ]:
-            # 清理上一次（可能因中断而残留）的图谱数据，避免 Neo4j 累积孤儿节点
+            # 清理上一次（可能因中断而残留）的图谱数据，避免图谱累积孤儿节点
             if project.graph_id:
                 try:
-                    from ..utils.neo4j_graph_utils import (
+                    from ..utils.graph_store import (
                         delete_group,
-                        get_neo4j_graph_client,
+                        get_graph_store,
                     )
 
-                    delete_group(get_neo4j_graph_client(), project.graph_id)
+                    delete_group(get_graph_store(), project.graph_id)
                     logger.info(f"强制重建：已清理旧图谱数据 graph_id={project.graph_id}")
                 except Exception as exc:
                     logger.warning(f"清理旧图谱数据失败（忽略）: {exc}")
@@ -362,13 +357,10 @@ def list_tasks():
 def get_graph_data(graph_id: str, current=Depends(get_current_user)):
     """获取图谱数据（节点和边，仅限属主）"""
     try:
-        if not settings.neo4j_uri:
-            return _error(t("api.neo4jConfigMissing"), 500)
-
         if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
             return _error(t("api.projectNotFound", id=graph_id), 404)
 
-        builder = GraphBuilderService(api_key=settings.neo4j_uri)
+        builder = GraphBuilderService()
         graph_data = builder.get_graph_data(graph_id)
         return {"success": True, "data": graph_data}
 
@@ -385,16 +377,13 @@ def recanonicalize_project_graph(
     dry_run=true 时只返回拟合并分组，不改动数据库（用于先复核再执行）。
     """
     try:
-        if not settings.neo4j_uri:
-            return _error(t("api.neo4jConfigMissing"), 500)
-
         project = ProjectManager.get_project(project_id)
         if not project or project.user_id != current["user_id"]:
             return _error(t("api.projectNotFound", id=project_id), 404)
         if not project.graph_id:
             return _error(t("api.graphNotBuilt"), 400)
 
-        builder = GraphBuilderService(api_key=settings.neo4j_uri)
+        builder = GraphBuilderService()
         result = builder.recanonicalize_graph(project.graph_id, dry_run=dry_run)
         logger.info(f"图谱实体消解完成: {result}")
         return {"success": True, "data": result}
@@ -405,15 +394,12 @@ def recanonicalize_project_graph(
 
 @router.delete("/delete/{graph_id}")
 def delete_graph(graph_id: str, current=Depends(get_current_user)):
-    """删除 Neo4j 图谱（仅限属主）"""
+    """删除 图谱（仅限属主）"""
     try:
-        if not settings.neo4j_uri:
-            return _error(t("api.neo4jConfigMissing"), 500)
-
         if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
             return _error(t("api.graphDeleted", id=graph_id), 404)
 
-        builder = GraphBuilderService(api_key=settings.neo4j_uri)
+        builder = GraphBuilderService()
         builder.delete_graph(graph_id)
         return {"success": True, "message": t("api.graphDeleted", id=graph_id)}
 

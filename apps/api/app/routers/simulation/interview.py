@@ -17,7 +17,7 @@ from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 r
     InterviewAllRequest,
     InterviewBatchRequest,
     InterviewHistoryRequest,
-    Neo4jEntityReader,
+    GraphEntityReader,
     OasisProfileGenerator,
     PrepareSimulationRequest,
     PrepareStatusRequest,
@@ -203,10 +203,9 @@ def _interview_stream_response(simulation_id: str, poster) -> StreamingResponse:
     from ...services.simulation_ipc import SimulationIPCClient
 
     async def event_gen():
+        # 存活性以 Redis 心跳为准（不依赖本机 sim_dir）：模拟可能跑在另一台 worker 上，
+        # 处理本 SSE 的 API 副本本地未必有该模拟目录。IPC 客户端仅据 simulation_id 收发。
         sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
-        if not os.path.isdir(sim_dir):
-            yield _sse_event({"type": "error", "error": "simulation-not-found"})
-            return
         ipc = SimulationIPCClient(sim_dir)
         if not ipc.check_env_alive():
             # 环境已回收：前端应先调 ensure-env 唤醒后再发起；这里直接报错让其走兜底
