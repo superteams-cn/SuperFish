@@ -76,7 +76,7 @@ class ProjectRepository:
             return _row_to_project(row) if row else None
 
     @staticmethod
-    def list(limit: int = 50, user_id: str | None = None) -> list[Project]:
+    def list_projects(limit: int = 50, user_id: str | None = None) -> list[Project]:
         with session_scope() as session:
             query = session.query(ProjectRow)
             if user_id is not None:

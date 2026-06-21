@@ -88,7 +88,7 @@ class RunStateRepository:
         """确认 inst_id 是否为当前 owner。"""
         with session_scope() as session:
             row = session.get(SimulationRunStateRow, simulation_id)
-            return bool(row) and (row.data or {}).get("owner_id") == inst_id
+            return row is not None and (row.data or {}).get("owner_id") == inst_id
 
     @staticmethod
     def release_owner(simulation_id: str, inst_id: str) -> None:

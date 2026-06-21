@@ -59,4 +59,4 @@ const SoftBadge = React.forwardRef<HTMLSpanElement, SoftBadgeProps>(
 )
 SoftBadge.displayName = 'SoftBadge'
 
-export { SoftBadge, softBadgeVariants }
+export { SoftBadge }

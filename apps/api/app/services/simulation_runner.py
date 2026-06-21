@@ -238,9 +238,9 @@ class SimulationRunner:
         cls,
         simulation_id: str,
         platform: str = "parallel",  # twitter / reddit / parallel
-        max_rounds: int = None,  # 最大模拟轮数（可选，用于截断过长的模拟）
+        max_rounds: int | None = None,  # 最大模拟轮数（可选，用于截断过长的模拟）
         enable_graph_memory_update: bool = False,  # 是否将活动更新到Neo4j图谱
-        graph_id: str = None,  # Neo4j图谱ID（启用图谱更新时必需）
+        graph_id: str | None = None,  # Neo4j图谱ID（启用图谱更新时必需）
     ) -> SimulationRunState:
         """
         启动模拟
@@ -1352,7 +1352,7 @@ class SimulationRunner:
         simulation_id: str,
         agent_id: int,
         prompt: str,
-        platform: str = None,
+        platform: str | None = None,
         timeout: float = 60.0,
     ) -> dict[str, Any]:
         """
@@ -1414,7 +1414,7 @@ class SimulationRunner:
         cls,
         simulation_id: str,
         interviews: list[dict[str, Any]],
-        platform: str = None,
+        platform: str | None = None,
         timeout: float = 120.0,
     ) -> dict[str, Any]:
         """

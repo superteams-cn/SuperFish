@@ -14,6 +14,10 @@ const InteractionPage = lazy(() => import('@/pages/InteractionPage'))
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'))
 const VerifyEmailPage = lazy(() => import('@/pages/VerifyEmailPage'))
 
+// 本文件是路由配置模块（导出 router 配置 + 内部外壳组件），非组件热更新单元，
+// 故关闭 react-refresh 的「仅导出组件」约束。
+/* eslint-disable react-refresh/only-export-components */
+
 /** 路由懒加载时的全屏加载占位。 */
 function PageLoader() {
   return (

@@ -67,7 +67,7 @@ class ProjectManager:
     @classmethod
     def list_projects(cls, limit: int = 50, user_id: str | None = None) -> list[Project]:
         """列出项目，按创建时间倒序；传 user_id 时只返回该用户的项目。"""
-        return ProjectRepository.list(limit=limit, user_id=user_id)
+        return ProjectRepository.list_projects(limit=limit, user_id=user_id)
 
     @classmethod
     def get_projects_bulk(cls, project_ids: list[str]) -> dict[str, Project]:

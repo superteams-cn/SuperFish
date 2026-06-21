@@ -173,6 +173,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// Provider 组件与其配套 hook 同源共置（hook 依赖本文件内的 AuthContext），
+// 此处导出 hook 不影响实际开发，故针对该行关闭 react-refresh 约束。
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth 必须在 <AuthProvider> 内使用')

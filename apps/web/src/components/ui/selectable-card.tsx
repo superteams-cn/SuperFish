@@ -52,4 +52,4 @@ const SelectableCard = React.forwardRef<HTMLButtonElement, SelectableCardProps>(
 )
 SelectableCard.displayName = 'SelectableCard'
 
-export { SelectableCard, selectableCardVariants }
+export { SelectableCard }

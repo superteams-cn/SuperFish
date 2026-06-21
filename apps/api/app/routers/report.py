@@ -61,7 +61,7 @@ logger = get_logger("superfish.api.report")
 def _owns_simulation(simulation_id: str, current: dict) -> bool:
     """body 传入 simulation_id 时的归属校验。"""
     st = SimulationManager().get_simulation(simulation_id)
-    return bool(st) and st.user_id == current["user_id"]
+    return st is not None and st.user_id == current["user_id"]
 
 
 # ============== 报告生成接口 ==============

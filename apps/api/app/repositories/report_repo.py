@@ -38,10 +38,10 @@ def _row_to_report(row: ReportRow) -> Report:
     )
 
 
-def _load_row(session, report_id: str, create: bool = False) -> ReportRow | None:
-    """加载报告行；create=True 时不存在则新建并 add。"""
+def _get_or_create_row(session, report_id: str) -> ReportRow:
+    """加载报告行；不存在则新建并 add。保证返回非 None。"""
     row = session.get(ReportRow, report_id)
-    if row is None and create:
+    if row is None:
         row = ReportRow(report_id=report_id, created_at=datetime.now().isoformat())
         session.add(row)
     return row
@@ -54,7 +54,7 @@ class ReportRepository:
     def save_report(report: Report) -> None:
         """保存报告元信息与完整 markdown（章节/进度等其他字段保留）。"""
         with session_scope() as session:
-            row = _load_row(session, report.report_id, create=True)
+            row = _get_or_create_row(session, report.report_id)
             row.simulation_id = report.simulation_id
             # 只在有值时写入，避免后续进度保存把已继承的归属清空
             if report.user_id:
@@ -76,7 +76,7 @@ class ReportRepository:
     @staticmethod
     def save_outline(report_id: str, outline: ReportOutline) -> None:
         with session_scope() as session:
-            row = _load_row(session, report_id, create=True)
+            row = _get_or_create_row(session, report_id)
             row.outline = outline.to_dict()
 
     @staticmethod
@@ -84,7 +84,7 @@ class ReportRepository:
         """按 section_index 幂等地写入/替换单个章节条目。"""
         section_index = entry.get("section_index")
         with session_scope() as session:
-            row = _load_row(session, report_id, create=True)
+            row = _get_or_create_row(session, report_id)
             sections = [s for s in (row.sections or []) if s.get("section_index") != section_index]
             sections.append(entry)
             sections.sort(key=lambda s: s.get("section_index", 0))
@@ -102,7 +102,7 @@ class ReportRepository:
     @staticmethod
     def set_progress(report_id: str, progress_data: dict) -> None:
         with session_scope() as session:
-            row = _load_row(session, report_id, create=True)
+            row = _get_or_create_row(session, report_id)
             row.progress = progress_data
 
     @staticmethod
@@ -114,7 +114,7 @@ class ReportRepository:
     @staticmethod
     def set_markdown(report_id: str, markdown_content: str) -> None:
         with session_scope() as session:
-            row = _load_row(session, report_id, create=True)
+            row = _get_or_create_row(session, report_id)
             row.markdown_content = markdown_content
 
     @staticmethod

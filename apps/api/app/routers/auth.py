@@ -196,6 +196,7 @@ def login(req: LoginRequest, request: Request):
     ok = user is not None and verify_password(password, user.password_hash)
     if not ok:
         return _error(t("auth.invalidCredentials"), 401)
+    assert user is not None  # ok 为真即已排除 None（供类型收窄）
     if not user.is_active:
         return _error(t("auth.accountDisabled"), 403)
     data = {"user": _public_user(user), **_issue_tokens(user.user_id)}
@@ -241,7 +242,7 @@ def refresh(req: RefreshRequest):
     except Exception:
         return _error(t("auth.invalidToken"), 401)
 
-    user_id = payload.get("sub")
+    user_id = str(payload.get("sub") or "")
     user = UserRepository.get_by_id(user_id)
     if user is None or not user.is_active:
         return _error(t("auth.invalidToken"), 401)
@@ -297,7 +298,7 @@ def reset_password(req: ResetPasswordRequest):
     except Exception:
         return _error(t("auth.invalidResetToken"), 400)
 
-    user = UserRepository.get_by_id(payload.get("sub"))
+    user = UserRepository.get_by_id(str(payload.get("sub") or ""))
     # 指纹不符 = 密码已改过（旧链接） → 失效
     if (
         user is None
@@ -345,7 +346,7 @@ def verify_email(req: VerifyEmailRequest):
     except Exception:
         return _error(t("auth.invalidVerifyToken"), 400)
 
-    user = UserRepository.get_by_id(payload.get("sub"))
+    user = UserRepository.get_by_id(str(payload.get("sub") or ""))
     if user is None or not user.is_active:
         return _error(t("auth.invalidVerifyToken"), 400)
     UserRepository.mark_verified(user.user_id)
