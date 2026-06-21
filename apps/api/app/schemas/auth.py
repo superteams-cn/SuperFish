@@ -40,3 +40,9 @@ class ResetPasswordRequest(BaseModel):
 
     token: str | None = Field(default=None, description="重置令牌，必填")
     new_password: str | None = Field(default=None, description="新密码，必填")
+
+
+class VerifyEmailRequest(BaseModel):
+    """邮箱验证请求体。"""
+
+    token: str | None = Field(default=None, description="验证令牌，必填")

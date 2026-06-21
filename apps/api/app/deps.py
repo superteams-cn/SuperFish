@@ -2,10 +2,11 @@
 FastAPI 公共依赖项
 """
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from .db import session_scope
 from .db_models import UserRow
+from .settings import settings
 from .utils.locale import coerce_locale, set_locale, t
 from .utils.security import decode_token
 
@@ -44,4 +45,22 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict:
             "display_name": user.display_name,
             "status": user.status,
             "email_verified": user.email_verified,
+            "is_admin": (user.email or "").lower() in settings.admin_email_set,
         }
+
+
+def require_verified_user(current: dict = Depends(get_current_user)) -> dict:
+    """软门禁：未验证邮箱时拒绝烧钱操作（建图谱/创建/启动模拟），返回 403。
+
+    登录浏览不受限；仅在产生 LLM 成本的入口挂此依赖。
+    """
+    if not current.get("email_verified"):
+        raise HTTPException(status_code=403, detail=t("auth.emailNotVerified"))
+    return current
+
+
+def get_current_admin(current: dict = Depends(get_current_user)) -> dict:
+    """运维接口依赖：邮箱不在 admin 白名单则返回 403。"""
+    if not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail=t("auth.adminRequired"))
+    return current

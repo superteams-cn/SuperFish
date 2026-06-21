@@ -9,7 +9,13 @@ import {
   type ReactNode,
 } from 'react'
 
-import { getMe, loginUser, registerUser, type AuthUser } from '@/lib/api/auth'
+import {
+  getMe,
+  loginUser,
+  registerUser,
+  resendVerification as apiResendVerification,
+  type AuthUser,
+} from '@/lib/api/auth'
 import { setUnauthorizedHandler } from '@/lib/api/client'
 import { clearTokens, getAccessToken, setTokens } from '@/lib/auth-storage'
 
@@ -27,6 +33,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName?: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
+  resendVerification: () => Promise<string>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -90,6 +98,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setDialogOpen(false)
   }, [])
 
+  // 重新拉取 /me（验证邮箱后刷新 email_verified 等状态）
+  const refreshUser = useCallback(async () => {
+    const res = await getMe()
+    if (res.success && res.data) setUser(res.data)
+  }, [])
+
+  const resendVerification = useCallback(async () => {
+    const res = await apiResendVerification()
+    if (!res.success) throw new Error(res.error || 'resend failed')
+    return res.data?.message || ''
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -103,8 +123,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       register,
       logout,
+      refreshUser,
+      resendVerification,
     }),
-    [user, ready, dialogOpen, dialogMode, openAuth, closeAuth, login, register, logout],
+    [
+      user,
+      ready,
+      dialogOpen,
+      dialogMode,
+      openAuth,
+      closeAuth,
+      login,
+      register,
+      logout,
+      refreshUser,
+      resendVerification,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

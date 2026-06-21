@@ -9,7 +9,7 @@ import re
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from ..db import session_scope
@@ -21,15 +21,18 @@ from ..schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    VerifyEmailRequest,
 )
 from ..settings import settings
 from ..utils.locale import t
 from ..utils.logger import get_logger
 from ..utils.mailer import send_email
+from ..utils.rate_limit import check_rate_limit, client_ip
 from ..utils.security import (
     create_access_token,
     create_refresh_token,
     create_reset_token,
+    create_verify_token,
     decode_token,
     hash_password,
     password_fingerprint,
@@ -67,9 +70,17 @@ def _issue_tokens(user_id: str) -> dict:
     }
 
 
+def _send_verification_email(user_id: str, email: str) -> None:
+    """发送邮箱验证邮件（开发桩下打印到日志）。"""
+    token = create_verify_token(user_id)
+    link = f"{settings.web_base_url}/verify-email?token={token}"
+    send_email(email, t("auth.verifyEmailSubject"), t("auth.verifyEmailBody", link=link))
+    logger.info(f"已发送邮箱验证邮件: {email}")
+
+
 @router.post("/register")
-def register(req: RegisterRequest):
-    """注册新账户（开放注册）。成功后直接签发令牌并登录。"""
+def register(req: RegisterRequest, request: Request):
+    """注册新账户（开放注册）。成功后直接签发令牌并登录，并发送邮箱验证邮件。"""
     email = (req.email or "").strip().lower()
     password = req.password or ""
 
@@ -77,6 +88,12 @@ def register(req: RegisterRequest):
         return _error(t("auth.invalidEmail"), 400)
     if len(password) < _MIN_PASSWORD_LEN:
         return _error(t("auth.passwordTooShort"), 400)
+
+    # 限流：按 IP 防注册刷量
+    if not check_rate_limit(
+        f"auth:register:ip:{client_ip(request)}", settings.rate_limit_register_per_hour, 3600
+    ):
+        return _error(t("auth.rateLimited"), 429)
 
     now = datetime.now().isoformat()
     user_id = "user_" + uuid.uuid4().hex[:16]
@@ -101,16 +118,30 @@ def register(req: RegisterRequest):
         data = {"user": _public_user(user), **_issue_tokens(user.user_id)}
 
     logger.info(f"新用户注册: {email}")
+    # 发送验证邮件（失败只记录，不影响注册成功）
+    try:
+        _send_verification_email(user_id, email)
+    except Exception as e:
+        logger.warning(f"验证邮件发送失败: {email} err={e}")
     return {"success": True, "data": data}
 
 
 @router.post("/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, request: Request):
     """邮箱+密码登录。"""
     email = (req.email or "").strip().lower()
     password = req.password or ""
     if not email or not password:
         return _error(t("auth.missingCredentials"), 400)
+
+    # 限流：IP 与邮箱双维度，挡暴力撞库
+    ip = client_ip(request)
+    if not check_rate_limit(
+        f"auth:login:ip:{ip}", settings.rate_limit_login_per_min, 60
+    ) or not check_rate_limit(
+        f"auth:login:email:{email}", settings.rate_limit_login_per_min, 60
+    ):
+        return _error(t("auth.rateLimited"), 429)
 
     with session_scope() as session:
         user = session.query(UserRow).filter(UserRow.email == email).first()
@@ -147,7 +178,7 @@ def refresh(req: RefreshRequest):
 
 
 @router.post("/forgot-password")
-def forgot_password(req: ForgotPasswordRequest):
+def forgot_password(req: ForgotPasswordRequest, request: Request):
     """申请重置密码：向邮箱发送重置链接。
 
     无论邮箱是否存在都返回成功，避免用户枚举。开发桩下邮件打印到后端日志。
@@ -155,6 +186,14 @@ def forgot_password(req: ForgotPasswordRequest):
     email = (req.email or "").strip().lower()
     if not _EMAIL_RE.match(email):
         return _error(t("auth.invalidEmail"), 400)
+
+    # 限流：IP + 邮箱，防找回密码邮件轰炸
+    if not check_rate_limit(
+        f"auth:forgot:ip:{client_ip(request)}", settings.rate_limit_forgot_per_hour, 3600
+    ) or not check_rate_limit(
+        f"auth:forgot:email:{email}", settings.rate_limit_forgot_per_hour, 3600
+    ):
+        return _error(t("auth.rateLimited"), 429)
 
     with session_scope() as session:
         user = session.query(UserRow).filter(UserRow.email == email).first()
@@ -200,6 +239,47 @@ def reset_password(req: ResetPasswordRequest):
 
     logger.info(f"密码已重置: user={payload.get('sub')}")
     return {"success": True, "data": {"message": t("auth.resetSuccess")}}
+
+
+@router.post("/verify-email")
+def verify_email(req: VerifyEmailRequest):
+    """凭验证令牌确认邮箱。令牌过期/格式错返回 400；已验证则幂等返回成功。"""
+    token = (req.token or "").strip()
+    if not token:
+        return _error(t("auth.invalidVerifyToken"), 400)
+    try:
+        payload = decode_token(token, expected_type="verify")
+    except Exception:
+        return _error(t("auth.invalidVerifyToken"), 400)
+
+    with session_scope() as session:
+        user = session.get(UserRow, payload.get("sub"))
+        if user is None or user.status != "active":
+            return _error(t("auth.invalidVerifyToken"), 400)
+        if not user.email_verified:
+            user.email_verified = True
+            user.updated_at = datetime.now().isoformat()
+
+    logger.info(f"邮箱已验证: user={payload.get('sub')}")
+    return {"success": True, "data": {"message": t("auth.verifySuccess")}}
+
+
+@router.post("/resend-verification")
+def resend_verification(request: Request, current=Depends(get_current_user)):
+    """重发邮箱验证邮件（需登录）。已验证则直接返回成功，不再发信。"""
+    if current.get("email_verified"):
+        return {"success": True, "data": {"message": t("auth.alreadyVerified")}}
+
+    if not check_rate_limit(
+        f"auth:resend:user:{current['user_id']}", settings.rate_limit_resend_per_hour, 3600
+    ):
+        return _error(t("auth.rateLimited"), 429)
+
+    try:
+        _send_verification_email(current["user_id"], current["email"])
+    except Exception as e:
+        logger.warning(f"重发验证邮件失败: {current['email']} err={e}")
+    return {"success": True, "data": {"message": t("auth.verifyEmailSent")}}
 
 
 @router.get("/me")

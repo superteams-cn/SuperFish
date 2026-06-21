@@ -90,6 +90,13 @@ service.interceptors.response.use(
       unauthorizedHandler?.()
     }
 
+    // 归一化错误文案：FastAPI HTTPException 走 {detail}，业务信封走 {error}。
+    // 统一抬到 error.message，调用方读 (err as Error).message 即可拿到本地化文案。
+    const serverMsg = error.response?.data?.detail ?? error.response?.data?.error
+    if (typeof serverMsg === 'string' && serverMsg) {
+      error.message = serverMsg
+    }
+
     console.error('Response error:', error)
     if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
       console.error('Request timeout')

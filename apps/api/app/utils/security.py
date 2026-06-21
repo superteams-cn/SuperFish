@@ -64,6 +64,11 @@ def create_refresh_token(user_id: str) -> str:
     return _make_token(user_id, settings.jwt_refresh_ttl_days * 86400, "refresh")
 
 
+def create_verify_token(user_id: str) -> str:
+    """签发邮箱验证令牌（type=verify）。点击链接后置 email_verified=True。"""
+    return _make_token(user_id, settings.jwt_verify_ttl_min * 60, "verify")
+
+
 def password_fingerprint(password_hash: str) -> str:
     """由当前密码哈希派生短指纹，写入重置令牌。
 

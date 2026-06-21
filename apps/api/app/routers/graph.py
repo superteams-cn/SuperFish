@@ -11,7 +11,7 @@ import traceback
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
-from ..deps import get_current_user, use_locale
+from ..deps import get_current_user, require_verified_user, use_locale
 from ..jobqueue import enqueue
 from ..models.project import ProjectManager, ProjectStatus
 from ..models.task import TaskManager
@@ -118,7 +118,7 @@ async def generate_ontology(
     simulation_requirement: str = Form(default=""),
     project_name: str = Form(default="Unnamed Project"),
     additional_context: str = Form(default=""),
-    current=Depends(get_current_user),
+    current=Depends(require_verified_user),
 ):
     """接口1：上传文件（PDF/MD/TXT），分析生成本体定义。
 
@@ -135,6 +135,12 @@ async def generate_ontology(
         # 校验上传文件
         if not files or all(not f.filename for f in files):
             return _error(t("api.requireFileUpload"), 400)
+
+        # 配额：单用户项目总数上限
+        if ProjectManager.count_projects(current["user_id"]) >= settings.max_projects_per_user:
+            return _error(
+                t("auth.projectQuotaExceeded", limit=settings.max_projects_per_user), 403
+            )
 
         # 创建项目（盖章当前用户为属主）
         project = ProjectManager.create_project(name=project_name, user_id=current["user_id"])
@@ -221,7 +227,7 @@ async def generate_ontology(
 
 
 @router.post("/build")
-def build_graph(req: BuildGraphRequest, current=Depends(get_current_user)):
+def build_graph(req: BuildGraphRequest, current=Depends(require_verified_user)):
     """接口2：根据 project_id 构建图谱（后台异步执行，仅限属主）。"""
     try:
         logger.info("=== 开始构建图谱 ===")

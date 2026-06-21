@@ -217,6 +217,12 @@ class ProjectManager:
             return [_row_to_project(r) for r in rows]
 
     @classmethod
+    def count_projects(cls, user_id: str) -> int:
+        """统计某用户名下项目数（用于配额校验）。"""
+        with session_scope() as session:
+            return session.query(ProjectRow).filter(ProjectRow.user_id == user_id).count()
+
+    @classmethod
     def user_owns_graph(cls, graph_id: str, user_id: str) -> bool:
         """判断某 graph_id 是否属于该用户（其名下的项目或模拟引用了它）。"""
         if not graph_id:

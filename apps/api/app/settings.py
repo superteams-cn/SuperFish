@@ -61,6 +61,21 @@ class Settings(BaseSettings):
     jwt_access_ttl_min: int = 30
     jwt_refresh_ttl_days: int = 14
     jwt_reset_ttl_min: int = 30
+    # 邮箱验证令牌有效期（默认 24h）
+    jwt_verify_ttl_min: int = 60 * 24
+
+    # ===== P3 开放注册护栏 =====
+    # admin 邮箱白名单（逗号分隔），命中者拥有运维接口权限（如 /admin/stop-all）
+    admin_emails: str = ""
+    # 单用户配额：项目总数 + 同时运行中的模拟数
+    max_projects_per_user: int = 10
+    max_concurrent_simulations: int = 2
+    # 限流（Redis 滑动窗口）。注册/登录/找回密码/重发验证按 IP 与邮箱双维度限流
+    rate_limit_enabled: bool = True
+    rate_limit_register_per_hour: int = 10
+    rate_limit_login_per_min: int = 10
+    rate_limit_forgot_per_hour: int = 5
+    rate_limit_resend_per_hour: int = 5
 
     # ===== 邮件发送（找回密码/邮箱验证）=====
     # 未配置 smtp_host 时走「开发桩」：邮件内容打印到后端日志，便于本地联调；
@@ -146,6 +161,11 @@ class Settings(BaseSettings):
         if self.ontology_edge_types_max < self.ontology_edge_types_min:
             self.ontology_edge_types_max = self.ontology_edge_types_min
         return self
+
+    @property
+    def admin_email_set(self) -> set[str]:
+        """解析 admin_emails 为规范化（小写去空）邮箱集合。"""
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
     def validate_required(self) -> list[str]:
         """验证必要配置，返回错误信息列表（空列表表示通过）。"""

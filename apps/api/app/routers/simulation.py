@@ -19,7 +19,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
-from ..deps import get_current_user, use_locale
+from ..deps import get_current_admin, get_current_user, require_verified_user, use_locale
 from ..models.project import ProjectManager
 from ..schemas.simulation import (
     CloseEnvRequest,
@@ -284,7 +284,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str, current=Depends(get_curre
 
 
 @router.post("/create")
-def create_simulation(req: CreateSimulationRequest, current=Depends(get_current_user)):
+def create_simulation(req: CreateSimulationRequest, current=Depends(require_verified_user)):
     """
     创建新的模拟
 
@@ -328,7 +328,7 @@ def create_simulation(req: CreateSimulationRequest, current=Depends(get_current_
 
 
 @router.post("/prepare")
-def prepare_simulation(req: PrepareSimulationRequest, current=Depends(get_current_user)):
+def prepare_simulation(req: PrepareSimulationRequest, current=Depends(require_verified_user)):
     """
     准备模拟环境（异步任务，LLM 智能生成所有参数）
 
@@ -860,7 +860,7 @@ def generate_profiles(req: GenerateProfilesRequest, current=Depends(get_current_
 
 
 @router.post("/start")
-def start_simulation(req: StartSimulationRequest, current=Depends(get_current_user)):
+def start_simulation(req: StartSimulationRequest, current=Depends(require_verified_user)):
     """
     开始运行模拟
 
@@ -879,6 +879,17 @@ def start_simulation(req: StartSimulationRequest, current=Depends(get_current_us
             return _error(t("api.requireSimulationId"), 400)
         if _owned_simulation(simulation_id, current) is None:
             return _error(t("api.simulationNotFound", id=simulation_id), 404)
+
+        # 配额：同时运行中的模拟数上限（重启自身不计入）
+        running = [
+            s
+            for s in SimulationManager().list_simulations(user_id=current["user_id"])
+            if s.status == SimulationStatus.RUNNING and s.simulation_id != simulation_id
+        ]
+        if len(running) >= settings.max_concurrent_simulations:
+            return _error(
+                t("api.concurrentSimQuota", limit=settings.max_concurrent_simulations), 403
+            )
 
         platform = req.platform
         max_rounds = req.max_rounds  # 可选：最大模拟轮数
@@ -1030,10 +1041,11 @@ def stop_simulation(req: StopSimulationRequest, current=Depends(get_current_user
 
 
 @router.post("/admin/stop-all")
-def stop_all_simulations():
+def stop_all_simulations(current=Depends(get_current_admin)):
     """运维入口：终止所有正在运行的模拟（含服务重启后接管的孤儿）。
 
     配合「进程退出时松手不杀子进程」的策略——真正想全停时调用此接口。
+    仅 admin 白名单邮箱可调用（settings.admin_emails）。
     """
     try:
         result = SimulationRunner.cleanup_all_simulations()

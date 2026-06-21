@@ -45,3 +45,11 @@ export function forgotPassword(email: string) {
 export function resetPassword(token: string, new_password: string) {
   return http.post<{ message: string }>('/api/auth/reset-password', { token, new_password })
 }
+
+export function verifyEmail(token: string) {
+  return http.post<{ message: string }>('/api/auth/verify-email', { token })
+}
+
+export function resendVerification() {
+  return http.post<{ message: string }>('/api/auth/resend-verification', {})
+}

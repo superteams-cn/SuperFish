@@ -1,7 +1,18 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Upload, X, FileText, ArrowUp, Sparkles, RotateCcw, History, Paperclip } from 'lucide-react'
+import {
+  Upload,
+  X,
+  FileText,
+  ArrowUp,
+  Sparkles,
+  RotateCcw,
+  History,
+  Paperclip,
+  MailWarning,
+} from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -67,7 +78,22 @@ function UserBubble({ children }: { children: ReactNode }) {
 export default function HomePage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { isAuthenticated, openAuth } = useAuth()
+  const { isAuthenticated, openAuth, user, resendVerification } = useAuth()
+  const [resending, setResending] = useState(false)
+  const needsVerify = isAuthenticated && user != null && !user.email_verified
+
+  const onResendVerification = async () => {
+    if (resending) return
+    setResending(true)
+    try {
+      const msg = await resendVerification()
+      toast.success(msg || t('auth.verifyEmailSent'))
+    } catch (err) {
+      toast.error((err as Error)?.message || t('auth.genericError'))
+    } finally {
+      setResending(false)
+    }
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<number>()
 
@@ -174,6 +200,24 @@ export default function HomePage() {
           <AuthButton />
         </div>
       </header>
+
+      {/* 未验证邮箱提示条：软门禁——验证后才能发起预测 */}
+      {needsVerify && (
+        <div className="animate-rise-in fixed inset-x-0 top-[68px] z-20 mx-auto flex w-full max-w-xl items-center gap-2 px-5">
+          <div className="glass-subtle flex w-full items-center gap-2 rounded-xl border px-4 py-2.5 text-sm">
+            <MailWarning className="h-4 w-4 shrink-0 text-amber-500" />
+            <span className="text-muted-foreground flex-1">{t('auth.verifyBanner')}</span>
+            <button
+              type="button"
+              onClick={onResendVerification}
+              disabled={resending}
+              className="text-primary shrink-0 font-medium hover:underline disabled:opacity-50"
+            >
+              {resending ? t('auth.submitting') : t('auth.resendVerification')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 对话式引导 */}
       <section className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-4 px-5 py-28">
