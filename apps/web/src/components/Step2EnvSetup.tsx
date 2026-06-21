@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { TextButton } from '@/components/ui/text-button'
 import { Card } from '@/components/ui/card'
 import { CollapsibleHeader } from '@/components/ui/collapsible-header'
+import { SelectableCard } from '@/components/ui/selectable-card'
 import { SoftBadge } from '@/components/ui/soft-badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ProjectData, SystemLog } from '@/lib/process-types'
@@ -215,10 +216,10 @@ export function Step2EnvSetup({
                     const topics = p.interested_topics ?? []
                     const behavior = agentByIndex.get(i)
                     const card = (
-                      <button
-                        type="button"
+                      <SelectableCard
+                        surface="glass"
                         onClick={() => setSelectedProfile(p)}
-                        className="glass animate-rise-in flex w-full flex-col rounded-2xl p-4 text-left transition-transform duration-300 hover:-translate-y-0.5"
+                        className="animate-rise-in flex w-full flex-col rounded-2xl p-4"
                       >
                         <div className="flex items-center gap-3">
                           <div className="bg-brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white">
@@ -263,7 +264,7 @@ export function Step2EnvSetup({
                             “{myPosts[0]}”
                           </p>
                         )}
-                      </button>
+                      </SelectableCard>
                     )
 
                     if (!behavior) return <div key={p.username || i}>{card}</div>

@@ -6,6 +6,7 @@ import { SurveyPanel } from '@/components/step5/SurveyPanel'
 import { useInteraction } from '@/components/step5/useInteraction'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
 import { TextButton } from '@/components/ui/text-button'
+import { SelectableCard } from '@/components/ui/selectable-card'
 import { Logo } from '@/components/common/Logo'
 import { cn } from '@/lib/utils'
 import type { Profile } from '@/lib/step2-types'
@@ -192,11 +193,10 @@ function PeoplePicker({
       <p className="text-muted-foreground mb-4 text-center text-sm">{t('step5.cPickPrompt')}</p>
       <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-2">
         {profiles.map((p, idx) => (
-          <button
+          <SelectableCard
             key={p.username || idx}
-            type="button"
             onClick={() => onPick(idx)}
-            className="bg-card flex items-start gap-3 rounded-2xl border p-4 text-left transition-transform duration-300 hover:-translate-y-0.5"
+            className="flex items-start gap-3 rounded-2xl p-4"
           >
             <div className="bg-brand-gradient flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white">
               {initial(p.name || p.username)}
@@ -212,7 +212,7 @@ function PeoplePicker({
                 </p>
               )}
             </div>
-          </button>
+          </SelectableCard>
         ))}
       </div>
     </div>

@@ -3,6 +3,7 @@ import { Loader2, MessageCircleQuestion } from 'lucide-react'
 
 import { Markdown } from '@/components/Markdown'
 import { Button } from '@/components/ui/button'
+import { SelectableCard } from '@/components/ui/selectable-card'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { Profile } from '@/lib/step2-types'
@@ -59,13 +60,14 @@ export function SurveyPanel({
           {profiles.map((p, idx) => {
             const on = selected.has(idx)
             return (
-              <button
+              <SelectableCard
                 key={p.username || idx}
-                type="button"
+                surface="plain"
+                lift={!on}
                 onClick={() => onToggle(idx)}
                 className={cn(
-                  'flex items-center gap-2 rounded-xl border p-2 text-left transition',
-                  on ? 'border-indigo-400 bg-indigo-500/10' : 'bg-card hover:-translate-y-0.5',
+                  'flex items-center gap-2 rounded-xl border p-2',
+                  on ? 'border-indigo-400 bg-indigo-500/10' : 'bg-card',
                 )}
               >
                 <div
@@ -82,7 +84,7 @@ export function SurveyPanel({
                   </div>
                   <div className="text-muted-foreground truncate text-[10px]">{p.profession}</div>
                 </div>
-              </button>
+              </SelectableCard>
             )
           })}
         </div>
