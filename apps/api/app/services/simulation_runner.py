@@ -161,8 +161,13 @@ class SimulationRunner:
         """
         if state.runner_status not in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
             return state
+        # 存活性优先以 Redis 心跳为准（host-independent）：模拟可能跑在另一台 worker，
+        # 在 API 副本/异机上做本机 PID 探活会把存活的远端模拟误判为已死。心跳在 → 视为存活，
+        # 快照由其 owner 监控线程保持新鲜。
+        if cls._env_alive(state.simulation_id):
+            return state
         if cls._pid_alive(state.process_pid, state.process_start_time):
-            return state  # 进程仍活，快照由 owner 监控线程保持新鲜
+            return state  # 进程在本机仍活（owner 视角；心跳偶发缺失时的兜底）
 
         # 尚未拿到 PID 的 STARTING：已入队但 worker 还没真正 Popen（跨进程/副本的排队窗口）。
         # 在宽限期内视为「启动中」保持原样，避免被误判为 INTERRUPTED；超期才判失败。
@@ -196,6 +201,27 @@ class SimulationRunner:
         except Exception as e:
             logger.warning(f"回写校正后的运行状态失败: {state.simulation_id}, error={e}")
         return state
+
+    @classmethod
+    def _env_alive(cls, simulation_id: str) -> bool:
+        """模拟是否存活（以 Redis IPC 心跳为准，host-independent）。
+
+        模拟子进程每轮循环刷新 sim:ipc:alive:{sid}（TTL 过期即失效），故无论模拟跑在
+        哪台 worker，任意副本都能据此判活 —— 取代「本机 PID 探活」对异机进程的无效判断。
+        """
+        try:
+            from .simulation_ipc import read_env_status
+
+            return read_env_status(simulation_id).get("status") == "alive"
+        except Exception:
+            return False
+
+    @classmethod
+    def _owner_fresh(cls, state: SimulationRunState) -> bool:
+        """是否有新鲜 owner 正在监控（owner 心跳在 OWNER_TTL 内）。"""
+        if not state.owner_id or not state.owner_heartbeat:
+            return False
+        return (time.time() - state.owner_heartbeat) < cls.OWNER_TTL
 
     @classmethod
     def _within_launch_grace(cls, state: SimulationRunState) -> bool:
@@ -805,18 +831,23 @@ class SimulationRunner:
         return twitter_enabled or reddit_enabled
 
     @classmethod
-    def reconcile_running_simulations(cls, locale: str = "zh") -> dict[str, Any]:
-        """启动时对账：接管孤儿、终结已死的运行。
+    def reconcile_running_simulations(
+        cls, locale: str = "zh", reset_detach: bool = True
+    ) -> dict[str, Any]:
+        """对账：接管本机仍在跑的孤儿、终结真正已死的运行（存活性以 Redis 心跳为准）。
 
         扫描 PG 中标记 running/starting 的模拟：
-        - PID 仍存活且本进程未在监控 → 抢占所有权 + 重建图谱 updater + 重起监控线程续读。
-        - PID 已死 → 据 actions.jsonl 判 completed/interrupted 回写。
+        - Redis 心跳在或本机 PID 存活 → 仍在运行；本机存活且无人监控时抢占所有权 + 重建
+          图谱 updater + 重起监控线程续读（异机运行则交给其 worker，不跨机抢监控、不误判）。
+        - 心跳与本机 PID 皆无、且无新鲜 owner → 据 actions.jsonl 判 completed/interrupted 回写。
 
-        在 FastAPI lifespan startup 调用，使「服务重启/热重载」后进行中的模拟自动恢复。
+        两处调用：FastAPI/worker 启动时（reset_detach=True，复位松手标志使重启后自动恢复），
+        以及 worker 周期 cron（reset_detach=False，使任一 worker 死亡后其在跑模拟被及时终结/接管）。
         """
-        # 新进程生命周期开始：复位松手标志
-        cls._detaching = False
-        cls._detached = False
+        # 新进程生命周期开始：复位松手标志（周期对账不复位，避免打断正在进行的优雅退出）
+        if reset_detach:
+            cls._detaching = False
+            cls._detached = False
 
         adopted, finalized = [], []
         try:
@@ -834,42 +865,49 @@ class SimulationRunner:
             if not state:
                 continue
 
-            if cls._pid_alive(state.process_pid, state.process_start_time):
-                # 孤儿仍在跑 → 接管监控
-                if sid in cls._monitor_threads:
-                    continue
-                if not cls._try_claim_ownership(sid):
-                    continue  # 别的进程已接管
-                cls._run_states[sid] = state
-                cls._graph_memory_enabled[sid] = bool(state.graph_memory_enabled)
-                if state.graph_memory_enabled and state.graph_id:
-                    try:
-                        Neo4jGraphMemoryManager.create_updater(sid, state.graph_id)
-                    except Exception as e:
-                        logger.error(f"接管时重建图谱记忆更新器失败: {sid}, error={e}")
-                th = threading.Thread(
-                    target=cls._monitor_simulation, args=(sid, locale), daemon=True
-                )
-                th.start()
-                cls._monitor_threads[sid] = th
-                adopted.append(sid)
-                logger.info(f"已接管运行中的模拟: {sid}, pid={state.process_pid}")
+            local_alive = cls._pid_alive(state.process_pid, state.process_start_time)
+            env_alive = cls._env_alive(sid)
+
+            if env_alive or local_alive:
+                # 仍在运行（本机或他机）。仅当进程在【本机】存活且无人监控时由本进程接管监控；
+                # 进程在异机时不跨机抢监控（无法 poll 异机 PID / tail 其本地日志），交给运行它的
+                # worker 自行监控 —— 但绝不在此把存活的远端模拟误判为已死。
+                if local_alive and sid not in cls._monitor_threads and cls._try_claim_ownership(sid):
+                    cls._run_states[sid] = state
+                    cls._graph_memory_enabled[sid] = bool(state.graph_memory_enabled)
+                    if state.graph_memory_enabled and state.graph_id:
+                        try:
+                            Neo4jGraphMemoryManager.create_updater(sid, state.graph_id)
+                        except Exception as e:
+                            logger.error(f"接管时重建图谱记忆更新器失败: {sid}, error={e}")
+                    th = threading.Thread(
+                        target=cls._monitor_simulation, args=(sid, locale), daemon=True
+                    )
+                    th.start()
+                    cls._monitor_threads[sid] = th
+                    adopted.append(sid)
+                    logger.info(f"已接管运行中的模拟: {sid}, pid={state.process_pid}")
+                continue
+
+            # 既无 Redis 心跳、本机也无存活 PID。若仍有新鲜 owner（其 worker 暂时探测不到但
+            # 心跳未过期），让它自己终结，避免争用；否则视为真正已死，据 actions.jsonl 终结。
+            if cls._owner_fresh(state):
+                continue
+
+            sim_dir = os.path.join(cls.RUN_STATE_DIR, sid)
+            if cls._has_simulation_end(sim_dir):
+                state.runner_status = RunnerStatus.COMPLETED
+                if not state.completed_at:
+                    state.completed_at = datetime.now().isoformat()
             else:
-                # 进程已死 → 据日志终结
-                sim_dir = os.path.join(cls.RUN_STATE_DIR, sid)
-                if cls._has_simulation_end(sim_dir):
-                    state.runner_status = RunnerStatus.COMPLETED
-                    if not state.completed_at:
-                        state.completed_at = datetime.now().isoformat()
-                else:
-                    state.runner_status = RunnerStatus.INTERRUPTED
-                state.twitter_running = False
-                state.reddit_running = False
-                state.owner_id = None
-                state.owner_heartbeat = None
-                cls._save_run_state(state)
-                finalized.append(sid)
-                logger.info(f"终结已死的模拟: {sid} -> {state.runner_status.value}")
+                state.runner_status = RunnerStatus.INTERRUPTED
+            state.twitter_running = False
+            state.reddit_running = False
+            state.owner_id = None
+            state.owner_heartbeat = None
+            cls._save_run_state(state)
+            finalized.append(sid)
+            logger.info(f"终结已死的模拟: {sid} -> {state.runner_status.value}")
 
         if adopted or finalized:
             logger.info(f"模拟对账完成: 接管={adopted}, 终结={finalized}")

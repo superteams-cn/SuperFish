@@ -300,3 +300,110 @@ def test_jobqueue_registers_simulation_run():
     arq_func_name, sync_fn = entry
     assert arq_func_name == "simulation_run_job"
     assert sync_fn is jobs.run_simulation_launch
+
+
+# ───── 提交3：跨主机存活以 Redis 心跳为准 / 周期对账接管收尾 ─────
+
+
+def test_reconcile_state_env_alive_keeps_running_despite_dead_local_pid(
+    runner_cleanup, tmp_path, monkeypatch
+):
+    """模拟跑在另一台 worker（本机 PID 探不到）但 Redis 心跳在 → 不得误判为 INTERRUPTED。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(SimulationRunner, "_env_alive", classmethod(lambda cls, sid: True))
+    sid = _new_sid(runner_cleanup)
+    SimulationRunner._save_run_state(
+        SimulationRunState(
+            simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=999999
+        )
+    )
+    SimulationRunner._run_states.pop(sid, None)
+
+    reconciled = SimulationRunner._reconcile_state(SimulationRunner._load_run_state(sid))
+    assert reconciled.runner_status == RunnerStatus.RUNNING  # 心跳在 → 保持运行
+
+
+def test_reconcile_running_skips_remote_alive_sim(runner_cleanup, tmp_path, monkeypatch):
+    """对账：异机存活模拟（心跳在、本机 PID 不在）既不接管也不终结。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(SimulationRunner, "_env_alive", classmethod(lambda cls, sid: True))
+    sid = _new_sid(runner_cleanup)
+    SimulationRunner._save_run_state(
+        SimulationRunState(
+            simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=999999
+        )
+    )
+    SimulationRunner._run_states.pop(sid, None)
+
+    result = SimulationRunner.reconcile_running_simulations(reset_detach=False)
+    assert sid not in result["finalized"]
+    assert sid not in result["adopted"]
+    # 状态保持 RUNNING（未被终结）
+    assert SimulationRunner._load_run_state(sid).runner_status == RunnerStatus.RUNNING
+
+
+def test_reconcile_running_finalizes_when_no_heartbeat_no_owner(
+    runner_cleanup, tmp_path, monkeypatch
+):
+    """对账：无心跳、本机 PID 死、无新鲜 owner → 据日志终结（此处无 simulation_end → INTERRUPTED）。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(SimulationRunner, "_env_alive", classmethod(lambda cls, sid: False))
+    sid = _new_sid(runner_cleanup)
+    SimulationRunner._save_run_state(
+        SimulationRunState(
+            simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=999999
+        )
+    )
+    SimulationRunner._run_states.pop(sid, None)
+
+    result = SimulationRunner.reconcile_running_simulations(reset_detach=False)
+    assert sid in result["finalized"]
+    assert SimulationRunner._load_run_state(sid).runner_status == RunnerStatus.INTERRUPTED
+
+
+def test_reconcile_running_skips_when_owner_fresh(runner_cleanup, tmp_path, monkeypatch):
+    """对账：无心跳/本机 PID 死，但 owner 心跳新鲜 → 让其 owner 自己终结，不在此争用。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(SimulationRunner, "_env_alive", classmethod(lambda cls, sid: False))
+    sid = _new_sid(runner_cleanup)
+    state = SimulationRunState(
+        simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=999999
+    )
+    state.owner_id = "other-worker:42"
+    state.owner_heartbeat = time.time()  # 新鲜
+    SimulationRunner._save_run_state(state)
+    SimulationRunner._run_states.pop(sid, None)
+
+    result = SimulationRunner.reconcile_running_simulations(reset_detach=False)
+    assert sid not in result["finalized"]
+    assert SimulationRunner._load_run_state(sid).runner_status == RunnerStatus.RUNNING
+
+
+def test_owner_fresh_and_periodic_reconcile_does_not_reset_detach(monkeypatch):
+    """_owner_fresh 阈值正确；周期对账（reset_detach=False）不复位松手标志。"""
+    s_fresh = SimulationRunState(simulation_id="x", owner_id="w:1", owner_heartbeat=time.time())
+    s_stale = SimulationRunState(
+        simulation_id="x", owner_id="w:1", owner_heartbeat=time.time() - 999
+    )
+    s_none = SimulationRunState(simulation_id="x")
+    assert SimulationRunner._owner_fresh(s_fresh) is True
+    assert SimulationRunner._owner_fresh(s_stale) is False
+    assert SimulationRunner._owner_fresh(s_none) is False
+
+    # 周期对账不得复位 _detaching（避免打断正在进行的优雅退出）
+    monkeypatch.setattr(SimulationRunner, "_env_alive", classmethod(lambda cls, sid: False))
+    SimulationRunner._detaching = True
+    try:
+        SimulationRunner.reconcile_running_simulations(reset_detach=False)
+        assert SimulationRunner._detaching is True
+    finally:
+        SimulationRunner._detaching = False
+
+
+def test_worker_registers_reconcile_cron():
+    """worker 配置含周期对账 cron，且 reconcile 作业映射到 SimulationRunner 对账。"""
+    from app import jobs
+    from app.worker import WorkerSettings
+
+    assert any(cj.name == "cron:reconcile_job" for cj in WorkerSettings.cron_jobs)
+    assert callable(jobs.run_reconcile)
