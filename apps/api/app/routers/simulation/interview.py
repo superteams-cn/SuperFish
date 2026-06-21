@@ -17,7 +17,7 @@ from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 r
     InterviewAllRequest,
     InterviewBatchRequest,
     InterviewHistoryRequest,
-    Neo4jEntityReader,
+    GraphEntityReader,
     OasisProfileGenerator,
     PrepareSimulationRequest,
     PrepareStatusRequest,

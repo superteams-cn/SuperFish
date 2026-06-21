@@ -9,8 +9,8 @@ import uuid
 import pytest
 
 from app.repositories.graph_repo import GraphRepository
-from app.utils.neo4j_graph_utils import (
-    Neo4jGraphClient,
+from app.utils.graph_store import (
+    GraphStore,
     delete_group,
     fetch_all_edges,
     fetch_all_nodes,
@@ -32,7 +32,7 @@ def graph(tmp_path):
         {"uuid": "e1", "name": "对战", "fact": "周瑜与诸葛亮联手", "source_node_uuid": "n1", "target_node_uuid": "n2"},
         {"uuid": "e2", "name": "发生地", "fact": "战于赤壁", "source_node_uuid": "n1", "target_node_uuid": "n3"},
     ]
-    Neo4jGraphClient().write_graph(gid, nodes, edges, user_id="u_test")
+    GraphStore().write_graph(gid, nodes, edges, user_id="u_test")
     yield gid
     GraphRepository.delete(gid)
 
@@ -64,15 +64,15 @@ def test_fetch_node_and_node_edges(graph):
 
 
 def test_search_scores_within_graph(graph):
-    res = run_async(Neo4jGraphClient().search("赤壁", group_ids=[graph], num_results=10))
+    res = run_async(GraphStore().search("赤壁", group_ids=[graph], num_results=10))
     assert any(r.fact and "赤壁" in r.fact for r in res)
     # 空 group_ids 不跨租户全表扫，直接空
-    assert run_async(Neo4jGraphClient().search("赤壁", group_ids=[])) == []
+    assert run_async(GraphStore().search("赤壁", group_ids=[])) == []
 
 
 def test_write_replaces_whole_graph(graph):
     # 再写一次（更小的集）应整张替换，而非累加
-    Neo4jGraphClient().write_graph(
+    GraphStore().write_graph(
         graph,
         [{"uuid": "n9", "name": "鲁肃", "summary": "", "type": "PERSON"}],
         [],

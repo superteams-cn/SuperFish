@@ -19,7 +19,7 @@ from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 r
     InterviewAllRequest,
     InterviewBatchRequest,
     InterviewHistoryRequest,
-    Neo4jEntityReader,
+    GraphEntityReader,
     OasisProfileGenerator,
     PrepareSimulationRequest,
     PrepareStatusRequest,
@@ -64,7 +64,7 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
             "simulation_id": "sim_xxxx",          // 必填，模拟ID
             "platform": "parallel",                // 可选: twitter / reddit / parallel (默认)
             "max_rounds": 100,                     // 可选: 最大模拟轮数，用于截断过长的模拟
-            "enable_graph_memory_update": false,   // 可选: 是否将 Agent 活动动态更新到 Neo4j 图谱记忆
+            "enable_graph_memory_update": false,   // 可选: 是否将 Agent 活动动态更新到 图谱记忆
             "force": false                         // 可选: 强制重新开始（会停止运行中的模拟并清理日志）
         }
     """

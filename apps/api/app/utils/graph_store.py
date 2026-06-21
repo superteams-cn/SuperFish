@@ -1,8 +1,8 @@
-"""图谱存储工具（模块名沿用 neo4j_graph_utils 以兼容既有导入）。
+"""图谱存储工具（模块名沿用 graph_store 以兼容既有导入）。
 
-后端已从 Neo4j 切换为 Postgres JSONB（见 repositories/graph_repo.py）：图谱访问全是
+后端为 Postgres JSONB（见 repositories/graph_repo.py）：图谱访问全是
 「取整张图 + 应用层朴素打分」，无多跳遍历，且单图极小（百级节点），故 KV 式 JSONB 存储
-足矣，并彻底消除 Neo4j 在线单点依赖。公开的类/函数名保持不变，调用方无需改动。
+足矣，并没有独立图数据库的在线单点。公开的类/函数名保持不变，调用方无需改动。
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def _score_text(query: str, terms: list[str], text: str) -> int:
     return score
 
 
-class Neo4jGraphClient:
+class GraphStore:
     """图谱存储客户端（历史名保留以兼容导入）。后端为 Postgres JSONB（GraphRepository）。
 
     仅承载实际被使用的子集：写整张图（write_graph）、应用层搜索（search）。
@@ -221,22 +221,22 @@ class Neo4jGraphClient:
         GraphRepository.save(graph_id, norm_nodes, norm_edges, user_id=user_id)
 
 
-def get_neo4j_graph_client(routing_key: str | None = None) -> Neo4jGraphClient:
+def get_graph_store(routing_key: str | None = None) -> GraphStore:
     """返回图谱存储客户端（进程内单例）。routing_key 仅为兼容签名而保留，无实际作用。"""
     global _graph_client
     if _graph_client is None:
         with _graph_client_lock:
             if _graph_client is None:
-                _graph_client = Neo4jGraphClient()
+                _graph_client = GraphStore()
                 logger.info("图谱存储客户端已初始化（Postgres 后端）")
     return _graph_client
 
 
-get_neo4j_client = get_neo4j_graph_client
+get_graph_store = get_graph_store
 
 
 def fetch_all_nodes(
-    client: Neo4jGraphClient | None,
+    client: GraphStore | None,
     group_id: str,
     max_items: int = _DEFAULT_MAX_NODES,
 ) -> list[dict[str, Any]]:
@@ -248,7 +248,7 @@ def fetch_all_nodes(
 
 
 def fetch_all_edges(
-    client: Neo4jGraphClient | None,
+    client: GraphStore | None,
     group_id: str,
 ) -> list[dict[str, Any]]:
     """取整张图的边（已富集 source/target 名）。"""
@@ -278,7 +278,7 @@ def fetch_node(group_id: str, node_uuid: str) -> dict[str, Any] | None:
     return next((n for n in nodes if n.get("uuid") == node_uuid), None)
 
 
-def delete_group(client: Neo4jGraphClient | None, group_id: str) -> None:
+def delete_group(client: GraphStore | None, group_id: str) -> None:
     """删除整张图。"""
     from ..repositories.graph_repo import GraphRepository
 

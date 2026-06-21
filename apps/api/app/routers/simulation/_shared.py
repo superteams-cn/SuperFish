@@ -36,7 +36,7 @@ from ...schemas.simulation import (
     StartSimulationRequest,
     StopSimulationRequest,
 )
-from ...services.neo4j_entity_reader import Neo4jEntityReader
+from ...services.graph_entity_reader import GraphEntityReader
 from ...services.oasis_profile_generator import OasisProfileGenerator
 from ...services.simulation_manager import SimulationManager, SimulationStatus
 from ...services.simulation_runner import SimulationRunner
@@ -78,7 +78,7 @@ __all__ = [
     "StartSimulationRequest",
     "StopSimulationRequest",
     # services
-    "Neo4jEntityReader",
+    "GraphEntityReader",
     "OasisProfileGenerator",
     "SimulationManager",
     "SimulationStatus",

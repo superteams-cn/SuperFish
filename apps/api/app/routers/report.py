@@ -337,9 +337,9 @@ def search_graph_tool(req: SearchToolRequest):
         if not graph_id or not query:
             return _error(t("api.requireGraphIdAndQuery"), 400)
 
-        from ..services.neo4j_tools import Neo4jToolsService
+        from ..services.graph_tools import GraphToolsService
 
-        tools = Neo4jToolsService()
+        tools = GraphToolsService()
         result = tools.search_graph(graph_id=graph_id, query=query, limit=limit)
         return {"success": True, "data": result.to_dict()}
 
@@ -356,9 +356,9 @@ def get_graph_statistics_tool(req: StatisticsToolRequest):
         if not graph_id:
             return _error(t("api.requireGraphId"), 400)
 
-        from ..services.neo4j_tools import Neo4jToolsService
+        from ..services.graph_tools import GraphToolsService
 
-        tools = Neo4jToolsService()
+        tools = GraphToolsService()
         result = tools.get_graph_statistics(graph_id)
         return {"success": True, "data": result}
 

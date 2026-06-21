@@ -12,12 +12,12 @@ from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 r
     EnvStatusRequest,
     FileResponse,
     GenerateProfilesRequest,
+    GraphEntityReader,
     HTTPException,
     InterviewAgentRequest,
     InterviewAllRequest,
     InterviewBatchRequest,
     InterviewHistoryRequest,
-    Neo4jEntityReader,
     OasisProfileGenerator,
     PrepareSimulationRequest,
     PrepareStatusRequest,
@@ -68,9 +68,6 @@ def get_graph_entities(
         enrich: 是否获取相关边信息（默认 true）
     """
     try:
-        if not settings.neo4j_uri:
-            return _error(t("api.neo4jConfigMissing"), 500)
-
         if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
             return _error(t("api.projectNotFound", id=graph_id), 404)
 
@@ -87,7 +84,7 @@ def get_graph_entities(
             f"获取图谱实体: graph_id={graph_id}, entity_types={entity_types_list}, enrich={enrich_bool}"
         )
 
-        reader = Neo4jEntityReader()
+        reader = GraphEntityReader()
         result = reader.filter_defined_entities(
             graph_id=graph_id, defined_entity_types=entity_types_list, enrich_with_edges=enrich_bool
         )
@@ -105,15 +102,12 @@ def get_entities_by_type(
 ):
     """获取指定类型的所有实体（仅限属主）"""
     try:
-        if not settings.neo4j_uri:
-            return _error(t("api.neo4jConfigMissing"), 500)
-
         if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
             return _error(t("api.projectNotFound", id=graph_id), 404)
 
         enrich_bool = enrich.lower() == "true"
 
-        reader = Neo4jEntityReader()
+        reader = GraphEntityReader()
         entities = reader.get_entities_by_type(
             graph_id=graph_id, entity_type=entity_type, enrich_with_edges=enrich_bool
         )
@@ -136,13 +130,10 @@ def get_entities_by_type(
 def get_entity_detail(graph_id: str, entity_uuid: str, current=Depends(get_current_user)):
     """获取单个实体的详细信息（仅限属主）"""
     try:
-        if not settings.neo4j_uri:
-            return _error(t("api.neo4jConfigMissing"), 500)
-
         if not ProjectManager.user_owns_graph(graph_id, current["user_id"]):
             return _error(t("api.projectNotFound", id=graph_id), 404)
 
-        reader = Neo4jEntityReader()
+        reader = GraphEntityReader()
         entity = reader.get_entity_with_context(graph_id, entity_uuid)
 
         if not entity:

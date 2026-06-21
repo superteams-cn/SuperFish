@@ -822,7 +822,7 @@
     "taskComplete": "Task complete",
     "taskFailed": "Task failed",
     "startPreparingEnv": "Preparing simulation environment...",
-    "connectingNeo4jGraph": "Connecting to Neo4j graph...",
+    "connectingGraph": "Connecting to graph...",
     "readingNodeData": "Reading node data...",
     "readingComplete": "Done, {count} entities found",
     "startGenerating": "Starting generation...",

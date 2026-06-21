@@ -14,7 +14,7 @@ from ..domain.simulation import PlatformType, SimulationState, SimulationStatus
 from ..repositories.simulation_repo import SimulationRepository
 from ..utils import object_store
 from ..utils.locale import t
-from .neo4j_entity_reader import Neo4jEntityReader
+from .graph_entity_reader import GraphEntityReader
 from .oasis_profile_generator import OasisProfileGenerator
 from .simulation_config_generator import SimulationConfigGenerator
 
@@ -33,7 +33,7 @@ class SimulationManager:
     模拟管理器
 
     核心功能：
-    1. 从Neo4j图谱读取实体并过滤
+    1. 从图谱读取实体并过滤
     2. 生成OASIS Agent Profile
     3. 使用LLM智能生成模拟配置参数
     4. 准备预设脚本所需的所有文件
@@ -88,7 +88,7 @@ class SimulationManager:
 
         Args:
             project_id: 项目ID
-            graph_id: Neo4j图谱ID
+            graph_id: 图谱ID
             enable_twitter: 是否启用Twitter模拟
             enable_reddit: 是否启用Reddit模拟
             user_id: 所属用户（从所属项目继承）
@@ -129,7 +129,7 @@ class SimulationManager:
         准备模拟环境（全程自动化）
 
         步骤：
-        1. 从Neo4j图谱读取并过滤实体
+        1. 从图谱读取并过滤实体
         2. 为每个实体生成OASIS Agent Profile（可选LLM增强，支持并行）
         3. 使用LLM智能生成模拟配置参数（时间、活跃度、发言频率等）
         4. 保存配置文件和Profile文件
@@ -159,9 +159,9 @@ class SimulationManager:
 
             # ========== 阶段1: 读取并过滤实体 ==========
             if progress_callback:
-                progress_callback("reading", 0, t("progress.connectingNeo4jGraph"))
+                progress_callback("reading", 0, t("progress.connectingGraph"))
 
-            reader = Neo4jEntityReader()
+            reader = GraphEntityReader()
 
             if progress_callback:
                 progress_callback("reading", 30, t("progress.readingNodeData"))

@@ -1,6 +1,6 @@
 """
 图谱实体读取与过滤服务
-从 Neo4j 图谱中读取节点，筛选出符合预定义实体类型的节点
+从 图谱中读取节点，筛选出符合预定义实体类型的节点
 """
 
 import json
@@ -8,15 +8,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..core.logger import get_logger
-from ..utils.neo4j_graph_utils import (
+from ..utils.graph_store import (
     fetch_all_edges,
     fetch_all_nodes,
     fetch_node,
     fetch_node_edges,
-    get_neo4j_graph_client,
+    get_graph_store,
 )
 
-logger = get_logger("superfish.neo4j_entity_reader")
+logger = get_logger("superfish.graph_entity_reader")
 
 
 def _parse_attrs(value: Any) -> dict[str, Any]:
@@ -79,9 +79,9 @@ class FilteredEntities:
         }
 
 
-class Neo4jEntityReader:
+class GraphEntityReader:
     """
-    图谱实体读取与过滤服务（Neo4j 实现）
+    图谱实体读取与过滤服务（Postgres 实现）
 
     公共接口与原 旧图谱 版本完全相同，调用方无需修改。
     """
@@ -92,7 +92,7 @@ class Neo4jEntityReader:
 
     def _get_client(self):
         if self._client is None:
-            self._client = get_neo4j_graph_client()
+            self._client = get_graph_store()
         return self._client
 
     def get_all_nodes(self, graph_id: str) -> list[dict[str, Any]]:

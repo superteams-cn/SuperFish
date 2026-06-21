@@ -17,7 +17,7 @@ from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 r
     InterviewAllRequest,
     InterviewBatchRequest,
     InterviewHistoryRequest,
-    Neo4jEntityReader,
+    GraphEntityReader,
     OasisProfileGenerator,
     PrepareSimulationRequest,
     PrepareStatusRequest,
@@ -169,7 +169,7 @@ def prepare_simulation(req: PrepareSimulationRequest, current=Depends(require_ve
         # 这样前端在调用 prepare 后立即就能获取到预期 Agent 总数
         try:
             logger.info(f"同步获取实体数量: graph_id={state.graph_id}")
-            reader = Neo4jEntityReader()
+            reader = GraphEntityReader()
             # 快速读取实体（不需要边信息，只统计数量）
             filtered_preview = reader.filter_defined_entities(
                 graph_id=state.graph_id,
@@ -589,7 +589,7 @@ def generate_profiles(req: GenerateProfilesRequest, current=Depends(get_current_
         use_llm = req.use_llm
         platform = req.platform
 
-        reader = Neo4jEntityReader()
+        reader = GraphEntityReader()
         filtered = reader.filter_defined_entities(
             graph_id=graph_id, defined_entity_types=entity_types, enrich_with_edges=True
         )

@@ -20,7 +20,7 @@ from ..core.logger import get_logger
 from ..domain.run_state import AgentAction, RoundSummary, RunnerStatus, SimulationRunState
 from ..repositories.run_state_repo import RunStateRepository
 from ..utils.locale import get_locale, set_locale
-from .neo4j_graph_memory_updater import Neo4jGraphMemoryManager
+from .graph_memory_updater import GraphMemoryManager
 from .simulation import log_reader
 from .simulation import process_control as pc
 from .simulation_ipc import CommandType, SimulationIPCClient
@@ -395,8 +395,8 @@ class SimulationRunner:
         simulation_id: str,
         platform: str = "parallel",  # twitter / reddit / parallel
         max_rounds: int | None = None,  # 最大模拟轮数（可选，用于截断过长的模拟）
-        enable_graph_memory_update: bool = False,  # 是否将活动更新到Neo4j图谱
-        graph_id: str | None = None,  # Neo4j图谱ID（启用图谱更新时必需）
+        enable_graph_memory_update: bool = False,  # 是否将活动更新到图谱
+        graph_id: str | None = None,  # 图谱ID（启用图谱更新时必需）
     ) -> SimulationRunState:
         """启动模拟（同步整链路：初始化 STARTING + 本进程拉起子进程）。
 
@@ -439,7 +439,7 @@ class SimulationRunner:
                 raise ValueError("启用图谱记忆更新时必须提供 graph_id")
 
             try:
-                Neo4jGraphMemoryManager.create_updater(simulation_id, graph_id)
+                GraphMemoryManager.create_updater(simulation_id, graph_id)
                 cls._graph_memory_enabled[simulation_id] = True
                 logger.info(
                     f"已启用图谱记忆更新: simulation_id={simulation_id}, graph_id={graph_id}"
@@ -683,7 +683,7 @@ class SimulationRunner:
             # 停止图谱记忆更新器
             if cls._graph_memory_enabled.get(simulation_id, False):
                 try:
-                    Neo4jGraphMemoryManager.stop_updater(simulation_id)
+                    GraphMemoryManager.stop_updater(simulation_id)
                     logger.info(f"已停止图谱记忆更新: simulation_id={simulation_id}")
                 except Exception as e:
                     logger.error(f"停止图谱记忆更新器失败: {e}")
@@ -728,7 +728,7 @@ class SimulationRunner:
         graph_memory_enabled = cls._graph_memory_enabled.get(state.simulation_id, False)
         graph_updater = None
         if graph_memory_enabled:
-            graph_updater = Neo4jGraphMemoryManager.get_updater(state.simulation_id)
+            graph_updater = GraphMemoryManager.get_updater(state.simulation_id)
 
         try:
             with open(log_path, encoding="utf-8") as f:
@@ -809,7 +809,7 @@ class SimulationRunner:
                             if action.round_num and action.round_num > state.current_round:
                                 state.current_round = action.round_num
 
-                            # 如果启用了图谱记忆更新，将活动发送到Neo4j图谱
+                            # 如果启用了图谱记忆更新，将活动发送到图谱
                             if graph_updater:
                                 graph_updater.add_activity_from_dict(action_data, platform)
 
@@ -894,7 +894,7 @@ class SimulationRunner:
                     cls._graph_memory_enabled[sid] = bool(state.graph_memory_enabled)
                     if state.graph_memory_enabled and state.graph_id:
                         try:
-                            Neo4jGraphMemoryManager.create_updater(sid, state.graph_id)
+                            GraphMemoryManager.create_updater(sid, state.graph_id)
                         except Exception as e:
                             logger.error(f"接管时重建图谱记忆更新器失败: {sid}, error={e}")
                     th = threading.Thread(
@@ -1053,7 +1053,7 @@ class SimulationRunner:
         # 停止图谱记忆更新器
         if cls._graph_memory_enabled.get(simulation_id, False):
             try:
-                Neo4jGraphMemoryManager.stop_updater(simulation_id)
+                GraphMemoryManager.stop_updater(simulation_id)
                 logger.info(f"已停止图谱记忆更新: simulation_id={simulation_id}")
             except Exception as e:
                 logger.error(f"停止图谱记忆更新器失败: {e}")
@@ -1238,7 +1238,7 @@ class SimulationRunner:
 
         # 停止本进程的图谱记忆 updater 线程（不影响子进程；接管进程会重建）
         try:
-            Neo4jGraphMemoryManager.stop_all()
+            GraphMemoryManager.stop_all()
         except Exception as e:
             logger.error(f"停止图谱记忆更新器失败: {e}")
         cls._graph_memory_enabled.clear()

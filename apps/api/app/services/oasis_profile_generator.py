@@ -1,6 +1,6 @@
 """
 OASIS Agent Profile生成器
-将Neo4j图谱中的实体转换为OASIS模拟平台所需的Agent Profile格式
+将图谱中的实体转换为OASIS模拟平台所需的Agent Profile格式
 
 优化改进：
 1. 调用图谱检索功能二次丰富节点信息
@@ -17,10 +17,10 @@ from typing import Any
 
 from ..core.logger import get_logger
 from ..core.settings import settings
+from ..utils.graph_store import fetch_all_edges, fetch_all_nodes, get_graph_store
 from ..utils.llm_client import LLMClient, parse_json_lenient
 from ..utils.locale import get_language_instruction, get_locale, set_locale, t
-from ..utils.neo4j_graph_utils import fetch_all_edges, fetch_all_nodes, get_neo4j_graph_client
-from .neo4j_entity_reader import EntityNode
+from .graph_entity_reader import EntityNode
 
 logger = get_logger("superfish.oasis_profile")
 
@@ -166,10 +166,10 @@ class OasisProfileGenerator:
     """
     OASIS Profile生成器
 
-    将Neo4j图谱中的实体转换为OASIS模拟所需的Agent Profile
+    将图谱中的实体转换为OASIS模拟所需的Agent Profile
 
     优化特性：
-    1. 调用Neo4j图谱检索功能获取更丰富的上下文
+    1. 调用图谱检索功能获取更丰富的上下文
     2. 生成非常详细的人设（包括基本信息、职业经历、性格特征、社交媒体行为等）
     3. 区分个人实体和抽象群体实体
     """
@@ -305,23 +305,23 @@ class OasisProfileGenerator:
             max_retries=0,
         )
 
-        # Neo4j 客户端用于检索丰富上下文
+        # 图谱存储客户端用于检索丰富上下文
         self._graph_client = None
         self.graph_id = graph_id
 
         try:
-            self._graph_client = get_neo4j_graph_client()
+            self._graph_client = get_graph_store()
         except Exception as e:
-            logger.warning(f"Neo4j图谱客户端初始化失败: {e}")
+            logger.warning(f"图谱存储客户端初始化失败: {e}")
 
     def generate_profile_from_entity(
         self, entity: EntityNode, user_id: int, use_llm: bool = True
     ) -> OasisAgentProfile:
         """
-        从Neo4j实体生成OASIS Agent Profile
+        从图谱实体生成OASIS Agent Profile
 
         Args:
-            entity: Neo4j实体节点
+            entity: 图谱实体节点
             user_id: 用户ID（用于OASIS）
             use_llm: 是否使用LLM生成详细人设
 
@@ -412,7 +412,7 @@ class OasisProfileGenerator:
 
     def _search_graph_for_entity(self, entity: EntityNode) -> dict[str, Any]:
         """
-        使用 Neo4j 图谱获取实体相关的丰富上下文信息。
+        使用 图谱获取实体相关的丰富上下文信息。
         （方法名保留以兼容现有调用）
         """
         results: dict[str, Any] = {"facts": [], "node_summaries": [], "context": ""}

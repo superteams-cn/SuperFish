@@ -63,3 +63,4 @@ apps/api/uploads/
 data/
 # 本地开发进程日志
 .dev-logs/
+docker-compose.e2e.yml.local

@@ -16,15 +16,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from neo4j import GraphDatabase  # noqa: E402
 
 from app.core.db import init_db  # noqa: E402
-from app.core.settings import settings  # noqa: E402
 from app.repositories.graph_repo import GraphRepository  # noqa: E402
 
 
 def main() -> None:
     init_db()  # 确保 graphs 表存在
-    driver = GraphDatabase.driver(
-        settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password)
-    )
+    # 旧 Neo4j 连接仅迁移用，从环境变量读取（运行时配置已无此项）
+    uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
+    user = os.environ.get("NEO4J_USER", "neo4j")
+    password = os.environ.get("NEO4J_PASSWORD", "neo4j")
+    driver = GraphDatabase.driver(uri, auth=(user, password))
     migrated = 0
     with driver.session() as session:
         group_ids = [
@@ -69,9 +70,9 @@ def main() -> None:
                 )
             ]
             # 复用 write_graph 的规范化（富集边名等）
-            from app.utils.neo4j_graph_utils import Neo4jGraphClient
+            from app.utils.graph_store import GraphStore
 
-            Neo4jGraphClient().write_graph(gid, nodes, edges)
+            GraphStore().write_graph(gid, nodes, edges)
             migrated += 1
             print(f"  ✓ {gid}: {len(nodes)} 节点 / {len(edges)} 边")
 

@@ -1,6 +1,6 @@
 """知识图谱仓储：graphs 表（整张图以 JSONB 存放）的数据访问。
 
-替代 Neo4j 作为图谱存储后端。访问模式为「按 graph_id 取整张图」，故只需简单 KV 式读写。
+图谱存储后端（Postgres）。访问模式为「按 graph_id 取整张图」，故只需简单 KV 式读写。
 """
 
 from __future__ import annotations

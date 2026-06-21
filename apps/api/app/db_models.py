@@ -15,10 +15,10 @@ from .core.settings import settings
 
 
 class GraphRow(Base):
-    """知识图谱存储表（替代 Neo4j）：整张图以两段 JSONB 存放。
+    """知识图谱存储表：整张图以两段 JSONB 存放。
 
     访问模式全是「取整张图」+ 应用层朴素打分（无多跳遍历），且单图极小（百级节点），
-    故 Postgres JSONB 一行存下即可，消除 Neo4j 在线单点依赖。
+    故 Postgres JSONB 一行存下即可，无需独立图数据库、无在线单点。
     nodes: [{uuid,name,summary,labels,attributes}]；edges: [{uuid,name,fact,
     source_node_uuid,target_node_uuid,source_node_name,target_node_name,attributes,...}]。
     """

@@ -1,8 +1,8 @@
-"""ReportAgent：基于 Neo4j 图谱工具、ReACT 模式生成模拟报告 + 与用户对话。
+"""ReportAgent：基于 图谱工具、ReACT 模式生成模拟报告 + 与用户对话。
 
 拆分自原 report_agent.py（含 Prompt 模板常量）。
 依赖：domain/report（领域）、report/logs（日志器）、report/manager（持久化编排）、
-neo4j_tools（检索工具）、llm_client（LLM 调用）。
+graph_tools（检索工具）、llm_client（LLM 调用）。
 """
 
 import json
@@ -16,7 +16,7 @@ from ...core.settings import settings
 from ...domain.report import Report, ReportOutline, ReportSection, ReportStatus
 from ...utils.llm_client import LLMClient
 from ...utils.locale import get_language_instruction, t
-from ..neo4j_tools import Neo4jToolsService
+from ..graph_tools import GraphToolsService
 from .logs import ReportConsoleLogger, ReportLogger
 from .manager import ReportManager
 
@@ -443,7 +443,7 @@ class ReportAgent:
         simulation_id: str,
         simulation_requirement: str,
         llm_client: LLMClient | None = None,
-        neo4j_tools: Neo4jToolsService | None = None,
+        graph_tools: GraphToolsService | None = None,
     ):
         """
         初始化Report Agent
@@ -453,14 +453,14 @@ class ReportAgent:
             simulation_id: 模拟ID
             simulation_requirement: 模拟需求描述
             llm_client: LLM客户端（可选）
-            neo4j_tools: Neo4j工具服务（可选）
+            graph_tools: 图谱工具服务（可选）
         """
         self.graph_id = graph_id
         self.simulation_id = simulation_id
         self.simulation_requirement = simulation_requirement
 
         self.llm = llm_client or LLMClient()
-        self.neo4j_tools = neo4j_tools or Neo4jToolsService()
+        self.graph_tools = graph_tools or GraphToolsService()
 
         # 工具定义
         self.tools = self._define_tools()
@@ -526,7 +526,7 @@ class ReportAgent:
             if tool_name == "insight_forge":
                 query = parameters.get("query", "")
                 ctx = parameters.get("report_context", "") or report_context
-                result = self.neo4j_tools.insight_forge(
+                result = self.graph_tools.insight_forge(
                     graph_id=self.graph_id,
                     query=query,
                     simulation_requirement=self.simulation_requirement,
@@ -540,7 +540,7 @@ class ReportAgent:
                 include_expired = parameters.get("include_expired", True)
                 if isinstance(include_expired, str):
                     include_expired = include_expired.lower() in ["true", "1", "yes"]
-                result = self.neo4j_tools.panorama_search(
+                result = self.graph_tools.panorama_search(
                     graph_id=self.graph_id, query=query, include_expired=include_expired
                 )
                 return result.to_text()
@@ -551,7 +551,7 @@ class ReportAgent:
                 limit = parameters.get("limit", 10)
                 if isinstance(limit, str):
                     limit = int(limit)
-                result = self.neo4j_tools.quick_search(
+                result = self.graph_tools.quick_search(
                     graph_id=self.graph_id, query=query, limit=limit
                 )
                 return result.to_text()
@@ -563,7 +563,7 @@ class ReportAgent:
                 if isinstance(max_agents, str):
                     max_agents = int(max_agents)
                 max_agents = min(max_agents, 10)
-                result = self.neo4j_tools.interview_agents(
+                result = self.graph_tools.interview_agents(
                     simulation_id=self.simulation_id,
                     interview_requirement=interview_topic,
                     simulation_requirement=self.simulation_requirement,
@@ -579,12 +579,12 @@ class ReportAgent:
                 return self._execute_tool("quick_search", parameters, report_context)
 
             elif tool_name == "get_graph_statistics":
-                result = self.neo4j_tools.get_graph_statistics(self.graph_id)
+                result = self.graph_tools.get_graph_statistics(self.graph_id)
                 return json.dumps(result, ensure_ascii=False, indent=2)
 
             elif tool_name == "get_entity_summary":
                 entity_name = parameters.get("entity_name", "")
-                result = self.neo4j_tools.get_entity_summary(
+                result = self.graph_tools.get_entity_summary(
                     graph_id=self.graph_id, entity_name=entity_name
                 )
                 return json.dumps(result, ensure_ascii=False, indent=2)
@@ -597,7 +597,7 @@ class ReportAgent:
 
             elif tool_name == "get_entities_by_type":
                 entity_type = parameters.get("entity_type", "")
-                nodes = self.neo4j_tools.get_entities_by_type(
+                nodes = self.graph_tools.get_entities_by_type(
                     graph_id=self.graph_id, entity_type=entity_type
                 )
                 result = [n.to_dict() for n in nodes]
@@ -701,7 +701,7 @@ class ReportAgent:
             progress_callback("planning", 0, t("progress.analyzingRequirements"))
 
         # 首先获取模拟上下文
-        context = self.neo4j_tools.get_simulation_context(
+        context = self.graph_tools.get_simulation_context(
             graph_id=self.graph_id, simulation_requirement=self.simulation_requirement
         )
 

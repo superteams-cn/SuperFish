@@ -1,5 +1,5 @@
 """
-Neo4j 图谱记忆更新服务
+图谱记忆更新服务
 将模拟中的 Agent 活动动态更新到当前项目图谱中。
 """
 
@@ -11,10 +11,10 @@ from queue import Empty, Queue
 from typing import Any
 
 from ..core.logger import get_logger
+from ..utils.graph_store import get_graph_store
 from ..utils.locale import get_locale, set_locale
-from ..utils.neo4j_graph_utils import get_neo4j_graph_client
 
-logger = get_logger("superfish.neo4j_graph_memory_updater")
+logger = get_logger("superfish.graph_memory_updater")
 
 
 @dataclass
@@ -157,11 +157,11 @@ class AgentActivity:
         return f"执行了{self.action_type}操作"
 
 
-class Neo4jGraphMemoryUpdater:
+class GraphMemoryUpdater:
     """
-    Neo4j 图谱记忆更新器
+    图谱记忆更新器
 
-    监控模拟的 actions 日志，将新的 Agent 活动实时写入 Neo4j 图谱。
+    监控模拟的 actions 日志，将新的 Agent 活动实时写入 图谱。
     按平台分组，每累积 BATCH_SIZE 条活动后批量合并为一个 episode 写入。
     """
 
@@ -174,7 +174,7 @@ class Neo4jGraphMemoryUpdater:
     def __init__(self, graph_id: str, api_key: str | None = None):
         # api_key 参数保留以兼容现有调用
         self.graph_id = graph_id
-        self._client = get_neo4j_graph_client()
+        self._client = get_graph_store()
 
         self._activity_queue: Queue = Queue()
         self._platform_buffers: dict[str, list[AgentActivity]] = {
@@ -272,7 +272,7 @@ class Neo4jGraphMemoryUpdater:
     def _send_batch_activities(self, activities: list[AgentActivity], platform: str):
         if not activities:
             return
-        # 模拟期图谱记忆增量写：Neo4j 移除后暂未在 Postgres 后端实现（上线先关，默认即关闭）。
+        # 模拟期图谱记忆增量写：图数据库移除后暂未在 Postgres 后端实现（上线先关，默认即关闭）。
         # enable_graph_memory_update 默认 False，故正常路径不会进到这里；若被显式开启则安全跳过，
         # 不影响模拟本身。后续如需该功能，可改为往图谱增量表追加 activity，避免反复重写大 JSONB。
         self._failed_count += len(activities)
@@ -318,26 +318,26 @@ class Neo4jGraphMemoryUpdater:
         }
 
 
-class Neo4jGraphMemoryManager:
+class GraphMemoryManager:
     """管理多个模拟的图谱记忆更新器（接口与原版完全兼容）"""
 
-    _updaters: dict[str, Neo4jGraphMemoryUpdater] = {}
+    _updaters: dict[str, GraphMemoryUpdater] = {}
     _lock = threading.Lock()
     _stop_all_done = False
 
     @classmethod
-    def create_updater(cls, simulation_id: str, graph_id: str) -> Neo4jGraphMemoryUpdater:
+    def create_updater(cls, simulation_id: str, graph_id: str) -> GraphMemoryUpdater:
         with cls._lock:
             if simulation_id in cls._updaters:
                 cls._updaters[simulation_id].stop()
-            updater = Neo4jGraphMemoryUpdater(graph_id)
+            updater = GraphMemoryUpdater(graph_id)
             updater.start()
             cls._updaters[simulation_id] = updater
             logger.info(f"创建图谱记忆更新器: simulation_id={simulation_id}, graph_id={graph_id}")
             return updater
 
     @classmethod
-    def get_updater(cls, simulation_id: str) -> Neo4jGraphMemoryUpdater | None:
+    def get_updater(cls, simulation_id: str) -> GraphMemoryUpdater | None:
         return cls._updaters.get(simulation_id)
 
     @classmethod

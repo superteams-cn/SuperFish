@@ -1,5 +1,5 @@
 """
-Neo4j 检索工具服务
+图谱检索工具服务
 封装图谱搜索、节点读取、边查询等工具，供 Report Agent 使用
 
 核心检索工具：
@@ -17,17 +17,17 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..core.logger import get_logger
-from ..utils.llm_client import LLMClient
-from ..utils.locale import get_locale, t
-from ..utils.neo4j_graph_utils import (
+from ..utils.graph_store import (
     fetch_all_edges,
     fetch_all_nodes,
     fetch_node,
-    get_neo4j_graph_client,
+    get_graph_store,
     run_async,
 )
+from ..utils.llm_client import LLMClient
+from ..utils.locale import get_locale, t
 
-logger = get_logger("superfish.neo4j_tools")
+logger = get_logger("superfish.graph_tools")
 
 
 def _search_terms(query: str) -> list[str]:
@@ -373,9 +373,9 @@ class _SubQueriesOutput(BaseModel):
 # ─── 主服务类 ────────────────────────────────────────────────────────────────
 
 
-class Neo4jToolsService:
+class GraphToolsService:
     """
-    Neo4j 检索工具服务
+    图谱检索工具服务
 
     【核心检索工具】
     1. insight_forge - 深度洞察检索（自动生成子问题，多维度检索）
@@ -394,7 +394,7 @@ class Neo4jToolsService:
 
     def __init__(self, api_key: str | None = None, llm_client: LLMClient | None = None):
         # api_key 参数保留以兼容现有调用
-        self._client = get_neo4j_graph_client()
+        self._client = get_graph_store()
         self._llm_client = llm_client
         logger.info(t("console.neo4jToolsInitialized"))
 

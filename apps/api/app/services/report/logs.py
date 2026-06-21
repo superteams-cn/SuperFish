@@ -317,7 +317,7 @@ class ReportConsoleLogger:
         # 添加到 report_agent 相关的 logger
         loggers_to_attach = [
             "superfish.report_agent",
-            "superfish.neo4j_tools",
+            "superfish.graph_tools",
         ]
 
         for logger_name in loggers_to_attach:
@@ -333,7 +333,7 @@ class ReportConsoleLogger:
         if self._file_handler:
             loggers_to_detach = [
                 "superfish.report_agent",
-                "superfish.neo4j_tools",
+                "superfish.graph_tools",
             ]
 
             for logger_name in loggers_to_detach:

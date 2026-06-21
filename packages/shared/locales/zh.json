@@ -822,7 +822,7 @@
     "taskComplete": "任务完成",
     "taskFailed": "任务失败",
     "startPreparingEnv": "开始准备模拟环境...",
-    "connectingNeo4jGraph": "正在连接Neo4j图谱...",
+    "connectingGraph": "正在连接图谱...",
     "readingNodeData": "正在读取节点数据...",
     "readingComplete": "完成，共 {count} 个实体",
     "startGenerating": "开始生成...",
