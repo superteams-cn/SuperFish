@@ -11,12 +11,15 @@
 """
 
 import os
+import sqlite3
 import time
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
 from app.core.errors import AppError
+from app.repositories.interview_trace_repo import InterviewTraceRepository
 from app.repositories.run_state_repo import RunStateRepository
 from app.services.simulation_runner import RunnerStatus, SimulationRunner, SimulationRunState
 
@@ -450,3 +453,600 @@ def test_worker_registers_reconcile_cron():
 
     assert any(cj.name == "cron:reconcile_job" for cj in WorkerSettings.cron_jobs)
     assert callable(jobs.run_reconcile)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 采访子系统（下轮抽 InterviewService 的接缝）
+#
+# 锁定当前可观察行为为基线：mock 掉 IPC/子进程/Redis/文件系统，断言三类路径：
+#   - 模拟不存在 → AppError(404)
+#   - 环境未运行（心跳不在）→ AppError(409)
+#   - 正常路径的编排顺序（check_env_alive → send_*）与返回结构。
+# 错误一律为 AppError，断言 .status。
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class _FakeIPCClient:
+    """SimulationIPCClient 的测试替身：记录调用、按脚本返回伪响应。
+
+    通过 monkeypatch 替换 simulation_runner 命名空间中的 SimulationIPCClient，
+    从而完全隔离 Redis；不起任何进程、不连任何外部服务。
+    """
+
+    instances: list["_FakeIPCClient"] = []
+
+    def __init__(self, sim_dir: str):
+        self.sim_dir = sim_dir
+        self.alive = True
+        self.calls: list[tuple[str, dict]] = []
+        # 默认完成态响应；用例可改写
+        self.interview_response = SimpleNamespace(
+            status=SimpleNamespace(value="completed"),
+            result={"answer": "ok"},
+            error=None,
+            timestamp="2026-06-21T00:00:00",
+        )
+        self.batch_response = SimpleNamespace(
+            status=SimpleNamespace(value="completed"),
+            result={"items": []},
+            error=None,
+            timestamp="2026-06-21T00:00:00",
+        )
+        _FakeIPCClient.instances.append(self)
+
+    def check_env_alive(self) -> bool:
+        self.calls.append(("check_env_alive", {}))
+        return self.alive
+
+    def send_interview(self, **kwargs):
+        self.calls.append(("send_interview", kwargs))
+        return self.interview_response
+
+    def send_batch_interview(self, **kwargs):
+        self.calls.append(("send_batch_interview", kwargs))
+        return self.batch_response
+
+
+@pytest.fixture
+def fake_ipc(monkeypatch):
+    """替换 simulation_runner 内引用的 SimulationIPCClient 为测试替身。"""
+    _FakeIPCClient.instances.clear()
+    monkeypatch.setattr("app.services.simulation_runner.SimulationIPCClient", _FakeIPCClient)
+    return _FakeIPCClient
+
+
+def _make_sim_dir(tmp_path, monkeypatch, sid: str):
+    """在受控 RUN_STATE_DIR 下建一个空的模拟目录，使 os.path.exists(sim_dir) 为真。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    sim_dir = tmp_path / sid
+    sim_dir.mkdir(parents=True, exist_ok=True)
+    return sim_dir
+
+
+# ───────────────────────── interview_agent ─────────────────────────
+
+
+def test_interview_agent_missing_simulation_raises_404(tmp_path, monkeypatch, fake_ipc):
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.interview_agent("sim_does_not_exist", agent_id=1, prompt="hi")
+    assert exc.value.status == 404
+
+
+def test_interview_agent_env_not_running_raises_409(tmp_path, monkeypatch, fake_ipc):
+    _make_sim_dir(tmp_path, monkeypatch, "sim_alive_false")
+    # 让替身上报「环境未存活」
+    monkeypatch.setattr(_FakeIPCClient, "check_env_alive", lambda self: False)
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.interview_agent("sim_alive_false", agent_id=1, prompt="hi")
+    assert exc.value.status == 409
+
+
+def test_interview_agent_happy_path_orchestration_and_shape(tmp_path, monkeypatch, fake_ipc):
+    _make_sim_dir(tmp_path, monkeypatch, "sim_ok")
+    result = SimulationRunner.interview_agent(
+        "sim_ok", agent_id=7, prompt="问题", platform="reddit", timeout=12.0
+    )
+
+    # 返回结构（completed → success=True，回填 agent_id/prompt/result/timestamp）
+    assert result == {
+        "success": True,
+        "agent_id": 7,
+        "prompt": "问题",
+        "result": {"answer": "ok"},
+        "timestamp": "2026-06-21T00:00:00",
+    }
+    # 编排顺序：先探活，再发采访；且采访参数被透传
+    client = fake_ipc.instances[-1]
+    assert [name for name, _ in client.calls] == ["check_env_alive", "send_interview"]
+    _, kw = client.calls[-1]
+    assert kw == {"agent_id": 7, "prompt": "问题", "platform": "reddit", "timeout": 12.0}
+
+
+def test_interview_agent_failed_response_maps_to_success_false(tmp_path, monkeypatch, fake_ipc):
+    _make_sim_dir(tmp_path, monkeypatch, "sim_fail")
+    monkeypatch.setattr(
+        _FakeIPCClient,
+        "send_interview",
+        lambda self, **kw: SimpleNamespace(
+            status=SimpleNamespace(value="failed"),
+            result=None,
+            error="boom",
+            timestamp="t1",
+        ),
+    )
+    result = SimulationRunner.interview_agent("sim_fail", agent_id=3, prompt="q")
+    assert result["success"] is False
+    assert result["error"] == "boom"
+    assert result["agent_id"] == 3
+    assert "result" not in result  # 失败分支不带 result
+
+
+# ───────────────────────── interview_agents_batch ─────────────────────────
+
+
+def test_interview_batch_missing_simulation_raises_404(tmp_path, monkeypatch, fake_ipc):
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.interview_agents_batch("nope", interviews=[{"agent_id": 1, "prompt": "x"}])
+    assert exc.value.status == 404
+
+
+def test_interview_batch_env_not_running_raises_409(tmp_path, monkeypatch, fake_ipc):
+    _make_sim_dir(tmp_path, monkeypatch, "sim_b_dead")
+    monkeypatch.setattr(_FakeIPCClient, "check_env_alive", lambda self: False)
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.interview_agents_batch(
+            "sim_b_dead", interviews=[{"agent_id": 1, "prompt": "x"}]
+        )
+    assert exc.value.status == 409
+
+
+def test_interview_batch_happy_path_shape_and_count(tmp_path, monkeypatch, fake_ipc):
+    _make_sim_dir(tmp_path, monkeypatch, "sim_b_ok")
+    interviews = [{"agent_id": 1, "prompt": "a"}, {"agent_id": 2, "prompt": "b"}]
+    result = SimulationRunner.interview_agents_batch(
+        "sim_b_ok", interviews=interviews, platform="twitter", timeout=99.0
+    )
+    assert result["success"] is True
+    assert result["interviews_count"] == 2
+    assert result["result"] == {"items": []}
+    client = fake_ipc.instances[-1]
+    assert [name for name, _ in client.calls] == ["check_env_alive", "send_batch_interview"]
+    _, kw = client.calls[-1]
+    assert kw == {"interviews": interviews, "platform": "twitter", "timeout": 99.0}
+
+
+# ───────────────────────── interview_all_agents ─────────────────────────
+
+
+def test_interview_all_agents_missing_simulation_raises_404(tmp_path, monkeypatch, fake_ipc):
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.interview_all_agents("nope", prompt="q")
+    assert exc.value.status == 404
+
+
+def test_interview_all_agents_missing_config_raises_404(tmp_path, monkeypatch, fake_ipc):
+    _make_sim_dir(tmp_path, monkeypatch, "sim_all_nocfg")
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.interview_all_agents("sim_all_nocfg", prompt="q")
+    assert exc.value.status == 404
+
+
+def test_interview_all_agents_empty_agent_configs_raises_404(tmp_path, monkeypatch, fake_ipc):
+    import json
+
+    sim_dir = _make_sim_dir(tmp_path, monkeypatch, "sim_all_empty")
+    (sim_dir / "simulation_config.json").write_text(
+        json.dumps({"agent_configs": []}), encoding="utf-8"
+    )
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.interview_all_agents("sim_all_empty", prompt="q")
+    assert exc.value.status == 404
+
+
+def test_interview_all_agents_builds_batch_from_config(tmp_path, monkeypatch, fake_ipc):
+    """从配置抽出 agent_id 列表（跳过缺 agent_id 的项）后委托批量采访。"""
+    import json
+
+    sim_dir = _make_sim_dir(tmp_path, monkeypatch, "sim_all_ok")
+    (sim_dir / "simulation_config.json").write_text(
+        json.dumps({"agent_configs": [{"agent_id": 10}, {"agent_id": 11}, {"name": "no_id"}]}),
+        encoding="utf-8",
+    )
+    result = SimulationRunner.interview_all_agents(
+        "sim_all_ok", prompt="统一问题", platform="reddit", timeout=200.0
+    )
+    assert result["success"] is True
+    client = fake_ipc.instances[-1]
+    _, kw = client.calls[-1]
+    # 仅含两个有 agent_id 的项，prompt 统一，platform/timeout 透传
+    assert kw["interviews"] == [
+        {"agent_id": 10, "prompt": "统一问题"},
+        {"agent_id": 11, "prompt": "统一问题"},
+    ]
+    assert kw["platform"] == "reddit"
+    assert kw["timeout"] == 200.0
+
+
+# ───────────────────────── get_interview_history（编排 + repo 委托）─────────────────────────
+
+
+def test_get_interview_history_single_platform_queries_only_that_db(tmp_path, monkeypatch):
+    """指定 platform 时只查该平台的 sqlite，路径与参数透传正确。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    (tmp_path / "sim_hist").mkdir(parents=True)
+    captured: list[dict] = []
+
+    def _fake_list(db_path, platform_name, agent_id, limit):
+        captured.append(
+            {
+                "db_path": db_path,
+                "platform_name": platform_name,
+                "agent_id": agent_id,
+                "limit": limit,
+            }
+        )
+        return [{"agent_id": 1, "timestamp": "t1", "platform": platform_name}]
+
+    monkeypatch.setattr(InterviewTraceRepository, "list_interviews", staticmethod(_fake_list))
+
+    out = SimulationRunner.get_interview_history(
+        "sim_hist", platform="reddit", agent_id=5, limit=50
+    )
+    assert len(captured) == 1
+    assert captured[0]["platform_name"] == "reddit"
+    assert captured[0]["agent_id"] == 5
+    assert captured[0]["limit"] == 50
+    assert captured[0]["db_path"].endswith("reddit_simulation.db")
+    assert len(out) == 1
+
+
+def test_get_interview_history_both_platforms_merged_sorted_and_capped(tmp_path, monkeypatch):
+    """不指定 platform 时查两平台，按 timestamp 倒序合并并按 limit 截断总数。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    (tmp_path / "sim_merge").mkdir(parents=True)
+
+    def _fake_list(db_path, platform_name, agent_id, limit):
+        if platform_name == "twitter":
+            return [{"timestamp": "2026-01-01", "platform": "twitter"}]
+        return [
+            {"timestamp": "2026-03-01", "platform": "reddit"},
+            {"timestamp": "2026-02-01", "platform": "reddit"},
+        ]
+
+    monkeypatch.setattr(InterviewTraceRepository, "list_interviews", staticmethod(_fake_list))
+
+    out = SimulationRunner.get_interview_history("sim_merge", platform=None, limit=2)
+    # 合并 3 条 → 截到 limit=2，且整体按 timestamp 倒序
+    assert len(out) == 2
+    assert [r["timestamp"] for r in out] == ["2026-03-01", "2026-02-01"]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# InterviewTraceRepository：每模拟独立 sqlite 的只读访问
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def _make_trace_db(path, rows):
+    """建一个含 OASIS `trace` 表的 sqlite 文件并塞入若干行。
+
+    rows: list[(user_id, action, info_json, created_at)]
+    """
+    conn = sqlite3.connect(str(path))
+    try:
+        conn.execute(
+            "CREATE TABLE trace (user_id INTEGER, action TEXT, info TEXT, created_at TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO trace (user_id, action, info, created_at) VALUES (?, ?, ?, ?)", rows
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_trace_repo_returns_empty_when_file_missing(tmp_path):
+    out = InterviewTraceRepository.list_interviews(
+        str(tmp_path / "nope.db"), platform_name="reddit"
+    )
+    assert out == []
+
+
+def test_trace_repo_filters_interview_action_and_parses_info(tmp_path):
+    import json
+
+    db = tmp_path / "reddit_simulation.db"
+    _make_trace_db(
+        db,
+        [
+            (1, "interview", json.dumps({"prompt": "Q1", "response": "A1"}), "2026-01-02"),
+            (1, "post", json.dumps({"x": 1}), "2026-01-03"),  # 非 interview → 应被过滤
+            (2, "interview", json.dumps({"prompt": "Q2", "response": "A2"}), "2026-01-01"),
+        ],
+    )
+    out = InterviewTraceRepository.list_interviews(str(db), platform_name="reddit")
+    # 仅 2 条 interview，按 created_at 倒序
+    assert [r["agent_id"] for r in out] == [1, 2]
+    assert out[0] == {
+        "agent_id": 1,
+        "response": "A1",
+        "prompt": "Q1",
+        "timestamp": "2026-01-02",
+        "platform": "reddit",
+    }
+
+
+def test_trace_repo_filters_by_agent_id(tmp_path):
+    import json
+
+    db = tmp_path / "reddit_simulation.db"
+    _make_trace_db(
+        db,
+        [
+            (1, "interview", json.dumps({"prompt": "Q1", "response": "A1"}), "2026-01-02"),
+            (2, "interview", json.dumps({"prompt": "Q2", "response": "A2"}), "2026-01-01"),
+        ],
+    )
+    out = InterviewTraceRepository.list_interviews(str(db), platform_name="reddit", agent_id=2)
+    assert len(out) == 1
+    assert out[0]["agent_id"] == 2
+
+
+def test_trace_repo_respects_limit(tmp_path):
+    import json
+
+    db = tmp_path / "reddit_simulation.db"
+    rows = [
+        (i, "interview", json.dumps({"prompt": f"Q{i}", "response": f"A{i}"}), f"2026-01-{i:02d}")
+        for i in range(1, 6)
+    ]
+    _make_trace_db(db, rows)
+    out = InterviewTraceRepository.list_interviews(str(db), platform_name="reddit", limit=2)
+    assert len(out) == 2
+
+
+def test_trace_repo_falls_back_on_invalid_info_json(tmp_path):
+    """info 非合法 JSON 时不崩，response 回退为整段 info、prompt 为空。"""
+    db = tmp_path / "reddit_simulation.db"
+    _make_trace_db(db, [(1, "interview", "not-json{", "2026-01-01")])
+    out = InterviewTraceRepository.list_interviews(str(db), platform_name="reddit")
+    assert len(out) == 1
+    # info 解析失败 → info = {"raw": "not-json{"}；response 取整个 info（无 "response" 键）
+    assert out[0]["response"] == {"raw": "not-json{"}
+    assert out[0]["prompt"] == ""
+
+
+def test_trace_repo_returns_empty_when_no_trace_table(tmp_path):
+    """库存在但无 trace 表（读失败）→ 记录日志并返回已得（空）列表，不抛。"""
+    db = tmp_path / "empty.db"
+    sqlite3.connect(str(db)).close()  # 建空库，无 trace 表
+    out = InterviewTraceRepository.list_interviews(str(db), platform_name="reddit")
+    assert out == []
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 生命周期状态机：stop_simulation 三态
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def test_stop_simulation_missing_raises_404(runner_cleanup, tmp_path, monkeypatch):
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    sid = _new_sid(runner_cleanup)  # 未落库
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.stop_simulation(sid)
+    assert exc.value.status == 404
+
+
+def test_stop_simulation_not_running_raises_409(runner_cleanup, tmp_path, monkeypatch):
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    sid = _new_sid(runner_cleanup)
+    SimulationRunner._save_run_state(
+        SimulationRunState(simulation_id=sid, runner_status=RunnerStatus.COMPLETED)
+    )
+    SimulationRunner._run_states.pop(sid, None)
+    with pytest.raises(AppError) as exc:
+        SimulationRunner.stop_simulation(sid)
+    assert exc.value.status == 409
+
+
+def test_stop_simulation_running_remote_posts_close_env_and_finalizes(
+    runner_cleanup, tmp_path, monkeypatch
+):
+    """正常停止一个「无本机句柄、本机 PID 不在」的运行：
+    走 Redis close_env 投递分支（不杀本机进程），并落终态 STOPPED。
+    通过替身隔离 IPC 与 S3 上传，无任何真实 IO。
+    """
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    # 隔离 S3 上传（停止流程末尾会调用）
+    monkeypatch.setattr(
+        SimulationRunner, "_upload_run_artifacts", classmethod(lambda c, s, d: None)
+    )
+
+    posted: list[tuple] = []
+
+    class _IPC:
+        def __init__(self, sim_dir):
+            self.sim_dir = sim_dir
+
+        def post_command(self, cmd_type, args):
+            posted.append((cmd_type, args))
+
+    monkeypatch.setattr("app.services.simulation_runner.SimulationIPCClient", _IPC)
+
+    sid = _new_sid(runner_cleanup)
+    # 新鲜 owner 心跳 → get_run_state 的 reconcile 视其为存活，保持 RUNNING（不被校正为终态），
+    # 从而让 stop_simulation 走真正的停止路径（而非 409）。
+    st = SimulationRunState(
+        simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=999999
+    )
+    st.owner_id = "remote-worker:1"
+    st.owner_heartbeat = time.time()
+    SimulationRunner._save_run_state(st)
+
+    state = SimulationRunner.stop_simulation(sid)
+
+    assert state.runner_status == RunnerStatus.STOPPED
+    assert state.twitter_running is False
+    assert state.reddit_running is False
+    assert state.completed_at
+    assert state.owner_id is None
+    # 远端停止：经 Redis 投递了一条 close_env 命令
+    assert len(posted) == 1
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 进程拉起：_spawn_process（mock subprocess.Popen，不起真实进程）
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def test_spawn_process_missing_run_state_raises_404(runner_cleanup, tmp_path, monkeypatch):
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    sid = _new_sid(runner_cleanup)  # 无运行态
+    with pytest.raises(AppError) as exc:
+        SimulationRunner._spawn_process(sid, platform="reddit")
+    assert exc.value.status == 404
+
+
+def test_spawn_process_missing_config_raises_404(runner_cleanup, tmp_path, monkeypatch):
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    sid = _new_sid(runner_cleanup)
+    (tmp_path / sid).mkdir(parents=True)  # 目录在但无 simulation_config.json
+    SimulationRunner._save_run_state(
+        SimulationRunState(simulation_id=sid, runner_status=RunnerStatus.STARTING)
+    )
+    with pytest.raises(AppError) as exc:
+        SimulationRunner._spawn_process(sid, platform="reddit")
+    assert exc.value.status == 404
+
+
+def test_spawn_process_missing_script_raises_404(runner_cleanup, tmp_path, monkeypatch):
+    """脚本不存在（指向空目录）→ AppError(404)。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(SimulationRunner, "SCRIPTS_DIR", str(tmp_path / "no_scripts"))
+    sid = _new_sid(runner_cleanup)
+    _write_config(tmp_path, sid)
+    SimulationRunner._save_run_state(
+        SimulationRunState(simulation_id=sid, runner_status=RunnerStatus.STARTING)
+    )
+    with pytest.raises(AppError) as exc:
+        SimulationRunner._spawn_process(sid, platform="reddit")
+    assert exc.value.status == 404
+
+
+def test_spawn_process_assembles_command_and_env_and_runs(runner_cleanup, tmp_path, monkeypatch):
+    """正常拉起（mock Popen）：装配命令行/env、置 RUNNING、记录 PID、抢占 owner。
+
+    断言不起真实进程的前提下的可观察编排：命令含解释器+脚本+--config，
+    可选 --max-rounds 透传；env 带 UTF-8 设置；cwd=sim_dir；状态转 RUNNING。
+    """
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    # 避免真起监控线程（其会读文件/落库）；只验证拉起编排
+    monkeypatch.setattr(
+        SimulationRunner, "_monitor_simulation", classmethod(lambda c, *a, **k: None)
+    )
+    # PID 起始时间读取在某些平台依赖 ps，固定为常量隔离
+    monkeypatch.setattr(
+        SimulationRunner, "_read_process_start_time", classmethod(lambda c, pid: 1.0)
+    )
+
+    captured = {}
+
+    class _FakePopen:
+        def __init__(self, cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            self.pid = 4321
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr("app.services.simulation_runner.subprocess.Popen", _FakePopen)
+
+    sid = _new_sid(runner_cleanup)
+    _write_config(tmp_path, sid)
+    SimulationRunner._save_run_state(
+        SimulationRunState(simulation_id=sid, runner_status=RunnerStatus.STARTING)
+    )
+
+    try:
+        state = SimulationRunner._spawn_process(sid, platform="reddit", max_rounds=5)
+
+        assert state.runner_status == RunnerStatus.RUNNING
+        assert state.process_pid == 4321
+        assert state.owner_id  # 已抢占监控所有权
+        # 命令行装配
+        cmd = captured["cmd"]
+        assert cmd[1].endswith("run_reddit_simulation.py")
+        assert "--config" in cmd
+        assert "--max-rounds" in cmd and "5" in cmd
+        # 环境变量与工作目录
+        kwargs = captured["kwargs"]
+        assert kwargs["env"]["PYTHONUTF8"] == "1"
+        assert kwargs["env"]["PYTHONIOENCODING"] == "utf-8"
+        assert kwargs["cwd"] == str(tmp_path / sid)
+    finally:
+        # 清理本用例在内存里登记的句柄，避免污染其它用例
+        SimulationRunner._processes.pop(sid, None)
+        SimulationRunner._monitor_threads.pop(sid, None)
+        SimulationRunner._action_queues.pop(sid, None)
+        sf = SimulationRunner._stdout_files.pop(sid, None)
+        if sf:
+            try:
+                sf.close()
+            except Exception:
+                pass
+        SimulationRunner._stderr_files.pop(sid, None)
+
+
+def test_spawn_process_graph_memory_requires_graph_id(runner_cleanup, tmp_path, monkeypatch):
+    """启用图谱记忆但未给 graph_id → AppError(400)。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    sid = _new_sid(runner_cleanup)
+    _write_config(tmp_path, sid)
+    SimulationRunner._save_run_state(
+        SimulationRunState(simulation_id=sid, runner_status=RunnerStatus.STARTING)
+    )
+    with pytest.raises(AppError) as exc:
+        SimulationRunner._spawn_process(
+            sid, platform="reddit", enable_graph_memory_update=True, graph_id=None
+        )
+    assert exc.value.status == 400
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 纯工具 / 小编排补漏
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def test_owner_fresh_boundaries():
+    """owner 心跳新鲜度边界：刚过 TTL 视为过期。"""
+    s_at_ttl = SimulationRunState(
+        simulation_id="x",
+        owner_id="w:1",
+        owner_heartbeat=time.time() - SimulationRunner.OWNER_TTL - 1,
+    )
+    assert SimulationRunner._owner_fresh(s_at_ttl) is False
+
+
+def test_within_launch_grace_handles_bad_started_at():
+    """started_at 缺失或不可解析时保守返回 True（视为刚入队，不误杀）。"""
+    s_none = SimulationRunState(simulation_id="x", started_at=None)
+    s_bad = SimulationRunState(simulation_id="x", started_at="not-a-date")
+    assert SimulationRunner._within_launch_grace(s_none) is True
+    assert SimulationRunner._within_launch_grace(s_bad) is True
+
+
+def test_check_all_platforms_completed_single_platform(tmp_path, monkeypatch):
+    """仅 reddit 启用（仅 reddit 日志存在）且已完成 → all_completed=True。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    sid = "sim_platcheck"
+    (tmp_path / sid / "reddit").mkdir(parents=True)
+    (tmp_path / sid / "reddit" / "actions.jsonl").write_text("{}\n", encoding="utf-8")
+    state = SimulationRunState(simulation_id=sid)
+    state.reddit_completed = True
+    assert SimulationRunner._check_all_platforms_completed(state) is True
+    # reddit 未完成 → False
+    state.reddit_completed = False
+    assert SimulationRunner._check_all_platforms_completed(state) is False
