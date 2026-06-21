@@ -72,6 +72,27 @@ def test_simulation_list_reachable(client: TestClient):
     assert r.json()["success"] is True
 
 
+def test_simulation_history_reachable(client: TestClient):
+    """/history 命中 lifecycle 子路由（其内联导入深度正确，不被 /{simulation_id} 吞）。"""
+    r = client.get("/api/simulation/history")
+    assert r.status_code == 200
+    assert r.json()["success"] is True
+
+
+def test_simulation_catchall_unknown_404(client: TestClient):
+    """单段 catch-all /{simulation_id} 注册在最后：未知 id 经归属守卫返回 404。"""
+    r = client.get("/api/simulation/__nope__")
+    assert r.status_code == 404
+
+
+def test_simulation_subrouters_reachable(client: TestClient):
+    """run/interview/env 子路由可达：空体命中处理器并返回本地化 400（非 404/500）。"""
+    for path in ("/api/simulation/stop", "/api/simulation/interview", "/api/simulation/env-status"):
+        r = client.post(path, json={})
+        assert r.status_code == 400, f"{path} -> {r.status_code}"
+        assert r.json()["success"] is False
+
+
 def test_report_list_reachable(client: TestClient):
     r = client.get("/api/report/list")
     assert r.status_code == 200
