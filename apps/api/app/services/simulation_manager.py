@@ -116,6 +116,102 @@ class SimulationManager:
 
         return state
 
+    def _project_kind(self, state: SimulationState) -> str:
+        """读取所属项目的推演类型（缺失回落 social_opinion）。"""
+        from ..repositories.project_repo import ProjectRepository
+
+        proj = ProjectRepository.get(state.project_id)
+        return (proj.kind if proj else "social_opinion") or "social_opinion"
+
+    def _prepare_narrative(
+        self,
+        state: SimulationState,
+        simulation_requirement: str,
+        defined_entity_types: list[str] | None,
+        progress_callback: Callable | None,
+    ) -> SimulationState:
+        """剧本推演准备：图谱角色 + 主题 → NarrativeSeed，落 sim_dir，状态置 READY。"""
+        from ..repositories.project_repo import ProjectRepository
+        from .narrative.runner import save_seed
+        from .narrative.seed_builder import build_seed
+
+        try:
+            state.status = SimulationStatus.PREPARING
+            self._save_simulation_state(state)
+            sim_dir = self._get_simulation_dir(state.simulation_id)
+
+            if progress_callback:
+                progress_callback("reading", 10, t("progress.connectingGraph"))
+
+            reader = GraphEntityReader()
+            filtered = reader.filter_defined_entities(
+                graph_id=state.graph_id,
+                defined_entity_types=defined_entity_types,
+                enrich_with_edges=True,
+            )
+            state.entities_count = filtered.filtered_count
+            state.entity_types = list(filtered.entity_types)
+
+            if filtered.filtered_count == 0:
+                state.status = SimulationStatus.FAILED
+                state.error = "没有找到符合条件的角色，请检查图谱是否正确构建"
+                self._save_simulation_state(state)
+                return state
+
+            if progress_callback:
+                progress_callback(
+                    "generating_profiles",
+                    50,
+                    t("progress.startGenerating"),
+                    current=0,
+                    total=filtered.filtered_count,
+                )
+
+            # 主题取项目 analysis_summary（P0 叙事拆解的主题/冲突主线）
+            proj = ProjectRepository.get(state.project_id)
+            theme = (proj.analysis_summary if proj else "") or ""
+
+            seed = build_seed(
+                simulation_id=state.simulation_id,
+                entities=filtered.entities,
+                requirement=simulation_requirement
+                or (proj.simulation_requirement if proj else "")
+                or "",
+                theme=theme,
+            )
+            save_seed(sim_dir, seed)
+            self._mirror_to_s3(state.simulation_id, "narrative_seed.json")
+
+            state.profiles_count = len(seed.characters)
+            state.config_generated = True
+            state.config_reasoning = f"叙事推演：{len(seed.characters)} 个角色，主题：{theme[:60]}"
+            state.simulation_requirement = seed.requirement
+            state.status = SimulationStatus.READY
+            self._save_simulation_state(state)
+
+            if progress_callback:
+                progress_callback(
+                    "generating_config",
+                    100,
+                    t("progress.configComplete"),
+                    current=len(seed.characters),
+                    total=len(seed.characters),
+                )
+
+            logger.info(
+                f"叙事推演准备完成: {state.simulation_id}, characters={len(seed.characters)}"
+            )
+            return state
+        except Exception as e:
+            logger.error(f"叙事推演准备失败: {state.simulation_id}, error={e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            state.status = SimulationStatus.FAILED
+            state.error = str(e)
+            self._save_simulation_state(state)
+            raise
+
     def prepare_simulation(
         self,
         simulation_id: str,
@@ -151,6 +247,13 @@ class SimulationManager:
         state = self._load_simulation_state(simulation_id)
         if not state:
             raise AppError(f"模拟不存在: {simulation_id}", status=404)
+
+        # 剧本推演（kind=narrative）：走叙事准备路径——读角色 → 建 NarrativeSeed → READY，
+        # 跳过 OASIS 人设/配置生成。
+        if self._project_kind(state) == "narrative":
+            return self._prepare_narrative(
+                state, simulation_requirement, defined_entity_types, progress_callback
+            )
 
         try:
             state.status = SimulationStatus.PREPARING

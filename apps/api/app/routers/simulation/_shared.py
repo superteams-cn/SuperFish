@@ -85,6 +85,26 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     if state is None:
         return False, {"reason": "模拟不存在"}
 
+    # 剧本推演：以 narrative_seed.json 存在 + config_generated 判定已准备（无 simulation_config.json）
+    from ...services.narrative.runner import is_narrative
+
+    sim_dir = simulation_manager._get_simulation_dir(simulation_id)
+    if is_narrative(sim_dir):
+        if state.config_generated and state.status.value in (
+            "ready",
+            "running",
+            "completed",
+            "stopped",
+            "failed",
+        ):
+            return True, {
+                "status": state.status.value,
+                "kind": "narrative",
+                "entities_count": state.entities_count,
+                "profiles_count": state.profiles_count,
+            }
+        return False, {"reason": "叙事种子未就绪", "status": state.status.value}
+
     status = state.status.value
     config_generated = state.config_generated
     logger.debug(

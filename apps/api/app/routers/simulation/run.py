@@ -90,6 +90,25 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
         if not state:
             return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
+        # 剧本推演（kind=narrative）：进程内线程跑叙事引擎，不入队 OASIS 子进程。
+        # 以 narrative_seed.json 是否存在判别（prepare 阶段已落盘 == 已准备好）。
+        from ...services.narrative.runner import NarrativeRunner, is_narrative
+
+        sim_dir = manager._get_simulation_dir(simulation_id)
+        if is_narrative(sim_dir):
+            result = NarrativeRunner.start(simulation_id, sim_dir, force=force)
+            state.status = SimulationStatus.RUNNING
+            manager._save_simulation_state(state)
+            return {
+                "success": True,
+                "data": {
+                    "simulation_id": simulation_id,
+                    "kind": "narrative",
+                    "runner_status": result.get("status", "running"),
+                    "started": result.get("started", True),
+                },
+            }
+
         force_restarted = False
 
         # 智能处理状态：如果准备工作已完成，允许重新启动

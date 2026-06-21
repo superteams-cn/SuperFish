@@ -305,6 +305,16 @@ def get_run_status_detail(simulation_id: str, platform: str | None = None):
         platform: 过滤平台（twitter/reddit，可选）
     """
     try:
+        # 剧本推演：返回 beat 流而非社媒动作
+        from ...services.narrative.runner import NarrativeRunner, is_narrative
+
+        sim_dir = SimulationManager()._get_simulation_dir(simulation_id)
+        if is_narrative(sim_dir):
+            status = NarrativeRunner.get_run_status(simulation_id, sim_dir)
+            status["simulation_id"] = simulation_id
+            status["all_beats"] = NarrativeRunner.get_beats(sim_dir)
+            return {"success": True, "data": status}
+
         run_state = SimulationRunner.get_run_state(simulation_id)
         platform_filter = platform
 
@@ -370,6 +380,15 @@ def get_run_status(simulation_id: str):
     获取模拟运行实时状态（用于前端轮询）
     """
     try:
+        # 剧本推演：返回 beat 进度
+        from ...services.narrative.runner import NarrativeRunner, is_narrative
+
+        sim_dir = SimulationManager()._get_simulation_dir(simulation_id)
+        if is_narrative(sim_dir):
+            status = NarrativeRunner.get_run_status(simulation_id, sim_dir)
+            status["simulation_id"] = simulation_id
+            return {"success": True, "data": status}
+
         run_state = SimulationRunner.get_run_state(simulation_id)
 
         if not run_state:
