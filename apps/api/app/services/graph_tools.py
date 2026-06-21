@@ -396,7 +396,7 @@ class GraphToolsService:
         # api_key 参数保留以兼容现有调用
         self._client = get_graph_store()
         self._llm_client = llm_client
-        logger.info(t("console.neo4jToolsInitialized"))
+        logger.info(t("console.graphToolsInitialized"))
 
     @property
     def llm(self) -> LLMClient:

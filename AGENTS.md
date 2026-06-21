@@ -81,6 +81,6 @@ superfish/
 
 ## 5. 协作纪律
 
-- 重依赖（OASIS / camel-ai / neo4j 版本）改动前必须与维护者确认。
+- 重依赖（OASIS / camel-ai 版本）改动前必须与维护者确认。
 - 不提交 `.env`、密钥、上传文件、日志等（见 `.gitignore`）。
 - 改动公共契约（API schema、locales key）时，前后端要同步更新。

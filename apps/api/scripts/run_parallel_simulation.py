@@ -90,7 +90,7 @@ _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载 .env（含 LLM_API_KEY/NEO4J/S3 等配置）。monorepo 重构后 .env 在仓库根
+# 加载 .env（含 LLM_API_KEY/S3 等配置）。monorepo 重构后 .env 在仓库根
 # （apps/api 的上两级），旧逻辑只往上找一级（apps/）会落空，导致子进程拿不到任何配置
 # → create_model 报"缺少 API Key"。这里按 仓库根 → apps → apps/api 顺序取第一个存在的。
 from dotenv import load_dotenv
