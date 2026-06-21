@@ -9,10 +9,10 @@ import {
   CheckCircle2,
   Sparkles,
   Code,
-  ChevronDown,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { CollapsibleHeader } from '@/components/ui/collapsible-header'
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { ReportOutlinePanel } from '@/components/step4/ReportOutlinePanel'
 import { AgentLogTimeline } from '@/components/step4/AgentLogTimeline'
@@ -27,13 +27,9 @@ import {
   getReportProgress,
   getReportSections,
 } from '@/lib/api/report'
-import { cn } from '@/lib/utils'
 import type { SystemLog } from '@/lib/process-types'
 import type { AgentLogEntry, ReportOutline } from '@/lib/step4-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
-
-const GRADIENT_BTN =
-  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
 
 interface Step4Props {
   reportId: string
@@ -408,7 +404,8 @@ export function Step4Report({
           {isComplete && (
             <div className="animate-rise-in mt-7 flex flex-col items-center gap-3">
               <Button
-                className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                variant="gradient"
+                className="h-12 gap-2 rounded-full px-8 text-base"
                 onClick={() => reportId && navigate(`/interaction/${reportId}`)}
               >
                 <Sparkles className="h-5 w-5" />
@@ -436,22 +433,13 @@ export function Step4Report({
 
           {/* 幕后：工作流进度 / Agent 日志 / 控制台 / 重新生成 */}
           <div className="mt-10">
-            <button
-              type="button"
-              onClick={() => setBackstageOpen((o) => !o)}
-              className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-xl border border-dashed px-4 py-3 text-sm transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Code className="h-4 w-4" />
-                {t('step4.cBackstage')}
-                <span className="text-muted-foreground/70 hidden text-xs sm:inline">
-                  · {t('step4.cBackstageHint')}
-                </span>
-              </span>
-              <ChevronDown
-                className={cn('h-4 w-4 transition-transform', backstageOpen && 'rotate-180')}
-              />
-            </button>
+            <CollapsibleHeader
+              open={backstageOpen}
+              onToggle={() => setBackstageOpen((o) => !o)}
+              icon={<Code className="h-4 w-4" />}
+              label={t('step4.cBackstage')}
+              hint={t('step4.cBackstageHint')}
+            />
 
             {backstageOpen && (
               <div className="mt-3 space-y-4">

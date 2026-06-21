@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Logo } from '@/components/common/Logo'
 import { verifyEmail } from '@/lib/api/auth'
 import { useAuth } from '@/stores/auth'
@@ -47,7 +48,7 @@ export default function VerifyEmailPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-5">
-      <div className="glass w-full max-w-sm rounded-2xl border p-7 text-center shadow-xl backdrop-blur-xl">
+      <Card variant="glass" className="w-full max-w-sm p-7 text-center shadow-xl">
         <Logo className="mx-auto mb-4 h-10 w-auto" />
         <h1 className="text-xl font-semibold">{t('auth.verifyPageTitle')}</h1>
 
@@ -77,7 +78,7 @@ export default function VerifyEmailPage() {
             {t('auth.backToSignIn')}
           </Button>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

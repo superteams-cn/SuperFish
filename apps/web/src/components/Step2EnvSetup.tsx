@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import {
   Loader2,
   CheckCircle2,
-  ChevronDown,
   Code,
   Sparkles,
   ArrowRight,
@@ -22,8 +21,10 @@ import { ProfileModal } from '@/components/step2/ProfileModal'
 import { PersonaBehavior } from '@/components/step2/PersonaBehavior'
 import { RoundsControl } from '@/components/step2/RoundsControl'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { CollapsibleHeader } from '@/components/ui/collapsible-header'
+import { SoftBadge } from '@/components/ui/soft-badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
 import {
   prepareSimulation,
   getPrepareStatus,
@@ -34,9 +35,6 @@ import {
 import type { ProjectData, SystemLog } from '@/lib/process-types'
 import type { AgentConfig, Profile, SimulationConfig } from '@/lib/step2-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
-
-const GRADIENT_BTN =
-  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
 
 interface Step2Props {
   simulationId: string
@@ -479,7 +477,7 @@ export function Step2EnvSetup({
 
           {/* 他们生活的世界：叙事方向 + 话题 + 一行概览（为「人」搭好舞台，从属于人） */}
           {simulationConfig && (ec?.narrative_direction || ec?.hot_topics?.length) && (
-            <div className="animate-rise-in glass mt-6 rounded-2xl p-4">
+            <Card variant="glass" className="animate-rise-in mt-6 p-4">
               <p className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-sm">
                 <Compass className="h-4 w-4" />
                 {t('step2.cWorld')}
@@ -490,9 +488,7 @@ export function Step2EnvSetup({
               {!!ec?.hot_topics?.length && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {ec.hot_topics.map((topic) => (
-                    <span key={topic} className="bg-secondary rounded-full px-3 py-1 text-xs">
-                      # {topic}
-                    </span>
+                    <SoftBadge key={topic}># {topic}</SoftBadge>
                   ))}
                 </div>
               )}
@@ -512,9 +508,7 @@ export function Step2EnvSetup({
                       <TooltipContent className="bg-popover text-foreground max-w-xs border p-3 shadow-xl backdrop-blur-xl">
                         <div className="flex flex-wrap gap-1.5">
                           {ec.hot_topics.map((topic) => (
-                            <span key={topic} className="bg-secondary rounded-full px-2 py-0.5">
-                              # {topic}
-                            </span>
+                            <SoftBadge key={topic}># {topic}</SoftBadge>
                           ))}
                         </div>
                       </TooltipContent>
@@ -539,7 +533,7 @@ export function Step2EnvSetup({
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           )}
 
           {/* 主角：为你召集的人（每个人带上 TA 已发的声音，点开看完整画像） */}
@@ -648,7 +642,8 @@ export function Step2EnvSetup({
                 </div>
               )}
               <Button
-                className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                variant="gradient"
+                className="h-12 gap-2 rounded-full px-8 text-base"
                 onClick={handleStart}
               >
                 <Sparkles className="h-5 w-5" />
@@ -668,22 +663,13 @@ export function Step2EnvSetup({
 
           {/* 幕后：实例信息 / 环境参数 / 激活事件 / 重新召集 / 原始日志 */}
           <div className="mt-10">
-            <button
-              type="button"
-              onClick={() => setBackstageOpen((o) => !o)}
-              className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-xl border border-dashed px-4 py-3 text-sm transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <Code className="h-4 w-4" />
-                {t('step2.cBackstage')}
-                <span className="text-muted-foreground/70 hidden text-xs sm:inline">
-                  · {t('step2.cBackstageHint')}
-                </span>
-              </span>
-              <ChevronDown
-                className={cn('h-4 w-4 transition-transform', backstageOpen && 'rotate-180')}
-              />
-            </button>
+            <CollapsibleHeader
+              open={backstageOpen}
+              onToggle={() => setBackstageOpen((o) => !o)}
+              icon={<Code className="h-4 w-4" />}
+              label={t('step2.cBackstage')}
+              hint={t('step2.cBackstageHint')}
+            />
 
             {backstageOpen && (
               <div className="mt-3 space-y-4">

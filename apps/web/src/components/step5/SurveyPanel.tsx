@@ -21,8 +21,6 @@ interface Props {
   onSubmit: () => void
 }
 
-const GRADIENT =
-  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-indigo-500/25 hover:shadow-lg'
 const initial = (name?: string) => (name || 'A').charAt(0).toUpperCase()
 
 /** 问一群人：挑几个人 + 同一个问题 → 收集每个人的回答。 */
@@ -102,7 +100,8 @@ export function SurveyPanel({
           className="resize-none rounded-2xl"
         />
         <Button
-          className={cn('mt-2 gap-1.5 rounded-full', GRADIENT)}
+          variant="gradient"
+          className="mt-2 gap-1.5 rounded-full"
           onClick={onSubmit}
           disabled={isSurveying || selected.size === 0 || !question.trim()}
         >

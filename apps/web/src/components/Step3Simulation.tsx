@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, CheckCircle2, Sparkles, ArrowRight, Code, ChevronDown, Radio } from 'lucide-react'
+import { Loader2, CheckCircle2, Sparkles, ArrowRight, Code, Radio } from 'lucide-react'
 
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { Button } from '@/components/ui/button'
+import { CollapsibleHeader } from '@/components/ui/collapsible-header'
 import {
   Dialog,
   DialogContent,
@@ -22,13 +23,9 @@ import {
   getRunStatusDetail,
 } from '@/lib/api/simulation'
 import { generateReport } from '@/lib/api/report'
-import { cn } from '@/lib/utils'
 import type { SystemLog } from '@/lib/process-types'
 import type { ActionItem, RunStatus } from '@/lib/step3-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
-
-const GRADIENT_BTN =
-  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
 
 interface Step3Props {
   simulationId: string
@@ -376,7 +373,8 @@ export function Step3Simulation({
             <div className="animate-rise-in mt-7 flex flex-col items-center gap-3">
               {done ? (
                 <Button
-                  className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                  variant="gradient"
+                  className="h-12 gap-2 rounded-full px-8 text-base"
                   onClick={handleGenerateReport}
                   disabled={isGeneratingReport}
                 >
@@ -418,22 +416,13 @@ export function Step3Simulation({
 
             {/* 幕后：双平台技术状态 / 原始日志 */}
             <div className="mt-10">
-              <button
-                type="button"
-                onClick={() => setBackstageOpen((o) => !o)}
-                className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-xl border border-dashed px-4 py-3 text-sm transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Code className="h-4 w-4" />
-                  {t('step3.cBackstage')}
-                  <span className="text-muted-foreground/70 hidden text-xs sm:inline">
-                    · {t('step3.cBackstageHint')}
-                  </span>
-                </span>
-                <ChevronDown
-                  className={cn('h-4 w-4 transition-transform', backstageOpen && 'rotate-180')}
-                />
-              </button>
+              <CollapsibleHeader
+                open={backstageOpen}
+                onToggle={() => setBackstageOpen((o) => !o)}
+                icon={<Code className="h-4 w-4" />}
+                label={t('step3.cBackstage')}
+                hint={t('step3.cBackstageHint')}
+              />
 
               {backstageOpen && (
                 <div className="mt-3 space-y-4">

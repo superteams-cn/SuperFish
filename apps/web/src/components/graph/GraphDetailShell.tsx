@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * 图谱详情面板外壳：右上浮层，标题 + 可选类型徽章 + 关闭按钮 + 滚动内容区。
- * d3 与 G6 两版面板共用；仅 z-index 不同，由 className 覆盖。
+ * 图谱面板复用；z-index 由 className 覆盖。
  */
 export function GraphDetailShell({
   title,

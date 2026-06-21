@@ -1,17 +1,32 @@
 import * as React from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(
-        'bg-card text-card-foreground rounded-2xl border shadow-lg backdrop-blur-xl',
-        className,
-      )}
-      {...props}
-    />
+/**
+ * 卡片表面：全站玻璃面板的唯一组件来源。
+ * - default：令牌驱动玻璃面（bg-card + backdrop-blur-xl + shadow-lg）。
+ * - glass：复用 index.css 的 `.glass`（带 saturate 提色 + 内描边高光 + 自定义阴影），
+ *   收口各处手写的 `glass rounded-2xl ...` 面板，避免 class 串复制。
+ */
+const cardVariants = cva('text-card-foreground rounded-2xl', {
+  variants: {
+    variant: {
+      default: 'bg-card border shadow-lg backdrop-blur-xl',
+      glass: 'glass',
+    },
+  },
+  defaultVariants: {
+    variant: 'default',
+  },
+})
+
+export interface CardProps
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> {}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, variant, ...props }, ref) => (
+    <div ref={ref} className={cn(cardVariants({ variant }), className)} {...props} />
   ),
 )
 Card.displayName = 'Card'
@@ -55,4 +70,4 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 )
 CardFooter.displayName = 'CardFooter'
 
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent, cardVariants }

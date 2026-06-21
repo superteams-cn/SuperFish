@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-/** 图例（左下，含实体类型色块与节点/边计数）。d3 与 G6 两版面板共用。 */
+/** 图例（左下，含实体类型色块与节点/边计数）。图谱面板复用。 */
 export function GraphLegend({
   typeColors,
   nodeCount,
@@ -32,7 +32,7 @@ export function GraphLegend({
   )
 }
 
-/** 底部居中的「实时更新中」胶囊提示。d3 与 G6 两版面板共用。 */
+/** 底部居中的「实时更新中」胶囊提示。图谱面板复用。 */
 export function GraphRealtimeHint({ hint }: { hint: string }) {
   return (
     <div className="bg-foreground/75 text-background absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-xs font-medium shadow-lg backdrop-blur">

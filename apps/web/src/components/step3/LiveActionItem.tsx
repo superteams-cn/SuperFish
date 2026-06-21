@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { PlatformLogo } from '@/components/step3/PlatformLogo'
+import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { ActionItem } from '@/lib/step3-types'
 
@@ -81,7 +82,7 @@ export function LiveActionItem({ action }: { action: ActionItem }) {
   }
 
   return (
-    <div className="glass animate-rise-in flex gap-3 rounded-2xl p-3.5">
+    <Card variant="glass" className="animate-rise-in flex gap-3 p-3.5">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-sm font-medium text-white">
         {name.slice(0, 1)}
       </div>
@@ -113,6 +114,6 @@ export function LiveActionItem({ action }: { action: ActionItem }) {
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

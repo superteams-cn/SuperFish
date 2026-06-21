@@ -28,10 +28,6 @@ import { useAuth } from '@/stores/auth'
 const ACCEPTED = ['pdf', 'md', 'txt']
 const THINK_MS = 750
 
-// 主操作的品牌渐变：业务层一次性强调样式，不进组件 variant
-const GRADIENT_BTN =
-  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
-
 type Stage = 'topic' | 'material' | 'ready'
 
 function AiAvatar() {
@@ -269,7 +265,8 @@ export default function HomePage() {
               />
               <Button
                 size="icon"
-                className={`${GRADIENT_BTN} size-10 shrink-0 rounded-full`}
+                variant="gradient"
+                className="size-10 shrink-0 rounded-full"
                 onClick={() => submitTopic(draft)}
                 disabled={!draft.trim()}
                 aria-label={t('home.chatGo')}
@@ -331,7 +328,8 @@ export default function HomePage() {
 
                   <Button
                     size="sm"
-                    className={`${GRADIENT_BTN} h-auto self-start rounded-full px-5 py-2.5`}
+                    variant="gradient"
+                    className="h-auto self-start rounded-full px-5 py-2.5"
                     onClick={() => advanceTo('ready')}
                     disabled={files.length === 0}
                   >
@@ -348,7 +346,8 @@ export default function HomePage() {
                       <Bubble>{t('home.chatReady')}</Bubble>
                       <div className="animate-rise-in ml-12 flex flex-wrap items-center gap-3">
                         <Button
-                          className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                          variant="gradient"
+                          className="h-12 gap-2 rounded-full px-8 text-base"
                           onClick={startEngine}
                         >
                           <Sparkles className="h-5 w-5" />

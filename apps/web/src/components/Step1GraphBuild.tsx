@@ -1,19 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import {
-  Loader2,
-  CheckCircle2,
-  ChevronDown,
-  RefreshCw,
-  Code,
-  Sparkles,
-  ArrowRight,
-} from 'lucide-react'
+import { Loader2, CheckCircle2, RefreshCw, Code, Sparkles, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { CollapsibleHeader } from '@/components/ui/collapsible-header'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { createSimulation, listSimulations } from '@/lib/api/simulation'
 import { cn } from '@/lib/utils'
@@ -25,9 +19,6 @@ import type {
   ProjectData,
   SystemLog,
 } from '@/lib/process-types'
-
-const GRADIENT_BTN =
-  'bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/40'
 
 interface Step1Props {
   currentPhase: number // -1 上传 / 0 本体 / 1 构建 / 2 完成
@@ -201,17 +192,18 @@ export function Step1GraphBuild({
 
             {/* 发现的角色 / 关系（hover 看说明） */}
             {(roles.length > 0 || rels.length > 0) && (
-              <div className="glass animate-rise-in mt-6 space-y-4 rounded-2xl p-5">
+              <Card variant="glass" className="animate-rise-in mt-6 space-y-4 p-5">
                 {tagGroup(roles, t('step1.cRoles'))}
                 {tagGroup(rels, t('step1.cRelations'))}
-              </div>
+              </Card>
             )}
 
             {/* 完成 → 唯一主操作：下一步 */}
             {done && (
               <div className="animate-rise-in mt-8 flex justify-center">
                 <Button
-                  className={`${GRADIENT_BTN} h-12 gap-2 rounded-full px-8 text-base`}
+                  variant="gradient"
+                  className="h-12 gap-2 rounded-full px-8 text-base"
                   onClick={() => handleEnter(false)}
                   disabled={busy}
                 >
@@ -228,22 +220,13 @@ export function Step1GraphBuild({
 
             {/* 幕后：重来 / 重建 / 原始日志 / ID */}
             <div className="mt-10">
-              <button
-                type="button"
-                onClick={() => setBackstageOpen((o) => !o)}
-                className="text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-xl border border-dashed px-4 py-3 text-sm transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Code className="h-4 w-4" />
-                  {t('step1.cBackstage')}
-                  <span className="text-muted-foreground/70 hidden text-xs sm:inline">
-                    · {t('step1.cBackstageHint')}
-                  </span>
-                </span>
-                <ChevronDown
-                  className={cn('h-4 w-4 transition-transform', backstageOpen && 'rotate-180')}
-                />
-              </button>
+              <CollapsibleHeader
+                open={backstageOpen}
+                onToggle={() => setBackstageOpen((o) => !o)}
+                icon={<Code className="h-4 w-4" />}
+                label={t('step1.cBackstage')}
+                hint={t('step1.cBackstageHint')}
+              />
 
               {backstageOpen && (
                 <div className="mt-3 space-y-3">

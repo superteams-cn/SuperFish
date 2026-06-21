@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Logo } from '@/components/common/Logo'
@@ -42,7 +43,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-5">
-      <div className="glass w-full max-w-sm rounded-2xl border p-7 shadow-xl backdrop-blur-xl">
+      <Card variant="glass" className="w-full max-w-sm p-7 shadow-xl">
         <div className="mb-6 flex flex-col items-center text-center">
           <Logo className="mb-4 h-10 w-auto" />
           <h1 className="text-xl font-semibold">{t('auth.resetPageTitle')}</h1>
@@ -76,7 +77,7 @@ export default function ResetPasswordPage() {
         >
           {t('auth.backToSignIn')}
         </button>
-      </div>
+      </Card>
     </div>
   )
 }

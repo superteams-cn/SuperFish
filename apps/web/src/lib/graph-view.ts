@@ -1,15 +1,15 @@
 /**
  * 把 SuperFish 后端的原始图谱数据（graphiti 风格：节点 uuid/labels/name，
- * 边 source_node_uuid/target_node_uuid/fact/fact_type）在前端转换为 G6 图谱
+ * 边 source_node_uuid/target_node_uuid/fact/fact_type）在前端转换为图谱
  * 组件所需的「视图模型」：节点带聚类/颜色/度数/半径，边带谓词/颜色，
  * 并按节点类型聚成簇（供 bubble-sets 背景使用）。
  *
  * kg-gen 原版这层计算在后端（_build_view_model），SuperFish 后端不产出该结构，
- * 故在此前端实现，保持 GraphPanelG6 与现有 d3 版 GraphPanel 接收同一份 GraphData。
+ * 故在此前端实现，为 d3 版 GraphPanel 提供统一的 GraphData。
  */
 import type { GraphData, GraphEdge, GraphNode } from '@/components/GraphPanel'
 
-// 实体类型配色（d3 / G6 两种引擎 + 图例共用，保证视觉统一）。
+// 实体类型配色（图谱与图例共用，保证视觉统一）。
 // 一组同明度的 jewel-tone 家族（Tailwind 500 级），以品牌 indigo 领衔——
 // 首个（也是最常见的）类型落在强调色上，整图主色调与「玻璃 + 单一 indigo」主题咬合；
 // 同饱和/明度让色板像「一家人」而非高饱和大杂烩，既保留类型辨识度又克制成体系。

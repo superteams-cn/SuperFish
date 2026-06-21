@@ -1,27 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, Network, Columns2, PanelRight, MoreHorizontal } from 'lucide-react'
+import { CheckCircle2, Network, Columns2, PanelRight } from 'lucide-react'
 
 import { readJourney, recordStage, stageUrl, type JourneyIds } from '@/lib/journey'
 
 import { GraphPanel, type GraphData } from '@/components/GraphPanel'
-import { GraphPanelG6 } from '@/components/GraphPanelG6'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { ThemeSwitcher } from '@/components/ThemeSwitcher'
 import { Brand } from '@/components/common/Brand'
-import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 export type ViewMode = 'graph' | 'split' | 'workbench'
-export type GraphEngine = 'd3' | 'g6'
 export type WorkflowStatus = 'processing' | 'completed' | 'error'
 
 interface WorkflowLayoutProps {
@@ -46,7 +37,7 @@ interface WorkflowLayoutProps {
 
 /**
  * 工作流通用外壳：顶部「推演旅程」进度（4 阶段人话）+ 左侧图谱舞台 + 右侧工作区。
- * 视图切换（图谱/分屏/内容）保留在顶栏；引擎切换（D3/G6）收进「更多」菜单（高级）。
+ * 视图切换（图谱/分屏/内容）保留在顶栏；图谱统一用 d3 力导向实现。
  */
 export function WorkflowLayout({
   step,
@@ -60,7 +51,6 @@ export function WorkflowLayout({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode)
-  const [engine, setEngine] = useState<GraphEngine>('d3')
 
   // 记录当前阶段与已知 ID 到旅程；合并后的旅程驱动进度条跳转
   const [journey, setJourney] = useState(readJourney)
@@ -147,20 +137,6 @@ export function WorkflowLayout({
             </ToggleGroupItem>
           </ToggleGroup>
 
-          {/* 更多（引擎切换，高级） */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="icon" className="rounded-full">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setEngine((e) => (e === 'g6' ? 'd3' : 'g6'))}>
-                {engine === 'g6' ? t('graph.engineSwitchToD3') : t('graph.engineSwitchToG6')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <ThemeSwitcher />
           <LanguageSwitcher />
         </div>
@@ -171,22 +147,12 @@ export function WorkflowLayout({
         <div
           className={cn('h-full overflow-hidden border-r transition-all duration-300', leftWidth)}
         >
-          {engine === 'g6' ? (
-            <GraphPanelG6
-              graphData={graphData}
-              loading={graphLoading}
-              onRefresh={onRefreshGraph}
-              onToggleMaximize={() => toggleMaximize('graph')}
-              resizeKey={viewMode}
-            />
-          ) : (
-            <GraphPanel
-              graphData={graphData}
-              loading={graphLoading}
-              onRefresh={onRefreshGraph}
-              onToggleMaximize={() => toggleMaximize('graph')}
-            />
-          )}
+          <GraphPanel
+            graphData={graphData}
+            loading={graphLoading}
+            onRefresh={onRefreshGraph}
+            onToggleMaximize={() => toggleMaximize('graph')}
+          />
         </div>
         <div className={cn('h-full overflow-hidden transition-all duration-300', rightWidth)}>
           {children}
