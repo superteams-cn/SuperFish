@@ -16,6 +16,7 @@ import uuid
 
 import pytest
 
+from app.core.errors import AppError
 from app.repositories.run_state_repo import RunStateRepository
 from app.services.simulation_runner import RunnerStatus, SimulationRunner, SimulationRunState
 
@@ -227,7 +228,12 @@ def _write_config(tmp_path, sid, *, hours=10, minutes_per_round=30):
     sim_dir.mkdir(parents=True, exist_ok=True)
     (sim_dir / "simulation_config.json").write_text(
         json.dumps(
-            {"time_config": {"total_simulation_hours": hours, "minutes_per_round": minutes_per_round}}
+            {
+                "time_config": {
+                    "total_simulation_hours": hours,
+                    "minutes_per_round": minutes_per_round,
+                }
+            }
         ),
         encoding="utf-8",
     )
@@ -261,8 +267,10 @@ def test_init_run_state_rejects_when_already_running(runner_cleanup, tmp_path, m
             simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=os.getpid()
         )
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(AppError) as exc_info:
         SimulationRunner._init_run_state(sid, platform="reddit")
+    # 状态冲突：当前状态不允许该操作 → 409 Conflict（迁移自原 ValueError/400）
+    assert exc_info.value.status == 409
 
 
 def test_reconcile_starting_no_pid_within_grace_stays_starting(

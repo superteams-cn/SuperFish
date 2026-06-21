@@ -294,9 +294,6 @@ def prepare_simulation(req: PrepareSimulationRequest, current=Depends(require_ve
             },
         }
 
-    except ValueError as e:
-        return _error(str(e), 404)
-
     except Exception as e:
         logger.error(f"启动准备任务失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())

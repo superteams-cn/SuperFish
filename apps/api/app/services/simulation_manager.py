@@ -9,6 +9,7 @@ import os
 from collections.abc import Callable
 from typing import Any
 
+from ..core.errors import AppError
 from ..core.logger import get_logger
 from ..domain.simulation import PlatformType, SimulationState, SimulationStatus
 from ..repositories.simulation_repo import SimulationRepository
@@ -149,7 +150,7 @@ class SimulationManager:
         """
         state = self._load_simulation_state(simulation_id)
         if not state:
-            raise ValueError(f"模拟不存在: {simulation_id}")
+            raise AppError(f"模拟不存在: {simulation_id}", status=404)
 
         try:
             state.status = SimulationStatus.PREPARING
@@ -368,7 +369,7 @@ class SimulationManager:
         """获取模拟的Agent Profile"""
         state = self._load_simulation_state(simulation_id)
         if not state:
-            raise ValueError(f"模拟不存在: {simulation_id}")
+            raise AppError(f"模拟不存在: {simulation_id}", status=404)
 
         sim_dir = self._get_simulation_dir(simulation_id)
         profile_path = os.path.join(sim_dir, f"{platform}_profiles.json")

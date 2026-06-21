@@ -80,9 +80,6 @@ def get_simulation_profiles(simulation_id: str, platform: str = "reddit"):
             "data": {"platform": platform, "count": len(profiles), "profiles": profiles},
         }
 
-    except ValueError as e:
-        return _error(str(e), 404)
-
     except Exception as e:
         logger.error(f"获取Profile失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())

@@ -21,6 +21,7 @@ from llama_index.core.schema import TextNode
 from llama_index.llms.openai_like import OpenAILike
 from pydantic import PrivateAttr
 
+from ..core.errors import AppError
 from ..core.logger import get_logger
 from ..core.settings import settings
 from ..models.task import TaskManager, TaskStatus
@@ -432,9 +433,9 @@ class GraphBuilderService:
                 }
 
         if not entity_types:
-            raise ValueError("本体缺少可用的 entity_types")
+            raise AppError("本体缺少可用的 entity_types", status=400)
         if not edge_types:
-            raise ValueError("本体缺少可用的 edge_types/source_targets")
+            raise AppError("本体缺少可用的 edge_types/source_targets", status=400)
 
         return {
             "entity_types": entity_types,

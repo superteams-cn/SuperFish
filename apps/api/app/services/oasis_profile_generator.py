@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from ..core.errors import AppError
 from ..core.logger import get_logger
 from ..core.settings import settings
 from ..utils.graph_store import fetch_all_edges, fetch_all_nodes, get_graph_store
@@ -293,7 +294,7 @@ class OasisProfileGenerator:
         self.model_name = model_name or settings.llm_model_name
 
         if not self.api_key:
-            raise ValueError("LLM_API_KEY 未配置")
+            raise AppError("LLM_API_KEY 未配置", status=400)
 
         # 单次调用超时（人设为长文本生成，正常也可能 60-90s，settings 默认 120s 留足余量）；
         # SDK 自带重试关掉（下方 _generate_* 自有重试循环），避免 600s 默认超时×内部重试

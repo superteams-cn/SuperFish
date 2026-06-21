@@ -181,9 +181,6 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
 
         return {"success": True, "data": response_data}
 
-    except ValueError as e:
-        return _error(str(e), 400)
-
     except Exception as e:
         logger.error(f"启动模拟失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())
@@ -220,9 +217,6 @@ def stop_simulation(req: StopSimulationRequest, current=Depends(get_current_user
             manager._save_simulation_state(state)
 
         return {"success": True, "data": run_state.to_dict()}
-
-    except ValueError as e:
-        return _error(str(e), 400)
 
     except Exception as e:
         logger.error(f"停止模拟失败: {str(e)}")

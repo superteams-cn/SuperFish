@@ -81,9 +81,6 @@ def interview_agent(req: InterviewAgentRequest, current=Depends(get_current_user
 
         return {"success": result.get("success", False), "data": result}
 
-    except ValueError as e:
-        return _error(str(e), 400)
-
     except TimeoutError as e:
         return _error(t("api.interviewTimeout", error=str(e)), 504)
 
@@ -147,9 +144,6 @@ def interview_agents_batch(req: InterviewBatchRequest, current=Depends(get_curre
         )
 
         return {"success": result.get("success", False), "data": result}
-
-    except ValueError as e:
-        return _error(str(e), 400)
 
     except TimeoutError as e:
         return _error(t("api.batchInterviewTimeout", error=str(e)), 504)
@@ -305,9 +299,6 @@ def interview_all_agents(req: InterviewAllRequest, current=Depends(get_current_u
         )
 
         return {"success": result.get("success", False), "data": result}
-
-    except ValueError as e:
-        return _error(str(e), 400)
 
     except TimeoutError as e:
         return _error(t("api.globalInterviewTimeout", error=str(e)), 504)

@@ -114,9 +114,6 @@ def close_simulation_env(req: CloseEnvRequest, current=Depends(get_current_user)
 
         return {"success": result.get("success", False), "data": result}
 
-    except ValueError as e:
-        return _error(str(e), 400)
-
     except Exception as e:
         logger.error(f"关闭环境失败: {str(e)}")
         return _error(str(e), 500, traceback=traceback.format_exc())

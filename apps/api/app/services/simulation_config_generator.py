@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
+from ..core.errors import AppError
 from ..core.logger import get_logger
 from ..core.settings import settings
 from ..utils.llm_client import LLMClient
@@ -235,7 +236,7 @@ class SimulationConfigGenerator:
         self.model_name = model_name or settings.llm_model_name
 
         if not self.api_key:
-            raise ValueError("LLM_API_KEY 未配置")
+            raise AppError("LLM_API_KEY 未配置", status=400)
 
         # 统一走可复用的 LLMClient（健壮 JSON 解析 / 截断修复 / 重试由其承载）
         self.llm = LLMClient(api_key=self.api_key, base_url=self.base_url, model=self.model_name)
