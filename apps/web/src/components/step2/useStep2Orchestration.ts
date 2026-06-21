@@ -17,6 +17,8 @@ interface Options {
   simulationId: string
   addLog: (msg: string) => void
   onUpdateStatus: (status: WorkflowStatus) => void
+  /** 推演类型：narrative 时跳过 OASIS 人设/配置门控，准备完成即就绪。 */
+  kind?: 'social_opinion' | 'narrative'
 }
 
 /**
@@ -25,8 +27,9 @@ interface Options {
  * 把所有计时器、可变 ref、轮询回调与生命周期副作用收拢于此，Step2EnvSetup 仅消费
  * 返回的状态（phase/profiles/config…）与 startPrepare 句柄做渲染。行为与原内联实现一致。
  */
-export function useStep2Orchestration({ simulationId, addLog, onUpdateStatus }: Options) {
+export function useStep2Orchestration({ simulationId, addLog, onUpdateStatus, kind }: Options) {
   const { t } = useTranslation()
+  const isNarrative = kind === 'narrative'
 
   const [phase, setPhase] = useState(0) // 0 初始化 / 1 人设 / 2 配置 / 4 完成
   const [taskId, setTaskId] = useState<string | null>(null)
@@ -138,6 +141,13 @@ export function useStep2Orchestration({ simulationId, addLog, onUpdateStatus }: 
   }, [addLog, configPoll, t])
 
   const loadPreparedData = useCallback(async () => {
+    // 剧本推演：无 OASIS 人设/配置，准备完成即就绪，直接放行到 Step3。
+    if (isNarrative) {
+      addLog(t('narrative.envReady'))
+      setPhase(4)
+      onUpdateStatus('completed')
+      return
+    }
     setPhase(2)
     addLog(t('log.loadingExistingConfig'))
     await fetchProfilesRealtime()
@@ -165,7 +175,15 @@ export function useStep2Orchestration({ simulationId, addLog, onUpdateStatus }: 
       addLog(t('log.loadConfigFailed', { error: (err as Error).message }))
       onUpdateStatus('error')
     }
-  }, [addLog, fetchProfilesRealtime, onUpdateStatus, simulationId, startConfigPolling, t])
+  }, [
+    addLog,
+    fetchProfilesRealtime,
+    isNarrative,
+    onUpdateStatus,
+    simulationId,
+    startConfigPolling,
+    t,
+  ])
 
   const pollPrepareStatus = useCallback(async () => {
     if (!taskIdRef.current && !simulationId) return

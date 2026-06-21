@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { WorkflowLayout, type WorkflowStatus } from '@/components/WorkflowLayout'
 import { Step3Simulation } from '@/components/Step3Simulation'
+import { Step3Narrative } from '@/components/Step3Narrative'
 import { getProject, getGraphData } from '@/lib/api/graph'
 import { getSimulation, getSimulationConfig } from '@/lib/api/simulation'
 import type { GraphData, ProjectData, SystemLog } from '@/lib/process-types'
@@ -21,6 +22,7 @@ export default function SimulationRunPage() {
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([])
   const [status, setStatus] = useState<WorkflowStatus>('processing')
   const [minutesPerRound, setMinutesPerRound] = useState(30)
+  const [kind, setKind] = useState<'social_opinion' | 'narrative'>('social_opinion')
   const initedRef = useRef(false)
   const graphRefreshTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const projectRef = useRef<ProjectData | null>(null)
@@ -98,6 +100,7 @@ export default function SimulationRunPage() {
           const projRes = await getProject(simRes.data.project_id)
           if (projRes.success && projRes.data) {
             projectRef.current = projRes.data
+            if (projRes.data.kind === 'narrative') setKind('narrative')
             addLog(t('log.projectLoadSuccess', { id: projRes.data.project_id }))
             if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id)
           }
@@ -155,14 +158,23 @@ export default function SimulationRunPage() {
       // 模拟运行时默认 split 视图，左侧图谱可见，实时观察记忆图谱变化
       initialViewMode="split"
     >
-      <Step3Simulation
-        simulationId={simulationId}
-        maxRounds={maxRounds}
-        minutesPerRound={minutesPerRound}
-        systemLogs={systemLogs}
-        addLog={addLog}
-        onUpdateStatus={setStatus}
-      />
+      {kind === 'narrative' ? (
+        <Step3Narrative
+          simulationId={simulationId}
+          systemLogs={systemLogs}
+          addLog={addLog}
+          onUpdateStatus={setStatus}
+        />
+      ) : (
+        <Step3Simulation
+          simulationId={simulationId}
+          maxRounds={maxRounds}
+          minutesPerRound={minutesPerRound}
+          systemLogs={systemLogs}
+          addLog={addLog}
+          onUpdateStatus={setStatus}
+        />
+      )}
     </WorkflowLayout>
   )
 }

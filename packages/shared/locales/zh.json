@@ -1132,5 +1132,21 @@
     "toggle": "切换明暗主题",
     "light": "浅色",
     "dark": "暗色"
+  },
+  "narrative": {
+    "envReady": "角色与舞台已就绪，可以开演",
+    "starting": "正在让角色登场……",
+    "engineStarted": "推演开始，角色开始对戏",
+    "resuming": "继续上次的推演",
+    "runEnded": "推演结束（{{status}}）",
+    "actingTitle": "他们正在演",
+    "actingSub": "角色依据各自的动机在场景里对戏，剧情正在展开",
+    "actedTitle": "这一场演完了",
+    "actedSub": "共 {{count}} 个节拍，剧情已推演到此",
+    "beatCount": "已演 {{count}} 个节拍",
+    "waiting": "角色正在酝酿第一句……",
+    "inner": "内心",
+    "subtext": "潜台词",
+    "speakingTo": "对 {{names}}"
   }
 }

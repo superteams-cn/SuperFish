@@ -27,6 +27,8 @@ export interface ProjectData {
   project_id: string
   name?: string
   status?: string
+  /** 推演类型：social_opinion(舆论预测，默认) / narrative(剧本推演) */
+  kind?: 'social_opinion' | 'narrative'
   graph_id?: string | null
   graph_build_task_id?: string | null
   ontology?: {

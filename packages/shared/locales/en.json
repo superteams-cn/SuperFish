@@ -1132,5 +1132,21 @@
     "toggle": "Toggle light/dark theme",
     "light": "Light",
     "dark": "Dark"
+  },
+  "narrative": {
+    "envReady": "Cast and stage are ready — let's begin",
+    "starting": "Bringing the characters on stage…",
+    "engineStarted": "The scene begins; characters start playing off each other",
+    "resuming": "Resuming the previous run",
+    "runEnded": "Run ended ({{status}})",
+    "actingTitle": "They're acting it out",
+    "actingSub": "Characters play the scene driven by their own motives as the story unfolds",
+    "actedTitle": "This scene has played out",
+    "actedSub": "{{count}} beats in total; the story has reached this point",
+    "beatCount": "{{count}} beats so far",
+    "waiting": "A character is about to speak…",
+    "inner": "inner",
+    "subtext": "subtext",
+    "speakingTo": "to {{names}}"
   }
 }

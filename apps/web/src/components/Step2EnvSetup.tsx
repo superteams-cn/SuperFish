@@ -69,7 +69,7 @@ export function Step2EnvSetup({
     expectedTotal,
     simulationConfig,
     startPrepare,
-  } = useStep2Orchestration({ simulationId, addLog, onUpdateStatus })
+  } = useStep2Orchestration({ simulationId, addLog, onUpdateStatus, kind: projectData?.kind })
 
   // 纯视图态（不属于编排逻辑）
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
