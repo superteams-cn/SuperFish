@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel
+
 from ..core.logger import get_logger
 from ..utils.llm_client import LLMClient
 from ..utils.locale import get_locale, t
@@ -356,6 +358,15 @@ class InterviewResult:
         parts.append("\n### 采访摘要与核心观点")
         parts.append(self.summary or "（无摘要）")
         return "\n".join(parts)
+
+
+# ─── LLM 结构化输出（pydantic 边界模型）──────────────────────────────────────
+
+
+class _SubQueriesOutput(BaseModel):
+    """问题分解的 LLM 输出：缺字段时默认空列表，由 chat_structured 校验。"""
+
+    sub_queries: list[str] = []
 
 
 # ─── 主服务类 ────────────────────────────────────────────────────────────────
@@ -820,14 +831,16 @@ class Neo4jToolsService:
         )
 
         try:
-            response = self.llm.chat_json(
-                messages=[
+            # pydantic 结构化输出：缺字段/类型错由 chat_structured 校验+重试兜住
+            result = self.llm.chat_structured(
+                [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
+                _SubQueriesOutput,
                 temperature=0.3,
             )
-            return [str(sq) for sq in response.get("sub_queries", [])[:max_queries]]
+            return [str(sq) for sq in result.sub_queries[:max_queries]]
         except Exception as e:
             logger.warning(t("console.generateSubQueriesFailed", error=str(e)))
             return [query, f"{query} 的主要参与者", f"{query} 的原因和影响", f"{query} 的发展过程"][
