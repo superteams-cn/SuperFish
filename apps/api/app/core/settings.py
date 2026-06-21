@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     email_from: str = "SuperFish <no-reply@superfish.local>"
     # 用于拼接邮件里的重置链接（指向前端路由 /reset-password）
-    web_base_url: str = "http://localhost:5180"
+    web_base_url: str = "http://localhost:3000"
 
     # ===== Redis（缓存/队列）=====
     # 源码部署默认 localhost；docker compose 中由 compose 注入 redis://redis:6379/0
