@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { getSimulationHistory } from '@/lib/api/simulation'
 import { deleteProject } from '@/lib/api/graph'
@@ -163,10 +164,17 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
   }
 
   if (loading) {
+    // 骨架屏：以真实卡片网格的形态占位，比纯转圈更接近最终内容、减少跳动
     return (
-      <div className="text-muted-foreground flex items-center justify-center gap-2 py-12 text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {t('history.loadingText')}
+      <div className="mt-12 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="bg-card space-y-3 rounded-2xl border p-4 backdrop-blur-xl">
+            <Skeleton className="h-4 w-3/5" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-4/5" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+        ))}
       </div>
     )
   }
