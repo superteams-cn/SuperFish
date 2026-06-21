@@ -97,12 +97,27 @@ def test_run_state_persistence_roundtrip(runner_cleanup):
     assert loaded.graph_memory_enabled is True
 
 
-def test_get_run_state_prefers_inmemory(runner_cleanup):
+def test_get_run_state_serves_inmemory_only_when_owner(runner_cleanup):
+    """内存缓存仅在本进程确实监控（owner）时可信；非 owner 必须改读 DB 取新鲜快照。
+
+    复现并守护 e2e 暴露的 bug：API 入队后缓存 STARTING，但拉起在 worker；若无脑信任缓存，
+    API 会一直返回 STARTING，看不到 worker 写入的 running/completed。
+    """
     sid = _new_sid(runner_cleanup)
     state = SimulationRunState(simulation_id=sid, runner_status=RunnerStatus.STOPPED)
-    SimulationRunner._save_run_state(state)
-    # _save_run_state 会把对象放进内存缓存；get_run_state 应原样返回同一对象
-    assert SimulationRunner.get_run_state(sid) is state
+    SimulationRunner._save_run_state(state)  # 缓存进 _run_states，但本进程并不监控它
+
+    # 非 owner：不得返回缓存对象，应读 DB 重建（值相等、对象不同）
+    got = SimulationRunner.get_run_state(sid)
+    assert got is not state
+    assert got.runner_status == RunnerStatus.STOPPED
+
+    # owner（有监控线程登记）：信任内存实时对象，原样返回
+    SimulationRunner._monitor_threads[sid] = object()  # type: ignore[assignment]
+    try:
+        assert SimulationRunner.get_run_state(sid) is state
+    finally:
+        SimulationRunner._monitor_threads.pop(sid, None)
 
 
 # ───────────────────────── 监控所有权 CAS ─────────────────────────
@@ -321,6 +336,26 @@ def test_reconcile_state_env_alive_keeps_running_despite_dead_local_pid(
 
     reconciled = SimulationRunner._reconcile_state(SimulationRunner._load_run_state(sid))
     assert reconciled.runner_status == RunnerStatus.RUNNING  # 心跳在 → 保持运行
+
+
+def test_reconcile_state_fresh_owner_keeps_running_during_active_rounds(
+    runner_cleanup, tmp_path, monkeypatch
+):
+    """活跃轮次中 Redis 心跳可能因 TTL 短暂缺失，但 owner 监控线程每 2s 刷 owner 心跳；
+    非 owner（API）reconcile 应据新鲜 owner 心跳判活，不得误判 INTERRUPTED。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(SimulationRunner, "_env_alive", classmethod(lambda cls, sid: False))
+    sid = _new_sid(runner_cleanup)
+    state = SimulationRunState(
+        simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=999999
+    )
+    state.owner_id = "worker-host:7"
+    state.owner_heartbeat = time.time()  # 监控线程刚刷新
+    SimulationRunner._save_run_state(state)
+    SimulationRunner._run_states.pop(sid, None)
+
+    reconciled = SimulationRunner._reconcile_state(SimulationRunner._load_run_state(sid))
+    assert reconciled.runner_status == RunnerStatus.RUNNING
 
 
 def test_reconcile_running_skips_remote_alive_sim(runner_cleanup, tmp_path, monkeypatch):

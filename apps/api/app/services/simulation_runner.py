@@ -137,16 +137,29 @@ class SimulationRunner:
             logger.warning(f"释放监控所有权失败: {simulation_id}, error={e}")
 
     @classmethod
+    def _owns_locally(cls, simulation_id: str) -> bool:
+        """本进程是否确实在监控该模拟（持有监控线程或子进程句柄）。
+
+        用于判定内存缓存 `_run_states` 是否可信：仅 owner（拉起或接管者）的缓存是实时的，
+        非 owner（如 API 入队后）的缓存是过期快照，必须改读 DB。
+        """
+        return simulation_id in cls._monitor_threads or simulation_id in cls._processes
+
+    @classmethod
     def get_run_state(cls, simulation_id: str) -> SimulationRunState | None:
         """获取运行状态。
 
         拥有子进程的进程（worker/本进程）持有 `_run_states` 里的实时对象；
-        其他副本（如另一个 API 进程）则从 Postgres 读取最新快照（不缓存，保证新鲜）。
+        其他副本（如 API 入队后并不监控的进程）则从 Postgres 读取最新快照（保证新鲜）。
+
+        关键：仅当本进程【确实在监控】该模拟（有监控线程或子进程句柄）时才信任内存缓存。
+        否则（如 API 调 _init_run_state 入队后缓存了 STARTING 快照、但拉起在 worker）必须读
+        DB —— 不然 API 会一直返回自己缓存的 STARTING，看不到 worker 写入的 running/completed。
 
         返回前做实时校正：若标记 running/starting 但进程已死，则据 actions.jsonl
         终态回写 completed/interrupted，消除「进程已退出但快照仍 running」的脏状态。
         """
-        if simulation_id in cls._run_states:
+        if cls._owns_locally(simulation_id):
             return cls._run_states[simulation_id]
         state = cls._load_run_state(simulation_id)
         if state is None:
@@ -161,9 +174,12 @@ class SimulationRunner:
         """
         if state.runner_status not in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
             return state
-        # 存活性优先以 Redis 心跳为准（host-independent）：模拟可能跑在另一台 worker，
-        # 在 API 副本/异机上做本机 PID 探活会把存活的远端模拟误判为已死。心跳在 → 视为存活，
-        # 快照由其 owner 监控线程保持新鲜。
+        # 存活性优先以 host-independent 信号为准（模拟可能跑在另一台 worker，本机 PID 探活
+        # 对异机进程无意义，会把存活的远端模拟误判为已死）：
+        #  1) owner 心跳新鲜 → 其监控线程在整个运行期（含活跃轮次）每 2s 刷新，最可靠；
+        #  2) Redis IPC 心跳在 → 子进程存活（活跃轮次中可能因 TTL 短暂缺失，故配合 owner 心跳）。
+        if cls._owner_fresh(state):
+            return state
         if cls._env_alive(state.simulation_id):
             return state
         if cls._pid_alive(state.process_pid, state.process_start_time):
@@ -258,7 +274,8 @@ class SimulationRunner:
         result: dict[str, SimulationRunState] = {}
         to_load: list[str] = []
         for sid in simulation_ids:
-            if sid in cls._run_states:
+            # 仅信任本进程确实在监控的内存态；非 owner 缓存可能过期，改读 DB（见 get_run_state）
+            if cls._owns_locally(sid):
                 result[sid] = cls._run_states[sid]
             else:
                 to_load.append(sid)
