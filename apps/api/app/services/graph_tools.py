@@ -913,7 +913,7 @@ class GraphToolsService:
         interview_requirement: str,
         simulation_requirement: str = "",
         max_agents: int = 5,
-        custom_questions: list[str] = None,
+        custom_questions: list[str] | None = None,
     ) -> InterviewResult:
         """深度采访：调用 OASIS 采访 API，采访模拟中正在运行的 Agent"""
         import re

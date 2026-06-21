@@ -1,100 +1,17 @@
-"""模拟路由子包的共享件：统一导入面 + 路由级归属守卫 + 跨处理器复用的小工具。
+"""模拟路由子包的共享件：路由级归属守卫 + 跨处理器复用的小工具。
 
-拆分自原 routers/simulation.py（2104 行）。各子路由模块统一 ``from ._shared import ...``，
-以此作为本子包的单一导入来源；业务处理器按概念分布在
-entities/lifecycle/run/interview/env/results 等模块。
-
-``__all__`` 显式声明再导出面，避免 lint 误删「本文件未直接使用、但供子模块导入」的符号。
+拆分自原 routers/simulation.py（2104 行）。业务处理器按概念分布在
+entities/lifecycle/run/interview/env/results 等模块；各子路由**直接从真实来源**
+import（fastapi / schemas / services / stdlib），仅本文件自有的共享符号
+（logger、归属守卫、prompt 优化、准备状态检查）才从这里导入。
 """
 
-import csv
-import json
-import os
-import threading
-import traceback
-from datetime import datetime
+from fastapi import Depends, HTTPException, Request
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
-
-from ...core.deps import get_current_admin, get_current_user, require_verified_user, use_locale
-from ...core.errors import error_response as _error  # 统一错误信封
+from ...core.deps import get_current_user
 from ...core.logger import get_logger
-from ...core.settings import settings
-from ...models.project import ProjectManager
-from ...schemas.simulation import (
-    CloseEnvRequest,
-    CreateSimulationRequest,
-    EnvStatusRequest,
-    GenerateProfilesRequest,
-    InterviewAgentRequest,
-    InterviewAllRequest,
-    InterviewBatchRequest,
-    InterviewHistoryRequest,
-    PrepareSimulationRequest,
-    PrepareStatusRequest,
-    StartSimulationRequest,
-    StopSimulationRequest,
-)
-from ...services.graph_entity_reader import GraphEntityReader
-from ...services.oasis_profile_generator import OasisProfileGenerator
 from ...services.simulation_manager import SimulationManager, SimulationStatus
-from ...services.simulation_runner import SimulationRunner
-from ...utils.locale import get_locale, set_locale, t
-
-__all__ = [
-    # stdlib / fastapi
-    "csv",
-    "json",
-    "os",
-    "threading",
-    "traceback",
-    "datetime",
-    "APIRouter",
-    "Depends",
-    "HTTPException",
-    "Request",
-    "FileResponse",
-    "StreamingResponse",
-    # deps / infra
-    "get_current_admin",
-    "get_current_user",
-    "require_verified_user",
-    "use_locale",
-    "_error",
-    "settings",
-    "ProjectManager",
-    # schemas
-    "CloseEnvRequest",
-    "CreateSimulationRequest",
-    "EnvStatusRequest",
-    "GenerateProfilesRequest",
-    "InterviewAgentRequest",
-    "InterviewAllRequest",
-    "InterviewBatchRequest",
-    "InterviewHistoryRequest",
-    "PrepareSimulationRequest",
-    "PrepareStatusRequest",
-    "StartSimulationRequest",
-    "StopSimulationRequest",
-    # services
-    "GraphEntityReader",
-    "OasisProfileGenerator",
-    "SimulationManager",
-    "SimulationStatus",
-    "SimulationRunner",
-    # locale
-    "get_locale",
-    "set_locale",
-    "t",
-    # 本子包共享 helper
-    "logger",
-    "_enforce_sim_ownership",
-    "_owned_simulation",
-    "INTERVIEW_PROMPT_PREFIX",
-    "optimize_interview_prompt",
-    "_check_simulation_prepared",
-]
+from ...utils.locale import t
 
 logger = get_logger("superfish.api.simulation")
 

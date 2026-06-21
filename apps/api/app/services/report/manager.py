@@ -125,8 +125,8 @@ class ReportManager:
         status: str,
         progress: int,
         message: str,
-        current_section: str = None,
-        completed_sections: list[str] = None,
+        current_section: str | None = None,
+        completed_sections: list[str] | None = None,
     ) -> None:
         """更新报告生成进度。"""
         cls._ensure_report_folder(report_id)

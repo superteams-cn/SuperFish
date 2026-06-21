@@ -16,13 +16,24 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from .logger import get_logger
+from .settings import settings
+
+logger = get_logger("superfish.api.errors")
+
 
 def error_response(message: str, status: int = 400, **extra: Any) -> JSONResponse:
-    """构造统一错误信封响应。
+    """构造统一错误信封响应，输出 ``{"success": False, "error": message, **extra}``。
 
-    替代各路由各自定义的 `_error`，输出与历史完全一致：
-    ``{"success": False, "error": message, **extra}``。
+    安全门控：调用点常以 ``traceback=traceback.format_exc()`` 传入完整堆栈，
+    无条件下发给客户端是信息泄漏面。这里集中处理——堆栈始终落日志，
+    仅当 ``settings.debug`` 为真时才放进响应体，生产环境一律丢弃。
     """
+    tb = extra.pop("traceback", None)
+    if tb:
+        logger.error("error_response %s (%s)\n%s", message, status, tb)
+        if settings.debug:
+            extra["traceback"] = tb
     body: dict[str, Any] = {"success": False, "error": message}
     body.update(extra)
     return JSONResponse(status_code=status, content=body)

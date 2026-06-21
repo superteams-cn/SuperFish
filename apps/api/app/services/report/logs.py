@@ -51,8 +51,8 @@ class ReportLogger:
         action: str,
         stage: str,
         details: dict[str, Any],
-        section_title: str = None,
-        section_index: int = None,
+        section_title: str | None = None,
+        section_index: int | None = None,
     ):
         """
         记录一条日志
@@ -258,7 +258,7 @@ class ReportLogger:
             },
         )
 
-    def log_error(self, error_message: str, stage: str, section_title: str = None):
+    def log_error(self, error_message: str, stage: str, section_title: str | None = None):
         """记录错误"""
         self.log(
             action="error",

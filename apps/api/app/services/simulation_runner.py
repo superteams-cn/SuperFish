@@ -18,6 +18,7 @@ from typing import Any
 
 from ..core.logger import get_logger
 from ..domain.run_state import AgentAction, RoundSummary, RunnerStatus, SimulationRunState
+from ..repositories.interview_trace_repo import InterviewTraceRepository
 from ..repositories.run_state_repo import RunStateRepository
 from ..utils.locale import get_locale, set_locale
 from .graph_memory_updater import GraphMemoryManager
@@ -889,7 +890,11 @@ class SimulationRunner:
                 # 仍在运行（本机或他机）。仅当进程在【本机】存活且无人监控时由本进程接管监控；
                 # 进程在异机时不跨机抢监控（无法 poll 异机 PID / tail 其本地日志），交给运行它的
                 # worker 自行监控 —— 但绝不在此把存活的远端模拟误判为已死。
-                if local_alive and sid not in cls._monitor_threads and cls._try_claim_ownership(sid):
+                if (
+                    local_alive
+                    and sid not in cls._monitor_threads
+                    and cls._try_claim_ownership(sid)
+                ):
                     cls._run_states[sid] = state
                     cls._graph_memory_enabled[sid] = bool(state.graph_memory_enabled)
                     if state.graph_memory_enabled and state.graph_id:
@@ -1596,7 +1601,7 @@ class SimulationRunner:
 
     @classmethod
     def interview_all_agents(
-        cls, simulation_id: str, prompt: str, platform: str = None, timeout: float = 180.0
+        cls, simulation_id: str, prompt: str, platform: str | None = None, timeout: float = 180.0
     ) -> dict[str, Any]:
         """
         采访所有Agent（全局采访）
@@ -1688,70 +1693,12 @@ class SimulationRunner:
             }
 
     @classmethod
-    def _get_interview_history_from_db(
-        cls, db_path: str, platform_name: str, agent_id: int | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
-        """从单个数据库获取Interview历史"""
-        import sqlite3
-
-        if not os.path.exists(db_path):
-            return []
-
-        results = []
-
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-
-            if agent_id is not None:
-                cursor.execute(
-                    """
-                    SELECT user_id, info, created_at
-                    FROM trace
-                    WHERE action = 'interview' AND user_id = ?
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                """,
-                    (agent_id, limit),
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT user_id, info, created_at
-                    FROM trace
-                    WHERE action = 'interview'
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                """,
-                    (limit,),
-                )
-
-            for user_id, info_json, created_at in cursor.fetchall():
-                try:
-                    info = json.loads(info_json) if info_json else {}
-                except json.JSONDecodeError:
-                    info = {"raw": info_json}
-
-                results.append(
-                    {
-                        "agent_id": user_id,
-                        "response": info.get("response", info),
-                        "prompt": info.get("prompt", ""),
-                        "timestamp": created_at,
-                        "platform": platform_name,
-                    }
-                )
-
-            conn.close()
-
-        except Exception as e:
-            logger.error(f"读取Interview历史失败 ({platform_name}): {e}")
-
-        return results
-
-    @classmethod
     def get_interview_history(
-        cls, simulation_id: str, platform: str = None, agent_id: int | None = None, limit: int = 100
+        cls,
+        simulation_id: str,
+        platform: str | None = None,
+        agent_id: int | None = None,
+        limit: int = 100,
     ) -> list[dict[str, Any]]:
         """
         获取Interview历史记录（从数据库读取）
@@ -1781,7 +1728,7 @@ class SimulationRunner:
 
         for p in platforms:
             db_path = os.path.join(sim_dir, f"{p}_simulation.db")
-            platform_results = cls._get_interview_history_from_db(
+            platform_results = InterviewTraceRepository.list_interviews(
                 db_path=db_path, platform_name=p, agent_id=agent_id, limit=limit
             )
             results.extend(platform_results)

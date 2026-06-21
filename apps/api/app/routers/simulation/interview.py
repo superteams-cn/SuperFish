@@ -3,51 +3,25 @@
 拆分自 routers/simulation.py。共享件见 _shared.py。
 """
 
-from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 ruff 裁剪)
-    INTERVIEW_PROMPT_PREFIX,
-    APIRouter,
-    CloseEnvRequest,
-    CreateSimulationRequest,
-    Depends,
-    EnvStatusRequest,
-    FileResponse,
-    GenerateProfilesRequest,
-    HTTPException,
+import json
+import os
+import traceback
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+
+from ...core.deps import get_current_user
+from ...core.errors import error_response as _error
+from ...core.settings import settings
+from ...schemas.simulation import (
     InterviewAgentRequest,
     InterviewAllRequest,
     InterviewBatchRequest,
     InterviewHistoryRequest,
-    GraphEntityReader,
-    OasisProfileGenerator,
-    PrepareSimulationRequest,
-    PrepareStatusRequest,
-    ProjectManager,
-    Request,
-    SimulationManager,
-    SimulationRunner,
-    SimulationStatus,
-    StartSimulationRequest,
-    StopSimulationRequest,
-    StreamingResponse,
-    _check_simulation_prepared,
-    _error,
-    _owned_simulation,
-    csv,
-    datetime,
-    get_current_admin,
-    get_current_user,
-    get_locale,
-    json,
-    logger,
-    optimize_interview_prompt,
-    os,
-    require_verified_user,
-    set_locale,
-    settings,
-    t,
-    threading,
-    traceback,
 )
+from ...services.simulation_runner import SimulationRunner
+from ...utils.locale import t
+from ._shared import _owned_simulation, logger, optimize_interview_prompt
 
 router = APIRouter()
 
@@ -323,11 +297,10 @@ def interview_all_agents(req: InterviewAllRequest, current=Depends(get_current_u
         # 优化 prompt，添加前缀避免 Agent 调用工具
         optimized_prompt = optimize_interview_prompt(prompt)
 
-        # platform 为可选；SimulationRunner 运行期接受 None（其签名标注偏紧，故定向忽略）
         result = SimulationRunner.interview_all_agents(
             simulation_id=simulation_id,
             prompt=optimized_prompt,
-            platform=platform,  # type: ignore[arg-type]
+            platform=platform,
             timeout=timeout,
         )
 
@@ -362,10 +335,9 @@ def get_interview_history(req: InterviewHistoryRequest, current=Depends(get_curr
         if _owned_simulation(simulation_id, current) is None:
             return _error(t("api.simulationNotFound", id=simulation_id), 404)
 
-        # platform/agent_id 为可选；运行期接受 None（service 签名偏紧，定向忽略）
         history = SimulationRunner.get_interview_history(
             simulation_id=simulation_id,
-            platform=platform,  # type: ignore[arg-type]
+            platform=platform,
             agent_id=agent_id,
             limit=limit,
         )

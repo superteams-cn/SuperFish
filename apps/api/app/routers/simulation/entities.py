@@ -3,51 +3,16 @@
 拆分自 routers/simulation.py。共享件见 _shared.py。
 """
 
-from ._shared import (  # noqa: F401  (统一从共享件导入，未用项由 ruff 裁剪)
-    INTERVIEW_PROMPT_PREFIX,
-    APIRouter,
-    CloseEnvRequest,
-    CreateSimulationRequest,
-    Depends,
-    EnvStatusRequest,
-    FileResponse,
-    GenerateProfilesRequest,
-    GraphEntityReader,
-    HTTPException,
-    InterviewAgentRequest,
-    InterviewAllRequest,
-    InterviewBatchRequest,
-    InterviewHistoryRequest,
-    OasisProfileGenerator,
-    PrepareSimulationRequest,
-    PrepareStatusRequest,
-    ProjectManager,
-    Request,
-    SimulationManager,
-    SimulationRunner,
-    SimulationStatus,
-    StartSimulationRequest,
-    StopSimulationRequest,
-    StreamingResponse,
-    _check_simulation_prepared,
-    _error,
-    _owned_simulation,
-    csv,
-    datetime,
-    get_current_admin,
-    get_current_user,
-    get_locale,
-    json,
-    logger,
-    optimize_interview_prompt,
-    os,
-    require_verified_user,
-    set_locale,
-    settings,
-    t,
-    threading,
-    traceback,
-)
+import traceback
+
+from fastapi import APIRouter, Depends
+
+from ...core.deps import get_current_user
+from ...core.errors import error_response as _error
+from ...models.project import ProjectManager
+from ...services.graph_entity_reader import GraphEntityReader
+from ...utils.locale import t
+from ._shared import logger
 
 router = APIRouter()
 

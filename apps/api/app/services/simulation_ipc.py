@@ -193,7 +193,7 @@ class SimulationIPCClient:
         return response
 
     def send_interview(
-        self, agent_id: int, prompt: str, platform: str = None, timeout: float = 60.0
+        self, agent_id: int, prompt: str, platform: str | None = None, timeout: float = 60.0
     ) -> IPCResponse:
         """
         发送单个Agent采访命令
@@ -252,7 +252,7 @@ class SimulationIPCClient:
         return self.post_command(CommandType.STREAM_BATCH_INTERVIEW, args, command_id=command_id)
 
     def send_batch_interview(
-        self, interviews: list[dict[str, Any]], platform: str = None, timeout: float = 120.0
+        self, interviews: list[dict[str, Any]], platform: str | None = None, timeout: float = 120.0
     ) -> IPCResponse:
         """
         发送批量采访命令
