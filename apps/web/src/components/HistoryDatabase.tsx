@@ -230,7 +230,7 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
               }}
               className={cn(
                 'bg-card focus-visible:ring-ring group relative isolate cursor-pointer overflow-hidden rounded-2xl border p-4 text-left backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2',
-                'transition-[transform,opacity,box-shadow,border-color] duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]',
+                'ease-smooth transition-[transform,opacity,box-shadow,border-color] duration-700',
                 'hover:border-brand hover:-translate-y-1 hover:shadow-lg',
                 'motion-reduce:transition-none',
               )}
@@ -281,7 +281,7 @@ export function HistoryDatabase({ onHasProjects }: HistoryDatabaseProps = {}) {
               </div>
 
               {/* 底部强调线（hover 时展开） */}
-              <span className="bg-brand absolute bottom-0 left-0 h-0.5 w-0 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:w-full" />
+              <span className="bg-brand ease-smooth absolute bottom-0 left-0 h-0.5 w-0 transition-all duration-500 group-hover:w-full" />
             </div>
           )
         })}

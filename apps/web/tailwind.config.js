@@ -9,6 +9,11 @@ export default {
       screens: { '2xl': '1400px' },
     },
     extend: {
+      transitionTimingFunction: {
+        // easeOutQuint：原先以任意值 ease-[cubic-bezier(0.23,1,0.32,1)] 内联，
+        // 逗号会触发 Tailwind「类名歧义」告警，提为具名令牌 ease-smooth。
+        smooth: 'cubic-bezier(0.23, 1, 0.32, 1)',
+      },
       fontFamily: {
         sans: [
           'Noto Sans SC',
