@@ -71,6 +71,11 @@ class SimulationState:
     config_generated: bool = False
     config_reasoning: str = ""
 
+    # 历史列表冗余字段（准备阶段从 simulation_config 落库，供首页历史批量读取）
+    simulation_requirement: str = ""
+    total_simulation_hours: int = 0
+    minutes_per_round: int = 0
+
     # 运行时数据
     current_round: int = 0
     twitter_status: str = "not_started"
@@ -98,6 +103,9 @@ class SimulationState:
             "entity_types": self.entity_types,
             "config_generated": self.config_generated,
             "config_reasoning": self.config_reasoning,
+            "simulation_requirement": self.simulation_requirement,
+            "total_simulation_hours": self.total_simulation_hours,
+            "minutes_per_round": self.minutes_per_round,
             "current_round": self.current_round,
             "twitter_status": self.twitter_status,
             "reddit_status": self.reddit_status,
@@ -136,6 +144,9 @@ def _row_to_state(row: SimulationRow) -> "SimulationState":
         entity_types=row.entity_types or [],
         config_generated=row.config_generated,
         config_reasoning=row.config_reasoning,
+        simulation_requirement=row.simulation_requirement or "",
+        total_simulation_hours=row.total_simulation_hours or 0,
+        minutes_per_round=row.minutes_per_round or 0,
         current_round=row.current_round,
         twitter_status=row.twitter_status,
         reddit_status=row.reddit_status,
@@ -157,6 +168,9 @@ def _apply_state_to_row(state: "SimulationState", row: SimulationRow) -> None:
     row.entity_types = state.entity_types
     row.config_generated = state.config_generated
     row.config_reasoning = state.config_reasoning
+    row.simulation_requirement = state.simulation_requirement
+    row.total_simulation_hours = state.total_simulation_hours
+    row.minutes_per_round = state.minutes_per_round
     row.current_round = state.current_round
     row.twitter_status = state.twitter_status
     row.reddit_status = state.reddit_status
@@ -463,6 +477,14 @@ class SimulationManager:
 
             state.config_generated = True
             state.config_reasoning = sim_params.generation_reasoning
+            # 冗余历史摘要字段：首页历史据此批量展示，免去逐条回源 config
+            state.simulation_requirement = sim_params.simulation_requirement or ""
+            state.total_simulation_hours = int(
+                getattr(sim_params.time_config, "total_simulation_hours", 0) or 0
+            )
+            state.minutes_per_round = int(
+                getattr(sim_params.time_config, "minutes_per_round", 0) or 0
+            )
 
             if progress_callback:
                 progress_callback(

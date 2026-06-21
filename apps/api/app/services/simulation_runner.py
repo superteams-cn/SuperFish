@@ -459,7 +459,47 @@ class SimulationRunner:
             data = dict(row.data) if row else None
         if not data:
             return None
+        return cls._state_from_data(simulation_id, data)
 
+    @classmethod
+    def get_run_states_bulk(cls, simulation_ids: list[str]) -> dict[str, SimulationRunState]:
+        """批量获取运行状态（首页历史用）：单次查询加载全部快照，避免逐条 N+1。
+
+        - 本进程拥有的活动对象优先用内存实时态；
+        - 仅对标记 running/starting 的快照做存活校正（绝大多数历史项为终态，无需触碰文件系统）。
+        返回 {simulation_id: SimulationRunState}；无快照的模拟不在结果中。
+        """
+        if not simulation_ids:
+            return {}
+        result: dict[str, SimulationRunState] = {}
+        to_load: list[str] = []
+        for sid in simulation_ids:
+            if sid in cls._run_states:
+                result[sid] = cls._run_states[sid]
+            else:
+                to_load.append(sid)
+
+        if to_load:
+            with session_scope() as session:
+                rows = (
+                    session.query(SimulationRunStateRow)
+                    .filter(SimulationRunStateRow.simulation_id.in_(to_load))
+                    .all()
+                )
+                raw = {r.simulation_id: dict(r.data) for r in rows if r.data}
+            for sid, data in raw.items():
+                state = cls._state_from_data(sid, data)
+                if state is None:
+                    continue
+                # 仅对仍标记运行中的快照做存活校正（其余直接用快照，零文件系统访问）
+                if state.runner_status in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
+                    state = cls._reconcile_state(state)
+                result[sid] = state
+        return result
+
+    @classmethod
+    def _state_from_data(cls, simulation_id: str, data: dict) -> SimulationRunState | None:
+        """从持久化 data dict 重建 SimulationRunState（_load_run_state 与批量加载共用）。"""
         try:
             state = SimulationRunState(
                 simulation_id=simulation_id,

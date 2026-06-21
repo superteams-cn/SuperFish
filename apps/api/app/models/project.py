@@ -217,6 +217,19 @@ class ProjectManager:
             return [_row_to_project(r) for r in rows]
 
     @classmethod
+    def get_projects_bulk(cls, project_ids: list[str]) -> dict[str, Project]:
+        """批量获取项目（单次查询），返回 {project_id: Project}，用于首页历史避免 N+1。"""
+        if not project_ids:
+            return {}
+        with session_scope() as session:
+            rows = (
+                session.query(ProjectRow)
+                .filter(ProjectRow.project_id.in_(project_ids))
+                .all()
+            )
+            return {r.project_id: _row_to_project(r) for r in rows}
+
+    @classmethod
     def count_projects(cls, user_id: str) -> int:
         """统计某用户名下项目数（用于配额校验）。"""
         with session_scope() as session:

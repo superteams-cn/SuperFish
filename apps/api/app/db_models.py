@@ -107,6 +107,11 @@ class SimulationRow(Base):
     config_generated: Mapped[bool] = mapped_column(default=False)
     config_reasoning: Mapped[str] = mapped_column(Text, default="")
 
+    # 历史列表冗余字段：准备阶段从 simulation_config 落库一份，避免首页历史逐条回源 S3
+    simulation_requirement: Mapped[str] = mapped_column(Text, default="")
+    total_simulation_hours: Mapped[int] = mapped_column(Integer, default=0)
+    minutes_per_round: Mapped[int] = mapped_column(Integer, default=0)
+
     current_round: Mapped[int] = mapped_column(Integer, default=0)
     twitter_status: Mapped[str] = mapped_column(String(32), default="not_started")
     reddit_status: Mapped[str] = mapped_column(String(32), default="not_started")

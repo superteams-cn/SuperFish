@@ -56,6 +56,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _migrate_add_user_id()
+    _migrate_add_history_summary()
     logger.info("数据库表已就绪（Postgres）")
 
 
@@ -72,6 +73,24 @@ def _migrate_add_user_id() -> None:
         stmts.append(
             f"CREATE INDEX IF NOT EXISTS ix_{table}_user_id ON {table} (user_id)"
         )
+    with engine.begin() as conn:
+        for s in stmts:
+            conn.execute(text(s))
+
+
+def _migrate_add_history_summary() -> None:
+    """补列迁移：simulations 表冗余历史摘要字段（P2.1），让首页历史单次批量查询，
+    不再逐条回源 S3 的 simulation_config.json。幂等。"""
+    from sqlalchemy import text
+
+    stmts = [
+        "ALTER TABLE simulations ADD COLUMN IF NOT EXISTS "
+        "simulation_requirement TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE simulations ADD COLUMN IF NOT EXISTS "
+        "total_simulation_hours INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE simulations ADD COLUMN IF NOT EXISTS "
+        "minutes_per_round INTEGER NOT NULL DEFAULT 0",
+    ]
     with engine.begin() as conn:
         for s in stmts:
             conn.execute(text(s))

@@ -164,18 +164,6 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     }
 
 
-def _get_report_id_for_simulation(simulation_id: str) -> str | None:
-    """获取 simulation 对应的最新 report_id（Postgres）。"""
-    try:
-        from ..services.report_agent import ReportManager
-
-        report = ReportManager.get_report_by_simulation(simulation_id)
-        return report.report_id if report else None
-    except Exception as e:
-        logger.warning(f"查找 simulation {simulation_id} 的 report 失败: {e}")
-        return None
-
-
 # ============== 实体读取接口 ==============
 
 
@@ -681,38 +669,34 @@ def get_simulation_history(limit: int = 20, current=Depends(get_current_user)):
     user_id = current["user_id"]
 
     def _build():
+        from ..services.report_agent import ReportManager
+
         manager = SimulationManager()
-        # 按用户过滤：既隔离数据，也把 N+1 的逐条增强限制在「当前用户的少量模拟」内
+        # 按用户过滤：既隔离数据，也限定批量增强的范围在「当前用户的少量模拟」内
         simulations = manager.list_simulations(user_id=user_id)[:limit]
 
-        # 增强模拟数据，只从 Simulation 文件读取
+        # P2.1 根治 N+1：三次批量查询替代逐条增强，且摘要字段直接来自 simulations 冗余列，
+        # 不再逐条回源 S3 的 simulation_config.json（原首页历史卡顿的主因）。
+        sim_ids = [s.simulation_id for s in simulations]
+        proj_ids = list({s.project_id for s in simulations if s.project_id})
+        run_states = SimulationRunner.get_run_states_bulk(sim_ids)
+        projects_map = ProjectManager.get_projects_bulk(proj_ids)
+        report_ids = ReportManager.latest_report_ids_for_simulations(sim_ids)
+
         enriched_simulations = []
         for sim in simulations:
-            sim_dict = sim.to_dict()
+            sim_dict = sim.to_dict()  # 已含 simulation_requirement/total_simulation_hours/minutes_per_round
 
-            # 获取模拟配置信息（从 simulation_config.json 读取 simulation_requirement）
-            config = manager.get_simulation_config(sim.simulation_id)
-            if config:
-                sim_dict["simulation_requirement"] = config.get("simulation_requirement", "")
-                time_config = config.get("time_config", {})
-                sim_dict["total_simulation_hours"] = time_config.get("total_simulation_hours", 0)
-                # 推荐轮数（后备值）
-                recommended_rounds = int(
-                    time_config.get("total_simulation_hours", 0)
-                    * 60
-                    / max(time_config.get("minutes_per_round", 60), 1)
-                )
-            else:
-                sim_dict["simulation_requirement"] = ""
-                sim_dict["total_simulation_hours"] = 0
-                recommended_rounds = 0
+            # 推荐轮数（后备值）由冗余的时间配置算出
+            recommended_rounds = int(
+                sim.total_simulation_hours * 60 / max(sim.minutes_per_round, 1)
+            )
 
-            # 获取运行状态（从 Postgres 读取用户设置的实际轮数）
-            run_state = SimulationRunner.get_run_state(sim.simulation_id)
+            # 运行状态（批量结果中取，用户设置的实际轮数优先）
+            run_state = run_states.get(sim.simulation_id)
             if run_state:
                 sim_dict["current_round"] = run_state.current_round
                 sim_dict["runner_status"] = run_state.runner_status.value
-                # 使用用户设置的 total_rounds，若无则使用推荐轮数
                 sim_dict["total_rounds"] = (
                     run_state.total_rounds if run_state.total_rounds > 0 else recommended_rounds
                 )
@@ -721,25 +705,28 @@ def get_simulation_history(limit: int = 20, current=Depends(get_current_user)):
                 sim_dict["runner_status"] = "idle"
                 sim_dict["total_rounds"] = recommended_rounds
 
-            # 获取关联项目的文件列表（最多3个）
-            project = ProjectManager.get_project(sim.project_id)
-            if project and hasattr(project, "files") and project.files:
+            # 关联项目的文件列表（最多3个，来自批量结果）
+            project = projects_map.get(sim.project_id)
+            if project and project.files:
                 sim_dict["files"] = [
                     {"filename": f.get("filename", "未知文件")} for f in project.files[:3]
                 ]
             else:
                 sim_dict["files"] = []
 
-            # 获取关联的 report_id（查找该 simulation 最新的 report）
-            sim_dict["report_id"] = _get_report_id_for_simulation(sim.simulation_id)
+            # 冗余列为空的存量模拟，用所属项目的需求兜底（项目已批量取出，零额外查询）
+            if not sim_dict.get("simulation_requirement") and project:
+                sim_dict["simulation_requirement"] = project.simulation_requirement or ""
+
+            # 关联的最新 report_id（来自批量结果）
+            sim_dict["report_id"] = report_ids.get(sim.simulation_id)
 
             # 添加版本号
             sim_dict["version"] = "v1.0.2"
 
             # 格式化日期
             try:
-                created_date = sim_dict.get("created_at", "")[:10]
-                sim_dict["created_date"] = created_date
+                sim_dict["created_date"] = (sim_dict.get("created_at", "") or "")[:10]
             except Exception:
                 sim_dict["created_date"] = ""
 

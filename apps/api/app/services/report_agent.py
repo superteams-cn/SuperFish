@@ -2425,6 +2425,28 @@ class ReportManager:
             return cls._row_to_report(row) if row else None
 
     @classmethod
+    def latest_report_ids_for_simulations(cls, simulation_ids: list[str]) -> dict[str, str]:
+        """批量取每个模拟的最新 report_id（单次查询），用于首页历史避免 N+1。
+
+        返回 {simulation_id: report_id}；无报告的模拟不在结果中。
+        """
+        if not simulation_ids:
+            return {}
+        with session_scope() as session:
+            rows = (
+                session.query(ReportRow.simulation_id, ReportRow.report_id, ReportRow.created_at)
+                .filter(ReportRow.simulation_id.in_(simulation_ids))
+                .order_by(ReportRow.created_at.desc())
+                .all()
+            )
+        latest: dict[str, str] = {}
+        # 已按 created_at 倒序，遇到的第一条即该模拟最新报告
+        for sim_id, report_id, _created in rows:
+            if sim_id not in latest:
+                latest[sim_id] = report_id
+        return latest
+
+    @classmethod
     def list_reports(
         cls, simulation_id: str | None = None, limit: int = 50, user_id: str | None = None
     ) -> list[Report]:
