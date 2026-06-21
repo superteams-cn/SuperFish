@@ -11,7 +11,7 @@ interface LogoProps {
 
 /**
  * 品牌 Logo，优雅降级：
- * - 把横版 logo 放到 public/logo.png、纯图标放到 public/logo-mark.png 即自动显示
+ * - 把横版 logo 放到 public/logo.svg、纯图标放到 public/logo-mark.svg 即自动显示
  * - 文件缺失时回退到文字 wordmark / 渐变图标，不会破图
  */
 export function Logo({ variant = 'full', className }: LogoProps) {
@@ -33,10 +33,10 @@ export function Logo({ variant = 'full', className }: LogoProps) {
     return <span className="text-lg font-semibold tracking-tight">SuperFish</span>
   }
 
-  // logo 为透明 PNG：直接贴上，无需白底卡，自适应任意背景
+  // logo 为透明 SVG：直接贴上，无需白底卡，自适应任意背景
   return (
     <img
-      src={variant === 'mark' ? '/logo-mark.png' : '/logo.png'}
+      src={variant === 'mark' ? '/logo-mark.svg' : '/logo.svg'}
       alt="SuperFish"
       className={cn('object-contain', className)}
       onError={() => setFailed(true)}

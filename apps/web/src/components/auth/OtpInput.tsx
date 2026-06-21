@@ -101,7 +101,7 @@ export function OtpInput({
           className={cn(
             'border-input bg-background h-12 w-full min-w-0 rounded-lg border text-center text-lg font-semibold',
             'focus-visible:border-ring focus-visible:ring-ring/30 outline-none focus-visible:ring-2',
-            'disabled:opacity-50 transition-colors',
+            'transition-colors disabled:opacity-50',
           )}
         />
       ))}
