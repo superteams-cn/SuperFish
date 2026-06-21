@@ -45,26 +45,6 @@ From serious predictions to playful simulations, we let every "what if" see its 
 </table>
 </div>
 
-## 🎬 Demo Videos
-
-### 1. Wuhan University Public Opinion Simulation + SuperFish Project Introduction
-
-<div align="center">
-
-📺 [Watch on Bilibili](https://www.bilibili.com/video/BV1VYBsBHEMY/) — the complete demo predicting with the BettaFish-generated "Wuhan University Public Opinion Report".
-
-</div>
-
-### 2. Dream of the Red Chamber Lost Ending Simulation
-
-<div align="center">
-
-📺 [Watch on Bilibili](https://www.bilibili.com/video/BV1cPk3BBExq) — SuperFish's deep prediction of the lost ending from the first 80 chapters of "Dream of the Red Chamber".
-
-</div>
-
-> **Financial Prediction**, **Political News Prediction** and more examples coming soon...
-
 ## 🔄 Workflow
 
 1. **Ontology & Graph Building**: LLM-generated ontology, strict LlamaIndex path extraction, and graph storage in Postgres
