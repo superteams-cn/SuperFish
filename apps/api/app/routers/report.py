@@ -28,7 +28,7 @@ from ..schemas.report import (
     SearchToolRequest,
     StatisticsToolRequest,
 )
-from ..services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
+from ..services.report import Report, ReportAgent, ReportManager, ReportStatus
 from ..services.simulation_manager import SimulationManager
 from ..utils.locale import get_locale, t
 

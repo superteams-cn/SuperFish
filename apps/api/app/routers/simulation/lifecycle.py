@@ -448,7 +448,7 @@ def get_simulation_history(limit: int = 20, current=Depends(get_current_user)):
     user_id = current["user_id"]
 
     def _build():
-        from ...services.report_agent import ReportManager
+        from ...services.report import ReportManager
 
         manager = SimulationManager()
         # 按用户过滤：既隔离数据，也限定批量增强的范围在「当前用户的少量模拟」内

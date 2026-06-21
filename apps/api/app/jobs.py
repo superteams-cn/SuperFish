@@ -111,7 +111,7 @@ def run_report_generate(
 
     报告章节已逐章写入 Postgres，因此重跑时 ReportAgent 可从已完成章节续跑。
     """
-    from .services.report_agent import ReportAgent, ReportManager, ReportStatus
+    from .services.report import ReportAgent, ReportManager, ReportStatus
 
     set_locale(locale)
     task_manager = TaskManager()
