@@ -22,6 +22,7 @@ import { AuthButton } from '@/components/auth/AuthButton'
 import { VerifyDialog } from '@/components/auth/VerifyDialog'
 import { HistoryDatabase } from '@/components/HistoryDatabase'
 import { Logo } from '@/components/common/Logo'
+import { QuotaChip } from '@/components/common/QuotaChip'
 import { setPendingUpload } from '@/stores/pendingUpload'
 import { useAuth } from '@/stores/auth'
 
@@ -188,6 +189,7 @@ export default function HomePage() {
             <History className="h-4 w-4" />
             <span className="hidden sm:inline">{t('home.records')}</span>
           </Button>
+          <QuotaChip enabled={isAuthenticated} />
           <ThemeSwitcher />
           <LanguageSwitcher />
           <AuthButton />

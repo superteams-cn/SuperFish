@@ -2,17 +2,25 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { getSimulationQuota, type SimulationQuota } from '@/lib/api/simulation'
 
+interface Options {
+  /** 为 false 时不拉取（如未登录），quota 保持 null。默认 true。 */
+  enabled?: boolean
+  /** 轮询间隔（毫秒）。传入则定时刷新，用于顶栏长驻展示保持新鲜。 */
+  pollMs?: number
+}
+
 /**
  * 并发推演配额：进入推演前显式告知名额占用，并在已满时拦截。
  *
  * 返回当前配额快照与 refresh（返回最新值，供「点击进入推演」时做权威的实时校验，
- * 避免用展示用的旧值放行）。任一拉取失败返回 null，调用方据此降级为不拦截（最终仍有
- * 后端 /start 兜底）。
+ * 避免用展示用的旧值放行）。任一拉取失败返回 null，调用方据此降级为不拦截/不展示
+ * （最终仍有后端 /start 兜底）。
  */
-export function useSimulationQuota() {
+export function useSimulationQuota({ enabled = true, pollMs }: Options = {}) {
   const [quota, setQuota] = useState<SimulationQuota | null>(null)
 
   const refresh = useCallback(async (): Promise<SimulationQuota | null> => {
+    if (!enabled) return null
     try {
       const res = await getSimulationQuota()
       const data = res.success ? (res.data ?? null) : null
@@ -22,11 +30,18 @@ export function useSimulationQuota() {
       setQuota(null)
       return null
     }
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
+    if (!enabled) {
+      setQuota(null)
+      return
+    }
     void refresh()
-  }, [refresh])
+    if (!pollMs) return
+    const id = setInterval(() => void refresh(), pollMs)
+    return () => clearInterval(id)
+  }, [enabled, pollMs, refresh])
 
   return { quota, refresh }
 }
