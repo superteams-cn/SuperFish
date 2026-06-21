@@ -404,7 +404,22 @@ def get_report_progress(report_id: str):
     try:
         progress = ReportManager.get_progress(report_id)
         if not progress:
-            return _error(t("api.reportProgressNotAvail", id=report_id), 404)
+            # 能走到这里说明归属守卫已确认报告行存在（否则先以 reportNotFound 404）。
+            # 占位行落库与 worker 首次写入 progress 之间有时间窗，此时 progress 为空
+            # 不代表“报告不存在”，而是“尚未开始”。合成一条 pending 进度，避免前端
+            # 在生成刚启动那一刻收到 404 红错（与占位行同一设计意图）。
+            report = ReportManager.get_report(report_id)
+            status = report.status.value if report else ReportStatus.PENDING.value
+            return {
+                "success": True,
+                "data": {
+                    "status": status,
+                    "progress": 0,
+                    "message": "",
+                    "current_section": None,
+                    "completed_sections": [],
+                },
+            }
         return {"success": True, "data": progress}
     except Exception as e:
         logger.error(f"获取报告进度失败: {str(e)}")
