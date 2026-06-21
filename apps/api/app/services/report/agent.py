@@ -17,6 +17,7 @@ from ...domain.report import Report, ReportOutline, ReportSection, ReportStatus
 from ...utils.llm_client import LLMClient
 from ...utils.locale import get_language_instruction, t
 from ..graph_tools import GraphToolsService
+from . import react_parser
 from .logs import ReportConsoleLogger, ReportLogger
 from .manager import ReportManager
 
@@ -614,64 +615,12 @@ class ReportAgent:
     VALID_TOOL_NAMES = {"insight_forge", "panorama_search", "quick_search", "interview_agents"}
 
     def _parse_tool_calls(self, response: str) -> list[dict[str, Any]]:
-        """
-        从LLM响应中解析工具调用
-
-        支持的格式（按优先级）：
-        1. <tool_call>{"name": "tool_name", "parameters": {...}}</tool_call>
-        2. 裸 JSON（响应整体或单行就是一个工具调用 JSON）
-        """
-        tool_calls = []
-
-        # 格式1: XML风格（标准格式）
-        xml_pattern = r"<tool_call>\s*(\{.*?\})\s*</tool_call>"
-        for match in re.finditer(xml_pattern, response, re.DOTALL):
-            try:
-                call_data = json.loads(match.group(1))
-                tool_calls.append(call_data)
-            except json.JSONDecodeError:
-                pass
-
-        if tool_calls:
-            return tool_calls
-
-        # 格式2: 兜底 - LLM 直接输出裸 JSON（没包 <tool_call> 标签）
-        # 只在格式1未匹配时尝试，避免误匹配正文中的 JSON
-        stripped = response.strip()
-        if stripped.startswith("{") and stripped.endswith("}"):
-            try:
-                call_data = json.loads(stripped)
-                if self._is_valid_tool_call(call_data):
-                    tool_calls.append(call_data)
-                    return tool_calls
-            except json.JSONDecodeError:
-                pass
-
-        # 响应可能包含思考文字 + 裸 JSON，尝试提取最后一个 JSON 对象
-        json_pattern = r'(\{"(?:name|tool)"\s*:.*?\})\s*$'
-        match = re.search(json_pattern, stripped, re.DOTALL)
-        if match:
-            try:
-                call_data = json.loads(match.group(1))
-                if self._is_valid_tool_call(call_data):
-                    tool_calls.append(call_data)
-            except json.JSONDecodeError:
-                pass
-
-        return tool_calls
+        """从 LLM 响应解析工具调用（薄委托 react_parser，传入合法工具名集合）。"""
+        return react_parser.parse_tool_calls(response, self.VALID_TOOL_NAMES)
 
     def _is_valid_tool_call(self, data: dict) -> bool:
-        """校验解析出的 JSON 是否是合法的工具调用"""
-        # 支持 {"name": ..., "parameters": ...} 和 {"tool": ..., "params": ...} 两种键名
-        tool_name = data.get("name") or data.get("tool")
-        if tool_name and tool_name in self.VALID_TOOL_NAMES:
-            # 统一键名为 name / parameters
-            if "tool" in data:
-                data["name"] = data.pop("tool")
-            if "params" in data and "parameters" not in data:
-                data["parameters"] = data.pop("params")
-            return True
-        return False
+        """校验并规范化工具调用 JSON（薄委托 react_parser）。"""
+        return react_parser.is_valid_tool_call(data, self.VALID_TOOL_NAMES)
 
     def _get_tools_description(self) -> str:
         """生成工具描述文本"""
