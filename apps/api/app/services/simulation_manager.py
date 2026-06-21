@@ -7,176 +7,25 @@ OASIS模拟管理器
 import json
 import os
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import StrEnum
 from typing import Any
 
-from ..core.db import session_scope
 from ..core.logger import get_logger
-from ..db_models import SimulationRow
+from ..domain.simulation import PlatformType, SimulationState, SimulationStatus
+from ..repositories.simulation_repo import SimulationRepository
 from ..utils import object_store
 from ..utils.locale import t
 from .neo4j_entity_reader import Neo4jEntityReader
 from .oasis_profile_generator import OasisProfileGenerator
 from .simulation_config_generator import SimulationConfigGenerator
 
+__all__ = [
+    "SimulationManager",
+    "SimulationState",
+    "SimulationStatus",
+    "PlatformType",
+]
+
 logger = get_logger("superfish.simulation")
-
-
-class SimulationStatus(StrEnum):
-    """模拟状态"""
-
-    CREATED = "created"
-    PREPARING = "preparing"
-    READY = "ready"
-    RUNNING = "running"
-    PAUSED = "paused"
-    STOPPED = "stopped"  # 模拟被手动停止
-    COMPLETED = "completed"  # 模拟自然完成
-    FAILED = "failed"
-
-
-class PlatformType(StrEnum):
-    """平台类型"""
-
-    TWITTER = "twitter"
-    REDDIT = "reddit"
-
-
-@dataclass
-class SimulationState:
-    """模拟状态"""
-
-    simulation_id: str
-    project_id: str
-    graph_id: str
-
-    # 所属用户（从所属项目继承）
-    user_id: str = ""
-
-    # 平台启用状态
-    enable_twitter: bool = True
-    enable_reddit: bool = True
-
-    # 状态
-    status: SimulationStatus = SimulationStatus.CREATED
-
-    # 准备阶段数据
-    entities_count: int = 0
-    profiles_count: int = 0
-    entity_types: list[str] = field(default_factory=list)
-
-    # 配置生成信息
-    config_generated: bool = False
-    config_reasoning: str = ""
-
-    # 历史列表冗余字段（准备阶段从 simulation_config 落库，供首页历史批量读取）
-    simulation_requirement: str = ""
-    total_simulation_hours: int = 0
-    minutes_per_round: int = 0
-
-    # 运行时数据
-    current_round: int = 0
-    twitter_status: str = "not_started"
-    reddit_status: str = "not_started"
-
-    # 时间戳
-    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-
-    # 错误信息
-    error: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """完整状态字典（内部使用）"""
-        return {
-            "simulation_id": self.simulation_id,
-            "project_id": self.project_id,
-            "user_id": self.user_id,
-            "graph_id": self.graph_id,
-            "enable_twitter": self.enable_twitter,
-            "enable_reddit": self.enable_reddit,
-            "status": self.status.value,
-            "entities_count": self.entities_count,
-            "profiles_count": self.profiles_count,
-            "entity_types": self.entity_types,
-            "config_generated": self.config_generated,
-            "config_reasoning": self.config_reasoning,
-            "simulation_requirement": self.simulation_requirement,
-            "total_simulation_hours": self.total_simulation_hours,
-            "minutes_per_round": self.minutes_per_round,
-            "current_round": self.current_round,
-            "twitter_status": self.twitter_status,
-            "reddit_status": self.reddit_status,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-            "error": self.error,
-        }
-
-    def to_simple_dict(self) -> dict[str, Any]:
-        """简化状态字典（API返回使用）"""
-        return {
-            "simulation_id": self.simulation_id,
-            "project_id": self.project_id,
-            "user_id": self.user_id,
-            "graph_id": self.graph_id,
-            "status": self.status.value,
-            "entities_count": self.entities_count,
-            "profiles_count": self.profiles_count,
-            "entity_types": self.entity_types,
-            "config_generated": self.config_generated,
-            "error": self.error,
-        }
-
-
-def _row_to_state(row: SimulationRow) -> "SimulationState":
-    return SimulationState(
-        simulation_id=row.simulation_id,
-        project_id=row.project_id,
-        user_id=row.user_id or "",
-        graph_id=row.graph_id,
-        enable_twitter=row.enable_twitter,
-        enable_reddit=row.enable_reddit,
-        status=SimulationStatus(row.status),
-        entities_count=row.entities_count,
-        profiles_count=row.profiles_count,
-        entity_types=row.entity_types or [],
-        config_generated=row.config_generated,
-        config_reasoning=row.config_reasoning,
-        simulation_requirement=row.simulation_requirement or "",
-        total_simulation_hours=row.total_simulation_hours or 0,
-        minutes_per_round=row.minutes_per_round or 0,
-        current_round=row.current_round,
-        twitter_status=row.twitter_status,
-        reddit_status=row.reddit_status,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
-        error=row.error,
-    )
-
-
-def _apply_state_to_row(state: "SimulationState", row: SimulationRow) -> None:
-    row.project_id = state.project_id
-    row.user_id = state.user_id
-    row.graph_id = state.graph_id
-    row.enable_twitter = state.enable_twitter
-    row.enable_reddit = state.enable_reddit
-    row.status = state.status.value if isinstance(state.status, SimulationStatus) else state.status
-    row.entities_count = state.entities_count
-    row.profiles_count = state.profiles_count
-    row.entity_types = state.entity_types
-    row.config_generated = state.config_generated
-    row.config_reasoning = state.config_reasoning
-    row.simulation_requirement = state.simulation_requirement
-    row.total_simulation_hours = state.total_simulation_hours
-    row.minutes_per_round = state.minutes_per_round
-    row.current_round = state.current_round
-    row.twitter_status = state.twitter_status
-    row.reddit_status = state.reddit_status
-    row.created_at = state.created_at
-    row.updated_at = state.updated_at
-    row.error = state.error
 
 
 class SimulationManager:
@@ -219,22 +68,12 @@ class SimulationManager:
             logger.warning(f"镜像模拟文件到对象存储失败 {filename}: {exc}")
 
     def _save_simulation_state(self, state: SimulationState):
-        """保存模拟状态到 Postgres（upsert）。"""
-        state.updated_at = datetime.now().isoformat()
-        with session_scope() as session:
-            row = session.get(SimulationRow, state.simulation_id)
-            if row is None:
-                row = SimulationRow(simulation_id=state.simulation_id)
-                _apply_state_to_row(state, row)
-                session.add(row)
-            else:
-                _apply_state_to_row(state, row)
+        """保存模拟状态到 Postgres（upsert，委托 SimulationRepository）。"""
+        SimulationRepository.save(state)
 
     def _load_simulation_state(self, simulation_id: str) -> SimulationState | None:
-        """从 Postgres 读取模拟状态。"""
-        with session_scope() as session:
-            row = session.get(SimulationRow, simulation_id)
-            return _row_to_state(row) if row else None
+        """从 Postgres 读取模拟状态（委托 SimulationRepository）。"""
+        return SimulationRepository.get(simulation_id)
 
     def create_simulation(
         self,
@@ -523,14 +362,7 @@ class SimulationManager:
         self, project_id: str | None = None, user_id: str | None = None
     ) -> list[SimulationState]:
         """列出所有模拟（Postgres，按创建时间倒序）；传 user_id 时只返回该用户的。"""
-        with session_scope() as session:
-            query = session.query(SimulationRow)
-            if user_id is not None:
-                query = query.filter(SimulationRow.user_id == user_id)
-            if project_id is not None:
-                query = query.filter(SimulationRow.project_id == project_id)
-            rows = query.order_by(SimulationRow.created_at.desc()).all()
-            return [_row_to_state(r) for r in rows]
+        return SimulationRepository.list(project_id=project_id, user_id=user_id)
 
     def get_profiles(self, simulation_id: str, platform: str = "reddit") -> list[dict[str, Any]]:
         """获取模拟的Agent Profile"""
