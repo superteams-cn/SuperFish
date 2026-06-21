@@ -26,7 +26,7 @@ from ..schemas.auth import (
 from ..settings import settings
 from ..utils.locale import t
 from ..utils.logger import get_logger
-from ..utils.mailer import send_email
+from ..utils.mailer import send_email_async
 from ..utils.rate_limit import check_rate_limit, client_ip
 from ..utils.security import (
     create_access_token,
@@ -74,7 +74,7 @@ def _send_verification_email(user_id: str, email: str) -> None:
     """发送邮箱验证邮件（开发桩下打印到日志）。"""
     token = create_verify_token(user_id)
     link = f"{settings.web_base_url}/verify-email?token={token}"
-    send_email(email, t("auth.verifyEmailSubject"), t("auth.verifyEmailBody", link=link))
+    send_email_async(email, t("auth.verifyEmailSubject"), t("auth.verifyEmailBody", link=link))
     logger.info(f"已发送邮箱验证邮件: {email}")
 
 
@@ -200,7 +200,7 @@ def forgot_password(req: ForgotPasswordRequest, request: Request):
         if user is not None and user.status == "active":
             token = create_reset_token(user.user_id, user.password_hash)
             link = f"{settings.web_base_url}/reset-password?token={token}"
-            send_email(
+            send_email_async(
                 user.email,
                 t("auth.resetEmailSubject"),
                 t("auth.resetEmailBody", link=link),

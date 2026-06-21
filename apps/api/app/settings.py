@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
+    # 直连 SSL（端口 465）还是 STARTTLS（端口 587）。留空时按端口自动判定（465→SSL）。
+    smtp_use_ssl: bool | None = None
+    # 是否启用 STARTTLS（仅在非 SSL 时有意义；个别内网无 TLS 的 SMTP 可置 false）
+    smtp_use_tls: bool = True
     email_from: str = "SuperFish <no-reply@superfish.local>"
     # 用于拼接邮件里的重置链接（指向前端路由 /reset-password）
     web_base_url: str = "http://localhost:5180"
