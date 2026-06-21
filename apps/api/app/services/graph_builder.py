@@ -899,7 +899,7 @@ class GraphBuilderService:
                 "source_node_name": node_map.get(e["source_node_uuid"], ""),
                 "target_node_name": node_map.get(e["target_node_uuid"], ""),
                 "attributes": e["attributes"],
-                "created_at": str(e["created_at"]) if e["created_at"] else None,
+                "created_at": str(e["created_at"]) if e.get("created_at") else None,
                 "valid_at": str(e["valid_at"]) if e.get("valid_at") else None,
                 "invalid_at": str(e["invalid_at"]) if e.get("invalid_at") else None,
                 "expired_at": str(e["expired_at"]) if e.get("expired_at") else None,

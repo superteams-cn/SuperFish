@@ -2,23 +2,9 @@
 
 <img src="./static/image/SuperFish_logo_compressed.jpeg" alt="SuperFish Logo" width="75%"/>
 
-<a href="https://trendshift.io/repositories/16144" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16144" alt="superteams-cn%2FSuperFish | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
 简洁通用的群体智能引擎，预测万物
 </br>
 <em>A Simple and Universal Swarm Intelligence Engine, Predicting Anything</em>
-
-<a href="https://www.shanda.com/" target="_blank"><img src="./static/image/shanda_logo.png" alt="superteams-cn%2FSuperFish | Shanda" height="40"/></a>
-
-[![GitHub Stars](https://img.shields.io/github/stars/superteams-cn/SuperFish?style=flat-square&color=DAA520)](https://github.com/superteams-cn/SuperFish/stargazers)
-[![GitHub Watchers](https://img.shields.io/github/watchers/superteams-cn/SuperFish?style=flat-square)](https://github.com/superteams-cn/SuperFish/watchers)
-[![GitHub Forks](https://img.shields.io/github/forks/superteams-cn/SuperFish?style=flat-square)](https://github.com/superteams-cn/SuperFish/network)
-[![Docker](https://img.shields.io/badge/Docker-Build-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/superteams-cn/SuperFish)
-
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](http://discord.gg/ePf5aPaHnA)
-[![X](https://img.shields.io/badge/X-Follow-000000?style=flat-square&logo=x&logoColor=white)](https://x.com/superfish_ai)
-[![Instagram](https://img.shields.io/badge/Instagram-Follow-E4405F?style=flat-square&logo=instagram&logoColor=white)](https://www.instagram.com/superfish_ai/)
 
 [English](./README.md) | [中文文档](./README-ZH.md)
 
@@ -26,7 +12,7 @@
 
 ## ⚡ Overview
 
-**SuperFish** is a next-generation AI prediction engine powered by multi-agent technology. By extracting seed information from the real world (such as breaking news, policy drafts, or financial signals), it automatically constructs a high-fidelity parallel digital world. Within this space, thousands of intelligent agents with independent personalities, long-term memory, and behavioral logic freely interact and undergo social evolution. You can inject variables dynamically from a "God's-eye view" to precisely deduce future trajectories — **rehearse the future in a digital sandbox, and win decisions after countless simulations**.
+**SuperFish (超级章鱼)** is a next-generation AI prediction engine powered by multi-agent technology. By extracting seed information from the real world (such as breaking news, policy drafts, or financial signals), it automatically constructs a high-fidelity parallel digital world. Within this space, thousands of intelligent agents with independent personalities, long-term memory, and behavioral logic freely interact and undergo social evolution. You can inject variables dynamically from a "God's-eye view" to precisely deduce future trajectories — **rehearse the future in a digital sandbox, and win decisions after countless simulations**.
 
 > You only need to: Upload seed materials (data analysis reports or interesting novel stories) and describe your prediction requirements in natural language</br>
 > SuperFish will return: A detailed prediction report and a deeply interactive high-fidelity digital world
@@ -39,10 +25,6 @@ SuperFish is dedicated to creating a swarm intelligence mirror that maps reality
 - **At the Micro Level**: We are a creative sandbox for individual users — whether deducing novel endings or exploring imaginative scenarios, everything can be fun, playful, and accessible
 
 From serious predictions to playful simulations, we let every "what if" see its outcome, making it possible to predict anything.
-
-## 🌐 Live Demo
-
-Welcome to visit our online demo environment and experience a prediction simulation on trending public opinion events we've prepared for you: [superfish-live-demo](https://666ghj.github.io/superfish-demo/)
 
 ## 📸 Screenshots
 
@@ -68,17 +50,17 @@ Welcome to visit our online demo environment and experience a prediction simulat
 ### 1. Wuhan University Public Opinion Simulation + SuperFish Project Introduction
 
 <div align="center">
-<a href="https://www.bilibili.com/video/BV1VYBsBHEMY/" target="_blank"><img src="./static/image/武大模拟演示封面.png" alt="SuperFish Demo Video" width="75%"/></a>
 
-Click the image to watch the complete demo video for prediction using BettaFish-generated "Wuhan University Public Opinion Report"
+📺 [Watch on Bilibili](https://www.bilibili.com/video/BV1VYBsBHEMY/) — the complete demo predicting with the BettaFish-generated "Wuhan University Public Opinion Report".
+
 </div>
 
 ### 2. Dream of the Red Chamber Lost Ending Simulation
 
 <div align="center">
-<a href="https://www.bilibili.com/video/BV1cPk3BBExq" target="_blank"><img src="./static/image/红楼梦模拟推演封面.jpg" alt="SuperFish Demo Video" width="75%"/></a>
 
-Click the image to watch SuperFish's deep prediction of the lost ending based on hundreds of thousands of words from the first 80 chapters of "Dream of the Red Chamber"
+📺 [Watch on Bilibili](https://www.bilibili.com/video/BV1cPk3BBExq) — SuperFish's deep prediction of the lost ending from the first 80 chapters of "Dream of the Red Chamber".
+
 </div>
 
 > **Financial Prediction**, **Political News Prediction** and more examples coming soon...
@@ -152,8 +134,6 @@ LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
 LLM_REQUEST_TIMEOUT=120
-GRAPH_EXTRACT_MAX_TOKENS=8192
-GRAPH_EXTRACT_MAX_TRIPLETS=20
 
 # ── PostgreSQL (project/task/report metadata + knowledge graphs) ──
 DATABASE_URL=postgresql+psycopg://superfish:superfish_pg@localhost:5432/superfish
@@ -167,11 +147,20 @@ S3_ACCESS_KEY=superfish
 S3_SECRET_KEY=superfish_secret
 S3_BUCKET=superfish
 S3_REGION=us-east-1
+
+# ── Auth (email + password / JWT) ──
+# A dev default exists so the app boots, but ALWAYS override in production
+# (e.g. `openssl rand -hex 32`).
+JWT_SECRET=dev-insecure-change-me
 ```
 
 > The `localhost` values above are for source deployment. For full Docker Compose deployment, use the service names instead (`postgres`, `redis://redis:6379/0`, `http://rustfs:9000`) — the `worker` and `superfish` services already set these.
 
-Optional acceleration LLM variables are also supported: `LLM_BOOST_API_KEY`, `LLM_BOOST_BASE_URL`, and `LLM_BOOST_MODEL_NAME`. (If you don't use them, omit these lines entirely rather than leaving placeholders.)
+`.env.example` is the source of truth and documents every option, including:
+- **Graph tuning** — `GRAPH_EXTRACT_MAX_TOKENS`, `GRAPH_EXTRACT_MAX_TRIPLETS`, `DEFAULT_CHUNK_SIZE`, ontology type counts (sensible defaults built in).
+- **Auth guardrails** — token TTLs, `ADMIN_EMAILS` allowlist, per-user quotas, rate limiting.
+- **Email (SMTP)** — password reset / email verification. Without `SMTP_HOST` it falls back to a dev stub that prints emails to the backend log.
+- **Acceleration LLM** (optional) — `LLM_BOOST_API_KEY`, `LLM_BOOST_BASE_URL`, `LLM_BOOST_MODEL_NAME`. (If you don't use them, omit these lines entirely rather than leaving placeholders.)
 
 #### 2. Install Dependencies
 
@@ -232,19 +221,21 @@ This starts everything: `superfish` (web + api), `worker` (arq), plus PostgreSQL
 
 > A faster mirror address is provided as comments in `docker-compose.yml` — replace if needed.
 
-## 📬 Join the Conversation
+#### Horizontal Scaling (Production)
 
-<div align="center">
-<img src="./static/image/QQ群.png" alt="QQ Group" width="60%"/>
-</div>
+Because the backend is stateless, you can run multiple API and worker replicas behind a load balancer. `docker-compose.scale.yml` ships a ready-made topology — **nginx (static frontend + reverse proxy) + 3 API replicas + 5 workers** — under its own Compose project:
 
-&nbsp;
+```bash
+# Start the scaled stack (separate project name avoids clashing with the base compose)
+docker compose -p sf-scale -f docker-compose.scale.yml up -d
 
-The SuperFish team is recruiting full-time/internship positions. If you're interested in multi-agent simulation and LLM applications, feel free to send your resume to: **superfish@shanda.com**
+# Scale a tier up or down on demand
+docker compose -p sf-scale -f docker-compose.scale.yml up -d --scale worker=8
+```
+
+nginx resolves API upstreams at request time, so adding/removing replicas needs no config change.
 
 ## 📄 Acknowledgments
-
-**SuperFish has received strategic support and incubation from Shanda Group!**
 
 SuperFish's simulation engine is powered by **[OASIS (Open Agent Social Interaction Simulations)](https://github.com/camel-ai/oasis)**, We sincerely thank the CAMEL-AI team for their open-source contributions!
 
