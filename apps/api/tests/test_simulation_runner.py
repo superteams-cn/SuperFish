@@ -119,6 +119,116 @@ def test_has_simulation_end(tmp_path):
     assert SimulationRunner._has_simulation_end(str(sim_dir)) is True
 
 
+# ───────────────────────── 监控循环：终态落地 + 资源清理 ─────────────────────────
+
+
+class _DeadProc:
+    """已退出的假进程：poll() 返回非 None（returncode），使监控循环体直接跳到终态处理。"""
+
+    def __init__(self, returncode: int):
+        self.returncode = returncode
+
+    def poll(self):
+        return self.returncode
+
+
+class _FakeFile:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def test_monitor_own_process_completed_finalizes_and_cleans_up(
+    runner_cleanup, tmp_path, monkeypatch
+):
+    """本进程亲自启动、退出码 0：落 COMPLETED + completed_at，置 running=False、owner 清空，
+    并清理 store 中的进程/线程/文件句柄。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        SimulationRunner, "_upload_run_artifacts", classmethod(lambda c, s, d: None)
+    )
+    sid = _new_sid(runner_cleanup)
+    (tmp_path / sid).mkdir(parents=True, exist_ok=True)
+    SimulationRunner._save_run_state(
+        SimulationRunState(
+            simulation_id=sid,
+            runner_status=RunnerStatus.RUNNING,
+            twitter_running=True,
+            reddit_running=True,
+        )
+    )
+    SimulationRunner._store.processes[sid] = _DeadProc(0)  # type: ignore[assignment]
+    SimulationRunner._store.monitor_threads[sid] = object()  # type: ignore[assignment]
+    fout = _FakeFile()
+    SimulationRunner._store.stdout_files[sid] = fout
+
+    SimulationRunner._monitor_simulation(sid)
+
+    got = SimulationRunner._load_run_state(sid)
+    assert got.runner_status == RunnerStatus.COMPLETED
+    assert got.completed_at
+    assert got.twitter_running is False
+    assert got.reddit_running is False
+    assert got.owner_id is None
+    # 资源清理
+    assert sid not in SimulationRunner._store.processes
+    assert sid not in SimulationRunner._store.monitor_threads
+    assert sid not in SimulationRunner._store.stdout_files
+    assert fout.closed is True
+
+
+def test_monitor_own_process_nonzero_exit_marks_failed_with_log_tail(
+    runner_cleanup, tmp_path, monkeypatch
+):
+    """本进程退出码非 0 且未见 simulation_end：落 FAILED，error 含退出码与日志尾部。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        SimulationRunner, "_upload_run_artifacts", classmethod(lambda c, s, d: None)
+    )
+    sid = _new_sid(runner_cleanup)
+    sim_dir = tmp_path / sid
+    sim_dir.mkdir(parents=True, exist_ok=True)
+    (sim_dir / "simulation.log").write_text("boom traceback here", encoding="utf-8")
+    SimulationRunner._save_run_state(
+        SimulationRunState(simulation_id=sid, runner_status=RunnerStatus.RUNNING)
+    )
+    SimulationRunner._store.processes[sid] = _DeadProc(1)  # type: ignore[assignment]
+
+    SimulationRunner._monitor_simulation(sid)
+
+    got = SimulationRunner._load_run_state(sid)
+    assert got.runner_status == RunnerStatus.FAILED
+    assert "进程退出码: 1" in (got.error or "")
+    assert "boom traceback here" in (got.error or "")
+
+
+def test_monitor_orphan_dead_without_sim_end_marks_interrupted(
+    runner_cleanup, tmp_path, monkeypatch
+):
+    """接管的孤儿（无本机句柄）：PID 已死且未见 simulation_end → INTERRUPTED。"""
+    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        SimulationRunner, "_upload_run_artifacts", classmethod(lambda c, s, d: None)
+    )
+    monkeypatch.setattr(SimulationRunner, "_pid_alive", classmethod(lambda c, p, s=None: False))
+    sid = _new_sid(runner_cleanup)
+    (tmp_path / sid).mkdir(parents=True, exist_ok=True)
+    SimulationRunner._save_run_state(
+        SimulationRunState(
+            simulation_id=sid, runner_status=RunnerStatus.RUNNING, process_pid=999999
+        )
+    )
+    # store.processes 无此 sid → process=None → 走孤儿分支
+
+    SimulationRunner._monitor_simulation(sid)
+
+    got = SimulationRunner._load_run_state(sid)
+    assert got.runner_status == RunnerStatus.INTERRUPTED
+    assert got.owner_id is None
+
+
 # ───────────────────────── 运行态持久化往返 ─────────────────────────
 
 
