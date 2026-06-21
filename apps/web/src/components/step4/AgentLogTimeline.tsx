@@ -112,7 +112,9 @@ export function AgentLogTimeline({ logs }: { logs: AgentLogEntry[] }) {
   return (
     <div className="border-muted space-y-2 border-l pl-4">
       {logs.map((log, idx) => {
-        const key = log.timestamp || String(idx)
+        // 同一毫秒可产生多条日志（timestamp 相同），单用 timestamp 当 key 会撞键。
+        // 日志流只追加，idx 对既有项稳定，拼上 idx 即唯一又稳定（兼作展开状态键）。
+        const key = `${idx}-${log.timestamp ?? ''}`
         const isMilestone = log.action === 'section_complete' || log.action === 'report_complete'
         const detail = log.details || {}
         const toolMeta = detail.tool_name ? TOOL_META[detail.tool_name] : undefined
