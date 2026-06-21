@@ -240,13 +240,12 @@ class ParallelIPCHandler:
         self.reddit_env = reddit_env
         self.reddit_agent_graph = reddit_agent_graph
         
-        self.commands_dir = os.path.join(simulation_dir, IPC_COMMANDS_DIR)
-        self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
         self.status_file = os.path.join(simulation_dir, ENV_STATUS_FILE)
-        
-        # 确保目录存在
-        os.makedirs(self.commands_dir, exist_ok=True)
-        os.makedirs(self.responses_dir, exist_ok=True)
+
+        # Redis IPC 总线（命令收取 / 响应回写 / 存活心跳）。
+        # simulation_dir 的 basename 即 simulation_id，用作 Redis 键前缀。
+        from _ipc_redis import RedisIPCServer
+        self._bus = RedisIPCServer(os.path.basename(os.path.normpath(simulation_dir)))
 
         # 流式采访用的 Redis 客户端（懒加载）
         self._redis = None
@@ -387,59 +386,29 @@ class ParallelIPCHandler:
             self.send_response(command_id, "failed", error=str(e))
         return True
 
-    def update_status(self, status: str):
-        """更新环境状态"""
-        with open(self.status_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "status": status,
-                "twitter_available": self.twitter_env is not None,
-                "reddit_available": self.reddit_env is not None,
-                "timestamp": datetime.now().isoformat()
-            }, f, ensure_ascii=False, indent=2)
-    
-    def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
-        if not os.path.exists(self.commands_dir):
-            return None
-        
-        # 获取命令文件（按时间排序）
-        command_files = []
-        for filename in os.listdir(self.commands_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(self.commands_dir, filename)
-                command_files.append((filepath, os.path.getmtime(filepath)))
-        
-        command_files.sort(key=lambda x: x[1])
-        
-        for filepath, _ in command_files:
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                continue
-        
-        return None
-    
-    def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
-        """发送响应"""
-        response = {
-            "command_id": command_id,
+    def _alive_payload(self, status: str = "alive") -> Dict[str, Any]:
+        return {
             "status": status,
-            "result": result,
-            "error": error,
-            "timestamp": datetime.now().isoformat()
+            "twitter_available": self.twitter_env is not None,
+            "reddit_available": self.reddit_env is not None,
+            "timestamp": datetime.now().isoformat(),
         }
-        
-        response_file = os.path.join(self.responses_dir, f"{command_id}.json")
-        with open(response_file, 'w', encoding='utf-8') as f:
-            json.dump(response, f, ensure_ascii=False, indent=2)
-        
-        # 删除命令文件
-        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
-        try:
-            os.remove(command_file)
-        except OSError:
-            pass
+
+    def update_status(self, status: str):
+        """更新环境存活状态：写 Redis 心跳键（API 任意副本据此判定 env 是否可接收采访）。"""
+        payload = self._alive_payload(status)
+        if status == "alive":
+            self._bus.touch_alive(payload)
+        else:
+            self._bus.mark_stopped(payload)
+
+    def poll_command(self) -> Optional[Dict[str, Any]]:
+        """非阻塞取一条待处理命令（来自 Redis 命令队列，FIFO）。"""
+        return self._bus.poll_command()
+
+    def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
+        """把响应写入 Redis 信箱（带 TTL 兜底）。"""
+        self._bus.send_response(command_id, status, result=result, error=error)
     
     def _get_env_and_graph(self, platform: str):
         """
@@ -710,6 +679,9 @@ class ParallelIPCHandler:
             should_continue: True 表示继续运行，False 表示应该退出
             had_command: 本次轮询是否实际收到并处理了命令（用于空闲超时判断）
         """
+        # 每轮刷新存活心跳（Redis 键 TTL 30s），进程存活期间不过期、被杀后自动失效
+        self._bus.touch_alive(self._alive_payload())
+
         command = self.poll_command()
         if not command:
             return True, False

@@ -2,24 +2,48 @@
 模拟IPC通信模块
 用于后端（FastAPI）和模拟脚本之间的进程间通信
 
-通过文件系统实现简单的命令/响应模式：
-1. 后端写入命令到 commands/ 目录
-2. 模拟脚本轮询命令目录，执行命令并写入响应到 responses/ 目录
-3. 后端轮询响应目录获取结果
+通过 Redis 实现命令/响应模式（不再依赖共享本地文件系统，故发命令的 API 副本与
+跑模拟的 worker 进程可分处不同主机）：
+1. 后端把命令 RPUSH 到 sim:ipc:cmd:{sid} 队列
+2. 模拟脚本 LPOP 取命令、执行，并把响应 RPUSH 到 sim:ipc:resp:{sid}:{cid} 信箱
+3. 后端 BLPOP 信箱获取结果；存活性由 sim:ipc:alive:{sid} 心跳键判定
+
+键协议与 scripts/_ipc_redis.py（模拟脚本侧）保持字节级一致。
 """
 
 import json
 import os
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+import redis
+
 from ..core.logger import get_logger
+from ..core.settings import settings
 
 logger = get_logger("superfish.simulation_ipc")
+
+# ---- 键协议（与 scripts/_ipc_redis.py 保持字节级一致）----
+CMD_KEY = "sim:ipc:cmd:{sid}"
+RESP_KEY = "sim:ipc:resp:{sid}:{cid}"
+ALIVE_KEY = "sim:ipc:alive:{sid}"
+CMD_TTL = 120  # 命令队列兜底 TTL（秒），防孤儿命令长期残留
+
+
+_redis_client: redis.Redis | None = None
+
+
+def _get_redis() -> redis.Redis:
+    """进程内复用一个同步 Redis 连接（连接池）。"""
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis.Redis.from_url(
+            settings.redis_url, encoding="utf-8", decode_responses=True
+        )
+    return _redis_client
 
 
 class CommandType(StrEnum):
@@ -110,31 +134,33 @@ class SimulationIPCClient:
         初始化IPC客户端
 
         Args:
-            simulation_dir: 模拟数据目录
+            simulation_dir: 模拟数据目录（其 basename 即 simulation_id，用作 Redis 键前缀）
         """
         self.simulation_dir = simulation_dir
-        self.commands_dir = os.path.join(simulation_dir, "ipc_commands")
-        self.responses_dir = os.path.join(simulation_dir, "ipc_responses")
+        self.simulation_id = os.path.basename(os.path.normpath(simulation_dir))
 
-        # 确保目录存在
-        os.makedirs(self.commands_dir, exist_ok=True)
-        os.makedirs(self.responses_dir, exist_ok=True)
+    def _post(self, command: IPCCommand) -> None:
+        """把命令 RPUSH 到该模拟的命令队列（FIFO），并刷新队列兜底 TTL。"""
+        r = _get_redis()
+        cmd_key = CMD_KEY.format(sid=self.simulation_id)
+        r.rpush(cmd_key, json.dumps(command.to_dict(), ensure_ascii=False))
+        r.expire(cmd_key, CMD_TTL)
 
     def send_command(
         self,
         command_type: CommandType,
         args: dict[str, Any],
         timeout: float = 60.0,
-        poll_interval: float = 0.5,
+        poll_interval: float = 0.5,  # 保留以兼容旧签名；Redis BLPOP 为阻塞等待，不再轮询
     ) -> IPCResponse:
         """
-        发送命令并等待响应
+        发送命令并等待响应（命令入 Redis 队列，响应经 Redis 信箱阻塞等待）
 
         Args:
             command_type: 命令类型
             args: 命令参数
             timeout: 超时时间（秒）
-            poll_interval: 轮询间隔（秒）
+            poll_interval: 兼容旧签名的占位参数（Redis BLPOP 阻塞等待，无需轮询）
 
         Returns:
             IPCResponse
@@ -145,50 +171,26 @@ class SimulationIPCClient:
         command_id = str(uuid.uuid4())
         command = IPCCommand(command_id=command_id, command_type=command_type, args=args)
 
-        # 写入命令文件
-        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
-        with open(command_file, "w", encoding="utf-8") as f:
-            json.dump(command.to_dict(), f, ensure_ascii=False, indent=2)
-
+        r = _get_redis()
+        resp_key = RESP_KEY.format(sid=self.simulation_id, cid=command_id)
+        self._post(command)
         logger.info(f"发送IPC命令: {command_type.value}, command_id={command_id}")
 
-        # 等待响应
-        response_file = os.path.join(self.responses_dir, f"{command_id}.json")
-        start_time = time.time()
+        # BLPOP 阻塞等待响应（timeout 取整秒，至少 1s）
+        item = r.blpop(resp_key, timeout=max(1, int(timeout)))
+        if item is None:
+            logger.error(f"等待IPC响应超时: command_id={command_id}")
+            raise TimeoutError(f"等待命令响应超时 ({timeout}秒)")
 
-        while time.time() - start_time < timeout:
-            if os.path.exists(response_file):
-                try:
-                    with open(response_file, encoding="utf-8") as f:
-                        response_data = json.load(f)
-                    response = IPCResponse.from_dict(response_data)
-
-                    # 清理命令和响应文件
-                    try:
-                        os.remove(command_file)
-                        os.remove(response_file)
-                    except OSError:
-                        pass
-
-                    logger.info(
-                        f"收到IPC响应: command_id={command_id}, status={response.status.value}"
-                    )
-                    return response
-                except (json.JSONDecodeError, KeyError) as e:
-                    logger.warning(f"解析响应失败: {e}")
-
-            time.sleep(poll_interval)
-
-        # 超时
-        logger.error(f"等待IPC响应超时: command_id={command_id}")
-
-        # 清理命令文件
+        _, raw = item
         try:
-            os.remove(command_file)
-        except OSError:
-            pass
+            response = IPCResponse.from_dict(json.loads(raw))
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"解析响应失败: {e}")
+            raise TimeoutError(f"响应解析失败: {e}") from e
 
-        raise TimeoutError(f"等待命令响应超时 ({timeout}秒)")
+        logger.info(f"收到IPC响应: command_id={command_id}, status={response.status.value}")
+        return response
 
     def send_interview(
         self, agent_id: int, prompt: str, platform: str = None, timeout: float = 60.0
@@ -224,9 +226,7 @@ class SimulationIPCClient:
         """
         command_id = command_id or str(uuid.uuid4())
         command = IPCCommand(command_id=command_id, command_type=command_type, args=args)
-        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
-        with open(command_file, "w", encoding="utf-8") as f:
-            json.dump(command.to_dict(), f, ensure_ascii=False, indent=2)
+        self._post(command)
         logger.info(f"投递IPC命令(不等待): {command_type.value}, command_id={command_id}")
         return command_id
 
@@ -292,25 +292,47 @@ class SimulationIPCClient:
         """
         检查模拟环境是否存活
 
-        通过检查 env_status.json 文件来判断
+        通过 Redis 心跳键 sim:ipc:alive:{sid} 判断（模拟进程每轮循环刷新，进程死后 TTL 过期）。
         """
-        status_file = os.path.join(self.simulation_dir, "env_status.json")
-        if not os.path.exists(status_file):
-            return False
+        return read_env_status(self.simulation_id).get("status") == "alive"
 
-        try:
-            with open(status_file, encoding="utf-8") as f:
-                status = json.load(f)
-            return status.get("status") == "alive"
-        except (json.JSONDecodeError, OSError):
-            return False
+
+def read_env_status(simulation_id: str) -> dict[str, Any]:
+    """读取模拟环境的存活/可用性状态（来自 Redis 心跳键）。
+
+    返回 {status, twitter_available, reddit_available, timestamp}；
+    键不存在（未启动 / 已回收）时返回 status=stopped。
+    """
+    default = {
+        "status": "stopped",
+        "twitter_available": False,
+        "reddit_available": False,
+        "timestamp": None,
+    }
+    try:
+        raw = _get_redis().get(ALIVE_KEY.format(sid=simulation_id))
+    except Exception:
+        return default
+    if not raw:
+        return default
+    try:
+        status = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return default
+    return {
+        "status": status.get("status", "stopped"),
+        "twitter_available": status.get("twitter_available", False),
+        "reddit_available": status.get("reddit_available", False),
+        "timestamp": status.get("timestamp"),
+    }
 
 
 class SimulationIPCServer:
     """
-    模拟IPC服务器（模拟脚本端使用）
+    模拟IPC服务器（模拟脚本端可用的参考实现，基于 Redis）
 
-    轮询命令目录，执行命令并返回响应
+    从 Redis 命令队列取命令、执行并把响应写回信箱。运行中的模拟脚本各自内置了等价的
+    轻量实现（见 scripts/_ipc_redis.py），本类作为同协议的库级参考实现保留。
     """
 
     def __init__(self, simulation_dir: str):
@@ -318,21 +340,14 @@ class SimulationIPCServer:
         初始化IPC服务器
 
         Args:
-            simulation_dir: 模拟数据目录
+            simulation_dir: 模拟数据目录（其 basename 即 simulation_id）
         """
         self.simulation_dir = simulation_dir
-        self.commands_dir = os.path.join(simulation_dir, "ipc_commands")
-        self.responses_dir = os.path.join(simulation_dir, "ipc_responses")
-
-        # 确保目录存在
-        os.makedirs(self.commands_dir, exist_ok=True)
-        os.makedirs(self.responses_dir, exist_ok=True)
-
-        # 环境状态
+        self.simulation_id = os.path.basename(os.path.normpath(simulation_dir))
         self._running = False
 
     def start(self):
-        """标记服务器为运行状态"""
+        """标记服务器为运行状态，写存活心跳"""
         self._running = True
         self._update_env_status("alive")
 
@@ -342,63 +357,31 @@ class SimulationIPCServer:
         self._update_env_status("stopped")
 
     def _update_env_status(self, status: str):
-        """更新环境状态文件"""
-        status_file = os.path.join(self.simulation_dir, "env_status.json")
-        with open(status_file, "w", encoding="utf-8") as f:
-            json.dump(
-                {"status": status, "timestamp": datetime.now().isoformat()},
-                f,
-                ensure_ascii=False,
-                indent=2,
-            )
+        """更新环境存活心跳键"""
+        ttl = 30 if status == "alive" else 5
+        _get_redis().set(
+            ALIVE_KEY.format(sid=self.simulation_id),
+            json.dumps({"status": status, "timestamp": datetime.now().isoformat()}),
+            ex=ttl,
+        )
 
     def poll_commands(self) -> IPCCommand | None:
-        """
-        轮询命令目录，返回第一个待处理的命令
-
-        Returns:
-            IPCCommand 或 None
-        """
-        if not os.path.exists(self.commands_dir):
+        """非阻塞取一条待处理命令（FIFO）。无命令返回 None。"""
+        raw = _get_redis().lpop(CMD_KEY.format(sid=self.simulation_id))
+        if not raw:
+            return None
+        try:
+            return IPCCommand.from_dict(json.loads(raw))
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"解析命令失败: {e}")
             return None
 
-        # 按时间排序获取命令文件
-        command_files = []
-        for filename in os.listdir(self.commands_dir):
-            if filename.endswith(".json"):
-                filepath = os.path.join(self.commands_dir, filename)
-                command_files.append((filepath, os.path.getmtime(filepath)))
-
-        command_files.sort(key=lambda x: x[1])
-
-        for filepath, _ in command_files:
-            try:
-                with open(filepath, encoding="utf-8") as f:
-                    data = json.load(f)
-                return IPCCommand.from_dict(data)
-            except (json.JSONDecodeError, KeyError, OSError) as e:
-                logger.warning(f"读取命令文件失败: {filepath}, {e}")
-                continue
-
-        return None
-
     def send_response(self, response: IPCResponse):
-        """
-        发送响应
-
-        Args:
-            response: IPC响应
-        """
-        response_file = os.path.join(self.responses_dir, f"{response.command_id}.json")
-        with open(response_file, "w", encoding="utf-8") as f:
-            json.dump(response.to_dict(), f, ensure_ascii=False, indent=2)
-
-        # 删除命令文件
-        command_file = os.path.join(self.commands_dir, f"{response.command_id}.json")
-        try:
-            os.remove(command_file)
-        except OSError:
-            pass
+        """把响应写入 Redis 信箱（带 TTL 兜底）。"""
+        key = RESP_KEY.format(sid=self.simulation_id, cid=response.command_id)
+        r = _get_redis()
+        r.rpush(key, json.dumps(response.to_dict(), ensure_ascii=False))
+        r.expire(key, 300)
 
     def send_success(self, command_id: str, result: dict[str, Any]):
         """发送成功响应"""

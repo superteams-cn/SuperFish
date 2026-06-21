@@ -1321,30 +1321,9 @@ class SimulationRunner:
         Returns:
             状态详情字典，包含 status, twitter_available, reddit_available, timestamp
         """
-        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
-        status_file = os.path.join(sim_dir, "env_status.json")
+        from .simulation_ipc import read_env_status
 
-        default_status = {
-            "status": "stopped",
-            "twitter_available": False,
-            "reddit_available": False,
-            "timestamp": None,
-        }
-
-        if not os.path.exists(status_file):
-            return default_status
-
-        try:
-            with open(status_file, encoding="utf-8") as f:
-                status = json.load(f)
-            return {
-                "status": status.get("status", "stopped"),
-                "twitter_available": status.get("twitter_available", False),
-                "reddit_available": status.get("reddit_available", False),
-                "timestamp": status.get("timestamp"),
-            }
-        except (json.JSONDecodeError, OSError):
-            return default_status
+        return read_env_status(simulation_id)
 
     @classmethod
     def interview_agent(
