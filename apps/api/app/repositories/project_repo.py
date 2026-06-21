@@ -19,6 +19,7 @@ def _row_to_project(row: ProjectRow) -> Project:
         user_id=row.user_id or "",
         name=row.name,
         status=ProjectStatus(row.status),
+        kind=row.kind or "social_opinion",
         created_at=row.created_at,
         updated_at=row.updated_at,
         files=row.files or [],
@@ -39,6 +40,7 @@ def _apply_project_to_row(project: Project, row: ProjectRow) -> None:
     row.user_id = project.user_id
     row.name = project.name
     row.status = status.value if isinstance(status, ProjectStatus) else status
+    row.kind = project.kind or "social_opinion"
     row.created_at = project.created_at
     row.updated_at = project.updated_at
     row.files = project.files

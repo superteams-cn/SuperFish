@@ -268,6 +268,7 @@ export default function ProcessPage() {
       const formData = new FormData()
       pending.files.forEach((f) => formData.append('files', f))
       formData.append('simulation_requirement', pending.simulationRequirement)
+      formData.append('kind', pending.kind)
       const res = await generateOntology(formData)
       if (res.success) {
         clearPendingUpload()

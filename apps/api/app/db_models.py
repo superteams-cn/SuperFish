@@ -62,6 +62,8 @@ class ProjectRow(Base):
     user_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     name: Mapped[str] = mapped_column(String(255), default="Unnamed Project")
     status: Mapped[str] = mapped_column(String(32), index=True, default="created")
+    # 推演类型（social_opinion / narrative）；存量行默认社媒舆论模拟
+    kind: Mapped[str] = mapped_column(String(32), index=True, default="social_opinion")
     # created_at/updated_at 沿用 ISO 字符串语义（与既有 to_dict 契约一致，便于字符串排序）
     created_at: Mapped[str] = mapped_column(String(40), default="", index=True)
     updated_at: Mapped[str] = mapped_column(String(40), default="")

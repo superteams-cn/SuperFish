@@ -27,8 +27,8 @@ def _safe_python_class_name(name: str, prefix: str) -> str:
     return class_name
 
 
-# 本体生成的系统提示词
-ONTOLOGY_SYSTEM_PROMPT = """你是一个专业的知识图谱本体设计专家。你的任务是分析给定的文本内容和模拟需求，设计适合**社交媒体舆论模拟**的实体类型和关系类型。
+# 本体生成的系统提示词（社媒舆论模拟，原有默认）
+SOCIAL_ONTOLOGY_SYSTEM_PROMPT = """你是一个专业的知识图谱本体设计专家。你的任务是分析给定的文本内容和模拟需求，设计适合**社交媒体舆论模拟**的实体类型和关系类型。
 
 **重要：你必须输出有效的JSON格式数据，不要输出任何其他内容。**
 
@@ -174,6 +174,135 @@ B. **具体类型（__ENTITY_SPECIFIC__个，根据文本内容设计）**：
 """
 
 
+# 本体生成的系统提示词（剧本/小说剧情拆解 + 推演）
+NARRATIVE_ONTOLOGY_SYSTEM_PROMPT = """你是一个专业的叙事结构分析专家。你的任务是分析给定的剧本/小说文本与推演需求，拆解出适合**剧情推演模拟**的实体类型（剧中人物/势力）和关系类型（人物之间的戏剧关系）。
+
+**重要：你必须输出有效的JSON格式数据，不要输出任何其他内容。**
+
+## 核心任务背景
+
+我们正在构建一个**剧情推演模拟系统**。在这个系统里：
+- 每个实体是剧中一个**可以行动、对话、做决定的角色或势力**（后续会被赋予人设、动机、记忆，让其"演一遍"）
+- 实体之间存在戏剧关系：冲突、结盟、情感、权力、动机指向等
+- 我们要在拆解出的人物关系与冲突结构上，推演剧情走向与不同结局
+
+因此，**实体必须是剧中真实出场、能驱动情节的主体**：
+
+**可以是**：
+- 具体人物（主角、对手/反派、配角、导师、爱人、亲属、旁观者等）
+- 势力 / 阵营 / 组织（家族、帮派、王国、公司、团队等集体行动主体）
+
+**不可以是**：
+- 抽象概念（如"命运"、"爱情"、"正义"）——这些请写进 analysis_summary 的主题分析，不要做成实体
+- 纯场景 / 道具 / 事件（如"城堡"、"宝剑"、"那场战争"）——它们是舞台与情节，不是发声主体
+
+> 注意：主题、冲突主线、伏笔、整体走向这些"拆解结论"放进 analysis_summary，**不要**塞进实体类型。实体层只保留"能演的人/势力"。
+
+## 输出格式
+
+请输出JSON格式，包含以下结构：
+
+```json
+{
+    "entity_types": [
+        {
+            "name": "实体类型名称（使用当前语言；中文项目可直接使用中文）",
+            "description": "简短描述（使用当前语言，不超过100字符）",
+            "attributes": [
+                {
+                    "name": "属性名（英文，snake_case）",
+                    "type": "text",
+                    "description": "属性描述（使用当前语言）"
+                }
+            ],
+            "examples": ["示例角色1", "示例角色2"]
+        }
+    ],
+    "edge_types": [
+        {
+            "name": "关系类型名称（使用当前语言；中文项目可直接使用中文）",
+            "description": "简短描述（使用当前语言，不超过100字符）",
+            "source_targets": [
+                {"source": "源实体类型", "target": "目标实体类型"}
+            ],
+            "attributes": []
+        }
+    ],
+    "analysis_summary": "剧情拆解概述：核心主题、主要冲突主线、关键人物动机、整体走向。"
+}
+```
+
+## 设计指南（极其重要！）
+
+### 1. 实体类型设计 - 必须严格遵守
+
+**数量要求：必须正好 __ENTITY_TOTAL__ 个实体类型**
+
+**层次结构要求（必须同时包含具体类型和兜底类型）**：
+
+A. **兜底类型（必须包含，放在列表最后2个）**：
+   - 中文输出时使用 `个人`；英文输出时使用 `Person`。表示任何具体出场人物的兜底类型。
+   - 中文输出时使用 `组织`；英文输出时使用 `Organization`。表示任何势力/阵营/集体的兜底类型。
+
+B. **具体类型（__ENTITY_SPECIFIC__个，根据剧情设计）**：
+   - 针对剧中的关键戏剧角色，设计更具体的类型
+   - 例如：`主角`、`对手`、`导师`、`爱慕对象`、`帮凶`；或英文 `Protagonist`, `Antagonist`, `Mentor`, `Ally`
+   - 具体类型应反映**角色在冲突中的戏剧功能**，而不只是身份职业
+
+**为什么需要兜底类型**：
+- 剧中会出现各种次要人物（路人、信使、群众），归入 `个人`
+- 临时团体、未具名势力，归入 `组织`
+
+### 2. 关系类型设计
+
+- 数量：__EDGE_MIN__-__EDGE_MAX__个
+- 关系应反映**戏剧张力与人物连接**，而非社媒互动
+- 确保关系的 source_targets 涵盖你定义的实体类型
+
+### 3. 属性设计
+
+- 每个实体类型1-3个关键属性，优先刻画"能驱动推演"的维度
+- **注意**：属性名不能使用 `name`、`uuid`、`group_id`、`created_at`、`summary`（系统保留字）
+- 推荐使用：`role`（戏剧角色定位）、`motivation`（核心动机）、`goal`（目标诉求）、`arc`（人物弧光起点）、`faction`（所属阵营）、`description`
+
+## 实体类型参考（戏剧功能）
+
+**人物类（具体）**：
+- 主角 / Protagonist：故事的核心驱动者
+- 对手 / Antagonist：与主角目标对立的力量
+- 导师 / Mentor：引导、给予主角能力或忠告者
+- 盟友 / Ally：与主角同行、协助者
+- 爱慕对象 / LoveInterest：情感线的对象
+- 阴影 / Shadow：威胁、反派帮凶
+
+**人物类（兜底）**：
+- 个人 / Person：任何具体出场人物（不属于上述具体类型时使用）
+
+**势力类（兜底）**：
+- 组织 / Organization：任何势力、阵营、家族、集体（不属于具体类型时使用）
+
+## 关系类型参考（戏剧关系）
+
+- CONFLICTS_WITH: 冲突/对立
+- ALLIES_WITH: 结盟/同盟
+- LOVES: 爱慕/情感
+- KIN_OF: 亲属
+- MENTORS: 指引/教导
+- SERVES: 效忠/从属
+- BETRAYS: 背叛
+- PROTECTS: 守护
+- RIVALS: 竞争/宿敌
+- SEEKS: 追求（目标指向另一主体）
+"""
+
+
+# 按推演类型选择系统提示词模板；未知类型回落社媒（保持旧默认行为）
+_SYSTEM_PROMPT_BY_KIND = {
+    "social_opinion": SOCIAL_ONTOLOGY_SYSTEM_PROMPT,
+    "narrative": NARRATIVE_ONTOLOGY_SYSTEM_PROMPT,
+}
+
+
 class OntologyGenerator:
     """
     本体生成器
@@ -188,6 +317,7 @@ class OntologyGenerator:
         document_texts: list[str],
         simulation_requirement: str,
         additional_context: str | None = None,
+        kind: str = "social_opinion",
     ) -> dict[str, Any]:
         """
         生成本体定义
@@ -196,20 +326,23 @@ class OntologyGenerator:
             document_texts: 文档文本列表
             simulation_requirement: 模拟需求描述
             additional_context: 额外上下文
+            kind: 推演类型（social_opinion / narrative），决定提示词模板；未知值回落社媒
 
         Returns:
             本体定义（entity_types, edge_types等）
         """
         # 构建用户消息
         user_message = self._build_user_message(
-            document_texts, simulation_requirement, additional_context
+            document_texts, simulation_requirement, additional_context, kind
         )
 
         lang_instruction = get_language_instruction()
+        # 按推演类型选模板；未知类型回落社媒，保证旧流程零改动
+        system_prompt_template = _SYSTEM_PROMPT_BY_KIND.get(kind, SOCIAL_ONTOLOGY_SYSTEM_PROMPT)
         # 按配置注入实体/关系类型数量（占位符用 __TOKEN__ 形式，避免与提示词内 JSON 的花括号冲突）
         entity_total = settings.ontology_entity_types
         base_prompt = (
-            ONTOLOGY_SYSTEM_PROMPT.replace("__ENTITY_TOTAL__", str(entity_total))
+            system_prompt_template.replace("__ENTITY_TOTAL__", str(entity_total))
             .replace("__ENTITY_SPECIFIC__", str(max(1, entity_total - 2)))
             .replace("__EDGE_MIN__", str(settings.ontology_edge_types_min))
             .replace("__EDGE_MAX__", str(settings.ontology_edge_types_max))
@@ -236,7 +369,11 @@ class OntologyGenerator:
     MAX_TEXT_LENGTH_FOR_LLM = 50000
 
     def _build_user_message(
-        self, document_texts: list[str], simulation_requirement: str, additional_context: str | None
+        self,
+        document_texts: list[str],
+        simulation_requirement: str,
+        additional_context: str | None,
+        kind: str = "social_opinion",
     ) -> str:
         """构建用户消息"""
 
@@ -266,7 +403,21 @@ class OntologyGenerator:
 """
 
         entity_total = settings.ontology_entity_types
-        message += f"""
+        if kind == "narrative":
+            message += f"""
+请根据以上剧本/小说内容，拆解出适合剧情推演的人物/势力实体类型和戏剧关系类型。
+
+**必须遵守的规则**：
+1. 必须正好输出{entity_total}个实体类型
+2. 最后2个必须是兜底类型：中文输出为 个人 和 组织；英文输出为 Person 和 Organization
+3. 前{max(1, entity_total - 2)}个是根据剧情设计的具体角色类型（按戏剧功能划分，如主角/对手/导师）
+4. 所有实体类型必须是剧中能行动、对话、做决定的人物或势力，不能是抽象概念/场景/道具
+5. 主题、冲突主线、伏笔、整体走向写进 analysis_summary，不要做成实体
+6. 属性名不能使用 name、uuid、group_id 等保留字，用 role、motivation、goal、faction 等替代
+7. 不要输出单独的展示名字段；name 就是最终展示和 schema 使用的类型名，必须与当前语言一致
+"""
+        else:
+            message += f"""
 请根据以上内容，设计适合社会舆论模拟的实体类型和关系类型。
 
 **必须遵守的规则**：

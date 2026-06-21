@@ -23,7 +23,7 @@ import { VerifyDialog } from '@/components/auth/VerifyDialog'
 import { HistoryDatabase } from '@/components/HistoryDatabase'
 import { Logo } from '@/components/common/Logo'
 import { QuotaChip } from '@/components/common/QuotaChip'
-import { setPendingUpload } from '@/stores/pendingUpload'
+import { setPendingUpload, type SimulationKind } from '@/stores/pendingUpload'
 import { useAuth } from '@/stores/auth'
 
 const ACCEPTED = ['pdf', 'md', 'txt']
@@ -84,6 +84,7 @@ export default function HomePage() {
   const timerRef = useRef<number>()
 
   const [stage, setStage] = useState<Stage>('topic')
+  const [kind, setKind] = useState<SimulationKind>('social_opinion')
   const [thinking, setThinking] = useState(false)
   const [draft, setDraft] = useState('')
   const [requirement, setRequirement] = useState('')
@@ -137,6 +138,7 @@ export default function HomePage() {
     window.clearTimeout(timerRef.current)
     setThinking(false)
     setStage('topic')
+    setKind('social_opinion')
     setRequirement('')
     setDraft('')
     setFiles([])
@@ -144,7 +146,7 @@ export default function HomePage() {
 
   const startEngine = () => {
     if (!requirement || files.length === 0) return
-    setPendingUpload(files, requirement)
+    setPendingUpload(files, requirement, kind)
     navigate('/process/new')
   }
 
@@ -233,6 +235,31 @@ export default function HomePage() {
 
         {stage === 'topic' ? (
           <div className="animate-rise-in ml-12 flex flex-col gap-3">
+            {/* 推演模式切换：社媒舆论预测（默认）/ 剧本剧情拆解推演 */}
+            <div
+              role="radiogroup"
+              aria-label={t('home.modeLabel')}
+              className="bg-card flex w-fit gap-1 rounded-full border p-1 shadow-sm backdrop-blur-xl"
+            >
+              {(['social_opinion', 'narrative'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={kind === m}
+                  onClick={() => setKind(m)}
+                  className={
+                    'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ' +
+                    (kind === m
+                      ? 'bg-primary text-primary-foreground shadow'
+                      : 'text-muted-foreground hover:text-foreground')
+                  }
+                >
+                  {t(m === 'narrative' ? 'home.modeNarrative' : 'home.modeSocial')}
+                </button>
+              ))}
+            </div>
+
             <div className="flex flex-wrap gap-2">
               {(['chatEg1', 'chatEg2', 'chatEg3', 'chatEg4', 'chatEg5'] as const).map((k) => (
                 <Button

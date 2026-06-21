@@ -17,6 +17,16 @@ class ProjectStatus(StrEnum):
     FAILED = "failed"  # 失败
 
 
+class ProjectKind(StrEnum):
+    """推演类型：决定本体/报告走哪套模板，以及中段引擎如何分派。
+
+    新增类型时只追加枚举值；存量数据缺该字段时一律回落 SOCIAL_OPINION，旧流程零改动。
+    """
+
+    SOCIAL_OPINION = "social_opinion"  # 社交媒体舆论模拟（原有默认流程）
+    NARRATIVE = "narrative"  # 剧本/小说剧情拆解 + 推演
+
+
 @dataclass
 class Project:
     """项目数据模型"""
@@ -26,6 +36,9 @@ class Project:
     status: ProjectStatus
     created_at: str
     updated_at: str
+
+    # 推演类型（决定本体/报告模板与引擎分派）；存量数据回落社媒舆论模拟
+    kind: str = ProjectKind.SOCIAL_OPINION.value
 
     # 所属用户（数据隔离归属根）
     user_id: str = ""
@@ -57,6 +70,7 @@ class Project:
             "user_id": self.user_id,
             "name": self.name,
             "status": self.status.value if isinstance(self.status, ProjectStatus) else self.status,
+            "kind": self.kind,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "files": self.files,
@@ -83,6 +97,7 @@ class Project:
             user_id=data.get("user_id", ""),
             name=data.get("name", "Unnamed Project"),
             status=status,
+            kind=data.get("kind") or ProjectKind.SOCIAL_OPINION.value,
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
             files=data.get("files", []),

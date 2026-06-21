@@ -111,6 +111,7 @@ async def generate_ontology(
     simulation_requirement: str = Form(default=""),
     project_name: str = Form(default="Unnamed Project"),
     additional_context: str = Form(default=""),
+    kind: str = Form(default="social_opinion"),
     current=Depends(require_verified_user),
 ):
     """接口1：上传文件（PDF/MD/TXT），分析生成本体定义。
@@ -133,10 +134,14 @@ async def generate_ontology(
         if ProjectManager.count_projects(current["user_id"]) >= settings.max_projects_per_user:
             return _error(t("auth.projectQuotaExceeded", limit=settings.max_projects_per_user), 403)
 
+        # 推演类型：未知值回落社媒舆论模拟（旧流程默认）
+        project_kind = kind if kind in ("social_opinion", "narrative") else "social_opinion"
+
         # 创建项目（盖章当前用户为属主）
         project = ProjectManager.create_project(name=project_name, user_id=current["user_id"])
+        project.kind = project_kind
         project.simulation_requirement = simulation_requirement
-        logger.info(f"创建项目: {project.project_id}")
+        logger.info(f"创建项目: {project.project_id} (kind={project_kind})")
 
         # 保存文件并提取文本
         document_texts = []
@@ -181,6 +186,7 @@ async def generate_ontology(
             document_texts=document_texts,
             simulation_requirement=simulation_requirement,
             additional_context=additional_context if additional_context else None,
+            kind=project_kind,
         )
 
         # 保存本体到项目
@@ -202,6 +208,7 @@ async def generate_ontology(
             "data": {
                 "project_id": project.project_id,
                 "project_name": project.name,
+                "kind": project.kind,
                 "ontology": project.ontology,
                 "analysis_summary": project.analysis_summary,
                 "files": project.files,
