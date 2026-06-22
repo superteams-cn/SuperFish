@@ -95,6 +95,21 @@ export const stopSimulation = (
 ): Promise<ApiEnvelope<Record<string, unknown>>> =>
   http.post<Record<string, unknown>>('/api/simulation/stop', data)
 
+/** 剧本推演分支：从某节拍处分叉 + 上帝视角注入变量，返回新推演 ID。 */
+export interface BranchResult {
+  simulation_id: string
+  parent_id: string
+  from_seq: number
+  start_beats: number
+  injection: string
+}
+export const branchSimulation = (data: {
+  simulation_id: string
+  from_seq?: number
+  injection?: string
+  label?: string
+}): Promise<ApiEnvelope<BranchResult>> => http.post<BranchResult>('/api/simulation/branch', data)
+
 /** 获取模拟运行实时状态。 */
 export const getRunStatus = (simulationId: string): Promise<ApiEnvelope<RunStatus>> =>
   http.get<RunStatus>(`/api/simulation/${simulationId}/run-status`)

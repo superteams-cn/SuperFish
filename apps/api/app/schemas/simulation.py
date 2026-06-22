@@ -64,6 +64,15 @@ class StopSimulationRequest(BaseModel):
     simulation_id: str | None = Field(default=None, description="模拟ID，必填")
 
 
+class BranchSimulationRequest(BaseModel):
+    """剧本推演分支请求体（从某个节拍处分叉 + 上帝视角注入变量）。"""
+
+    simulation_id: str | None = Field(default=None, description="父推演ID，必填")
+    from_seq: int = Field(default=-1, description="分支点 beat seq（含），-1 表示从末尾分叉")
+    injection: str = Field(default="", description="上帝视角注入的变量/事件，可选")
+    label: str = Field(default="", description="分支备注，可选")
+
+
 class InterviewAgentRequest(BaseModel):
     """采访单个 Agent 请求体"""
 

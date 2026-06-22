@@ -10,7 +10,9 @@ from app.services.narrative.runner import (
     BEATS_FILENAME,
     RUN_FILENAME,
     NarrativeRunner,
+    fork_into,
     is_narrative,
+    load_branch_meta,
     load_seed,
     save_seed,
 )
@@ -72,6 +74,42 @@ def test_run_status_running_but_dead_thread_is_interrupted(tmp_path):
     # 没有活线程 → 视为可续跑的中断态
     st = NarrativeRunner.get_run_status("sim_x", tmp_path)
     assert st["runner_status"] == "interrupted"
+
+
+def test_fork_into_truncates_and_injects(tmp_path):
+    parent = tmp_path / "parent"
+    child = tmp_path / "child"
+    parent.mkdir()
+    save_seed(parent, _seed())
+    beats = [
+        Beat(seq=0, type=BeatType.SPEAK.value, actor="u1", content="a"),
+        Beat(seq=1, type=BeatType.SPEAK.value, actor="u2", content="b"),
+        Beat(seq=2, type=BeatType.SPEAK.value, actor="u1", content="c"),
+    ]
+    (parent / BEATS_FILENAME).write_text(
+        "\n".join(json.dumps(b.to_dict(), ensure_ascii=False) for b in beats) + "\n",
+        encoding="utf-8",
+    )
+
+    start = fork_into(
+        parent,
+        child,
+        new_simulation_id="sim_child",
+        from_seq=1,
+        injection="天降大雨",
+        parent_id="sim_parent",
+    )
+    # 截断到 seq<=1 的 2 条 + 1 条注入 DIRECT = 3
+    assert start == 3
+    forked = NarrativeRunner.get_beats(child)
+    assert [b["seq"] for b in forked] == [0, 1, 2]
+    assert forked[2]["type"] == "DIRECT"
+    assert "天降大雨" in forked[2]["content"]
+    # 子种子换了 simulation_id
+    assert load_seed(child).simulation_id == "sim_child"
+    # 分支元信息可读
+    meta = load_branch_meta(child)
+    assert meta["parent_id"] == "sim_parent" and meta["from_seq"] == 1
 
 
 def test_get_beats_resolves_names(tmp_path):

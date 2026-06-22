@@ -1147,6 +1147,13 @@
     "waiting": "A character is about to speak…",
     "inner": "inner",
     "subtext": "subtext",
-    "speakingTo": "to {{names}}"
+    "speakingTo": "to {{names}}",
+    "branchCta": "Try another outcome (inject a variable)",
+    "branchTitle": "God's-eye view: inject a variable and see the story rewrite itself",
+    "branchPlaceholder": "e.g. an old letter arrives, a key witness shows up, the lead changes their mind…",
+    "branchGo": "Fork the run",
+    "branching": "Forking a new timeline…",
+    "branchFailed": "Branch failed: {{error}}",
+    "branchBadge": "Forked from beat {{seq}}"
   }
 }

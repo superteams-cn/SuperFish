@@ -1,16 +1,27 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Sparkles, ArrowRight, Code, Radio, AlertTriangle, RotateCcw } from 'lucide-react'
+import {
+  Loader2,
+  Sparkles,
+  ArrowRight,
+  Code,
+  Radio,
+  AlertTriangle,
+  RotateCcw,
+  GitBranch,
+} from 'lucide-react'
 
 import { SystemLogTerminal } from '@/components/SystemLogTerminal'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { CollapsibleHeader } from '@/components/ui/collapsible-header'
 import { NarrativeBeatFlow } from '@/components/step3/NarrativeBeatFlow'
 import { useNarrativeRun } from '@/components/step3/useNarrativeRun'
 import { StageIcon } from '@/components/common/StageIcon'
 import { SoftProgress } from '@/components/common/SoftProgress'
 import { generateReport } from '@/lib/api/report'
+import { branchSimulation } from '@/lib/api/simulation'
 import type { SystemLog } from '@/lib/process-types'
 import type { WorkflowStatus } from '@/components/WorkflowLayout'
 
@@ -34,6 +45,33 @@ export function Step3Narrative({ simulationId, systemLogs, addLog, onUpdateStatu
 
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [backstageOpen, setBackstageOpen] = useState(false)
+  const [branchOpen, setBranchOpen] = useState(false)
+  const [injection, setInjection] = useState('')
+  const [isBranching, setIsBranching] = useState(false)
+
+  const handleBranch = async () => {
+    if (!simulationId || isBranching) return
+    setIsBranching(true)
+    addLog(t('narrative.branching'))
+    try {
+      const res = await branchSimulation({
+        simulation_id: simulationId,
+        injection: injection.trim(),
+      })
+      if (res.success && res.data) {
+        // 分支即一条新推演：跳到它的运行页，自动开演
+        navigate(`/simulation/${res.data.simulation_id}/start`)
+        // 强制重新挂载（同路由不同 id），由 SimulationRunPage 的 useParams 驱动
+        navigate(0)
+      } else {
+        addLog(t('narrative.branchFailed', { error: res.error || t('common.unknownError') }))
+        setIsBranching(false)
+      }
+    } catch (err) {
+      addLog(t('narrative.branchFailed', { error: (err as Error).message }))
+      setIsBranching(false)
+    }
+  }
 
   const handleGenerateReport = async () => {
     if (!simulationId || isGeneratingReport) return
@@ -84,6 +122,13 @@ export function Step3Narrative({ simulationId, systemLogs, addLog, onUpdateStatu
             </div>
           ) : (
             <>
+              {status.branch && (
+                <div className="animate-rise-in text-muted-foreground mb-4 flex items-center justify-center gap-1.5 text-xs">
+                  <GitBranch className="h-3.5 w-3.5 text-violet-400" />
+                  {t('narrative.branchBadge', { seq: status.branch.from_seq + 1 })}
+                  {status.branch.injection ? `：${status.branch.injection}` : ''}
+                </div>
+              )}
               <div className="animate-rise-in text-center">
                 <StageIcon done={done} />
                 <h2 className="text-2xl font-semibold tracking-tight">
@@ -117,6 +162,47 @@ export function Step3Narrative({ simulationId, systemLogs, addLog, onUpdateStatu
                     {isGeneratingReport ? t('step3.cGenerating') : t('step3.cNext')}
                     {!isGeneratingReport && <ArrowRight className="h-5 w-5" />}
                   </Button>
+
+                  {/* 换个走向：上帝视角注入变量 → 分叉出另一条结局 */}
+                  {!branchOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setBranchOpen(true)}
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs"
+                    >
+                      <GitBranch className="h-3.5 w-3.5" />
+                      {t('narrative.branchCta')}
+                    </button>
+                  ) : (
+                    <div className="animate-rise-in bg-card w-full max-w-md rounded-2xl border p-4 shadow-sm backdrop-blur-xl">
+                      <p className="mb-2 text-sm font-medium">{t('narrative.branchTitle')}</p>
+                      <Textarea
+                        rows={2}
+                        value={injection}
+                        onChange={(e) => setInjection(e.target.value)}
+                        placeholder={t('narrative.branchPlaceholder')}
+                        className="resize-none text-sm"
+                      />
+                      <div className="mt-3 flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setBranchOpen(false)}>
+                          {t('common.cancel')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={handleBranch}
+                          disabled={isBranching}
+                        >
+                          {isBranching ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <GitBranch className="h-4 w-4" />
+                          )}
+                          {t('narrative.branchGo')}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

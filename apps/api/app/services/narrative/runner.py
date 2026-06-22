@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from ...domain.narrative import Beat, NarrativeSeed, fold
+from ...domain.narrative import DIRECTOR_ACTOR, Beat, NarrativeSeed, fold
 from .engine import BeatLog, NarrativeEngine
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 SEED_FILENAME = "narrative_seed.json"
 BEATS_FILENAME = "beats.jsonl"
 RUN_FILENAME = "narrative_run.json"
+BRANCH_FILENAME = "narrative_branch.json"
 
 DEFAULT_MAX_BEATS = 40
 
@@ -51,6 +52,70 @@ def load_seed(sim_dir: str | Path) -> NarrativeSeed | None:
     if not p.exists():
         return None
     return NarrativeSeed.from_dict(json.loads(p.read_text(encoding="utf-8")))
+
+
+def load_branch_meta(sim_dir: str | Path) -> dict[str, Any] | None:
+    """读取分支元信息（若该 sim 是某次推演的分支）。"""
+    p = Path(sim_dir) / BRANCH_FILENAME
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def fork_into(
+    parent_sim_dir: str | Path,
+    new_sim_dir: str | Path,
+    new_simulation_id: str,
+    from_seq: int,
+    injection: str = "",
+    parent_id: str = "",
+) -> int:
+    """从父推演分叉：截断复制 beats[0..from_seq] 到新 sim，并可注入一条上帝视角 DIRECT。
+
+    分支与续跑同机制——新 sim 只是带着「前缀事件流 + 注入」的另一条 event-sourced 时间线。
+    返回新 sim 起始时已有的 beat 数（用于前端定位"分支点"）。
+    """
+    from .engine import BeatLog  # 局部导入避免与 engine 的循环
+
+    parent_seed = load_seed(parent_sim_dir)
+    if parent_seed is None:
+        raise FileNotFoundError(f"父推演无种子: {parent_sim_dir}")
+
+    # 复制种子（换成新 sim id），让新分支独立成一次推演
+    parent_seed.simulation_id = new_simulation_id
+    save_seed(new_sim_dir, parent_seed)
+
+    parent_beats = BeatLog(Path(parent_sim_dir) / BEATS_FILENAME).read_all()
+    kept = [b for b in parent_beats if b.seq <= from_seq]
+    next_seq = (kept[-1].seq + 1) if kept else 0
+
+    new_log = BeatLog(Path(new_sim_dir) / BEATS_FILENAME)
+    for b in kept:
+        new_log.append(b)
+
+    if injection.strip():
+        new_log.append(
+            Beat(
+                seq=next_seq,
+                type="DIRECT",
+                actor=DIRECTOR_ACTOR,
+                scene_id=kept[-1].scene_id if kept else "",
+                content=f"（上帝视角注入：{injection.strip()}）",
+                meta={"kind": "injection", "injection": injection.strip()},
+            )
+        )
+
+    (Path(new_sim_dir) / BRANCH_FILENAME).write_text(
+        json.dumps(
+            {"parent_id": parent_id, "from_seq": from_seq, "injection": injection.strip()},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return len(new_log.read_all())
 
 
 class NarrativeRunner:
@@ -169,6 +234,7 @@ class NarrativeRunner:
             "max_beats": max_beats,
             "progress_percent": round(progress, 1),
             "error": run_state.get("error", ""),
+            "branch": load_branch_meta(sim_dir),
         }
 
     @classmethod

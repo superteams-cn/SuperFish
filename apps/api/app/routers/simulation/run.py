@@ -13,7 +13,11 @@ from ...core.redis_lock import LockBusy, redis_lock
 from ...core.settings import settings
 from ...jobqueue import enqueue
 from ...models.project import ProjectManager
-from ...schemas.simulation import StartSimulationRequest, StopSimulationRequest
+from ...schemas.simulation import (
+    BranchSimulationRequest,
+    StartSimulationRequest,
+    StopSimulationRequest,
+)
 from ...services.simulation_manager import SimulationManager, SimulationStatus
 from ...services.simulation_runner import SimulationRunner
 from ...utils.locale import get_locale, t
@@ -209,6 +213,79 @@ def start_simulation(req: StartSimulationRequest, current=Depends(require_verifi
     finally:
         if _start_lock is not None:
             _start_lock.__exit__(None, None, None)
+
+
+@router.post("/branch")
+def branch_simulation(req: BranchSimulationRequest, current=Depends(require_verified_user)):
+    """剧本推演分支：从父推演的某个节拍处分叉为一条新时间线，可注入上帝视角变量。
+
+    新建一个 narrative 模拟，复制父推演 beats[0..from_seq] 作为前缀（+可选注入），
+    置 READY 后即可像普通推演一样 /start 续跑——分支与续跑同一套 event-sourced 机制。
+    """
+    try:
+        parent_id = req.simulation_id
+        if not parent_id:
+            return _error(t("api.requireSimulationId"), 400)
+        parent_state = _owned_simulation(parent_id, current)
+        if parent_state is None:
+            return _error(t("api.simulationNotFound", id=parent_id), 404)
+
+        from ...services.narrative.runner import fork_into, is_narrative
+
+        manager = SimulationManager()
+        parent_dir = manager._get_simulation_dir(parent_id)
+        if not is_narrative(parent_dir):
+            return _error("只有剧本推演支持分支", 400)
+
+        # 配额：分支也是一次新推演，计入项目配额上限
+        from ...services.narrative.runner import BeatLog as _BL  # noqa: N814
+
+        parent_beats = _BL(f"{parent_dir}/beats.jsonl").read_all()
+        if not parent_beats:
+            return _error("父推演尚无可分支的节拍", 400)
+        from_seq = req.from_seq if req.from_seq >= 0 else parent_beats[-1].seq
+
+        # 新建子模拟（继承 project/graph/user）
+        child = manager.create_simulation(
+            project_id=parent_state.project_id,
+            graph_id=parent_state.graph_id,
+            user_id=parent_state.user_id,
+        )
+        child_dir = manager._get_simulation_dir(child.simulation_id)
+        start_beats = fork_into(
+            parent_dir,
+            child_dir,
+            new_simulation_id=child.simulation_id,
+            from_seq=from_seq,
+            injection=req.injection,
+            parent_id=parent_id,
+        )
+        manager._mirror_to_s3(child.simulation_id, "narrative_seed.json")
+
+        child.profiles_count = parent_state.profiles_count
+        child.entities_count = parent_state.entities_count
+        child.entity_types = parent_state.entity_types
+        child.config_generated = True
+        child.config_reasoning = f"分支自 {parent_id} 第 {from_seq} 拍" + (
+            f"，注入：{req.injection}" if req.injection else ""
+        )
+        child.simulation_requirement = parent_state.simulation_requirement
+        child.status = SimulationStatus.READY
+        manager._save_simulation_state(child)
+
+        return {
+            "success": True,
+            "data": {
+                "simulation_id": child.simulation_id,
+                "parent_id": parent_id,
+                "from_seq": from_seq,
+                "start_beats": start_beats,
+                "injection": req.injection,
+            },
+        }
+    except Exception as e:
+        logger.error(f"分支推演失败: {str(e)}")
+        return _error(str(e), 500, traceback=traceback.format_exc())
 
 
 @router.post("/stop")

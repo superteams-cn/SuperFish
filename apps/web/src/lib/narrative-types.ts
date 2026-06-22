@@ -27,4 +27,6 @@ export interface NarrativeRunStatus {
   progress_percent?: number
   error?: string
   all_beats?: BeatItem[]
+  /** 若本推演是某次推演的分支 */
+  branch?: { parent_id: string; from_seq: number; injection: string } | null
 }

@@ -1147,6 +1147,13 @@
     "waiting": "角色正在酝酿第一句……",
     "inner": "内心",
     "subtext": "潜台词",
-    "speakingTo": "对 {{names}}"
+    "speakingTo": "对 {{names}}",
+    "branchCta": "换个走向（注入变量）",
+    "branchTitle": "上帝视角：注入一个变量，看剧情如何改写",
+    "branchPlaceholder": "例如：此时一封旧信被送到、关键证人突然出现、主角改变主意……",
+    "branchGo": "分叉推演",
+    "branching": "正在分叉出新的时间线……",
+    "branchFailed": "分支失败：{{error}}",
+    "branchBadge": "本推演分叉自第 {{seq}} 拍"
   }
 }
