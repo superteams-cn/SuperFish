@@ -55,6 +55,21 @@ def list_projects(limit: int = 50, current=Depends(get_current_user)):
     }
 
 
+@router.get("/project/quota")
+def get_project_quota(current=Depends(get_current_user)):
+    """当前用户的项目名额：上限 + 已用 + 剩余。
+
+    供前端在「开始预测」前显式告知名额并在已满时拦截，避免上传后才撞 403。
+    注意：须声明在 /project/{project_id} 之前，否则 "quota" 会被当作 project_id。
+    """
+    used = ProjectManager.count_projects(current["user_id"])
+    limit = settings.max_projects_per_user
+    return {
+        "success": True,
+        "data": {"limit": limit, "used": used, "available": max(limit - used, 0)},
+    }
+
+
 @router.get("/project/{project_id}")
 def get_project(project_id: str, current=Depends(get_current_user)):
     """获取项目详情（仅限属主）"""

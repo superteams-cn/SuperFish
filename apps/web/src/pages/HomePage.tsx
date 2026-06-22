@@ -23,6 +23,9 @@ import { VerifyDialog } from '@/components/auth/VerifyDialog'
 import { HistoryDatabase } from '@/components/HistoryDatabase'
 import { Logo } from '@/components/common/Logo'
 import { QuotaChip } from '@/components/common/QuotaChip'
+import { ProjectQuotaChip } from '@/components/common/ProjectQuotaChip'
+import { useProjectQuota } from '@/hooks/useProjectQuota'
+import type { ProjectQuota } from '@/lib/api/graph'
 import { setPendingUpload, type SimulationKind, type NarrativeMode } from '@/stores/pendingUpload'
 import { useAuth } from '@/stores/auth'
 
@@ -94,6 +97,10 @@ export default function HomePage() {
   const [dragOver, setDragOver] = useState(false)
   const [hasHistory, setHasHistory] = useState<boolean | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // 开始预测前的名额确认弹框
+  const { refresh: refreshProjectQuota } = useProjectQuota({ enabled: isAuthenticated })
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmQuota, setConfirmQuota] = useState<ProjectQuota | null>(null)
 
   // 推进到下一段对话：先让 SuperFish “想一下”，再开口，制造真实节奏
   const advanceTo = (next: Stage) => {
@@ -147,8 +154,18 @@ export default function HomePage() {
     setFiles([])
   }
 
-  const startEngine = () => {
+  // 点击「开始预测」：先查项目名额并弹框提醒（满则拦截），确认后再进入
+  const startEngine = async () => {
     if (!requirement || files.length === 0) return
+    const q = await refreshProjectQuota()
+    setConfirmQuota(q)
+    setConfirmOpen(true)
+  }
+
+  // 弹框「确认开始」：名额未满才真正进入预测流程
+  const confirmStart = () => {
+    if (confirmQuota && confirmQuota.available <= 0) return
+    setConfirmOpen(false)
     setPendingUpload(files, requirement, kind, narrativeMode)
     navigate('/process/new')
   }
@@ -194,6 +211,7 @@ export default function HomePage() {
             <History className="h-4 w-4" />
             <span className="hidden sm:inline">{t('home.records')}</span>
           </Button>
+          <ProjectQuotaChip enabled={isAuthenticated} />
           <QuotaChip enabled={isAuthenticated} />
           <ThemeSwitcher />
           <LanguageSwitcher />
@@ -502,6 +520,59 @@ export default function HomePage() {
           {hasHistory === false && (
             <p className="text-muted-foreground py-16 text-center text-sm">{t('home.noHistory')}</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 开始预测前：项目名额确认 / 满额拦截 */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-sm">
+          {(() => {
+            const full = !!confirmQuota && confirmQuota.available <= 0
+            return (
+              <div className="flex flex-col gap-3">
+                <DialogTitle>
+                  {full ? t('home.quotaFullTitle') : t('home.startConfirmTitle')}
+                </DialogTitle>
+                {confirmQuota ? (
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {full
+                      ? t('home.quotaFullDesc', {
+                          used: confirmQuota.used,
+                          limit: confirmQuota.limit,
+                        })
+                      : t('home.startConfirmDesc', {
+                          used: confirmQuota.used,
+                          limit: confirmQuota.limit,
+                          available: confirmQuota.available,
+                        })}
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {t('home.startConfirmNoQuota')}
+                  </p>
+                )}
+                <div className="mt-1 flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                  {full ? (
+                    <Button
+                      onClick={() => {
+                        setConfirmOpen(false)
+                        if (isAuthenticated) setHistoryOpen(true)
+                      }}
+                    >
+                      {t('home.quotaFullGoManage')}
+                    </Button>
+                  ) : (
+                    <Button variant="gradient" onClick={confirmStart}>
+                      {t('home.startConfirmGo')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 

@@ -34,3 +34,13 @@ export function getProject(projectId: string): Promise<ApiEnvelope<ProjectData>>
 export function deleteProject(projectId: string): Promise<ApiEnvelope<{ message?: string }>> {
   return http.delete<{ message?: string }>(`/api/graph/project/${projectId}`)
 }
+
+/** 项目名额：上限 / 已用 / 剩余。用于「开始预测」前提醒与拦截。 */
+export interface ProjectQuota {
+  limit: number
+  used: number
+  available: number
+}
+export function getProjectQuota(): Promise<ApiEnvelope<ProjectQuota>> {
+  return http.get<ProjectQuota>('/api/graph/project/quota')
+}

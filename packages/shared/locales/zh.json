@@ -167,6 +167,13 @@
     "promptPlaceholder": "// 用自然语言输入模拟或预测需求（例.武大若发布撤销肖某处分的公告，会引发什么舆情走向）",
     "engineBadge": "引擎: SuperFish-V1.0",
     "startEngine": "启动引擎",
+    "startConfirmTitle": "开始预测",
+    "startConfirmDesc": "本次将创建 1 个新项目。当前项目名额：已用 {used} / 共 {limit}（剩余 {available}）。确认开始？",
+    "startConfirmNoQuota": "本次将创建 1 个新项目。确认开始？",
+    "startConfirmGo": "确认开始",
+    "quotaFullTitle": "项目名额已满",
+    "quotaFullDesc": "你已用满 {used}/{limit} 个项目名额，无法再创建。请先在「记录」里删除部分旧项目，再发起新的预测。",
+    "quotaFullGoManage": "去管理项目",
     "initializing": "初始化中...",
     "scrollToHistory": "查看历史推演",
     "heroPill": "AI 群体推演 · 看见每个决定的未来",
@@ -246,7 +253,9 @@
     "stepProgress": "步骤 {current}/{total}",
     "goToStage": "回到「{stage}」",
     "quotaChip": "推演名额 {running}/{limit}",
-    "quotaHint": "为保证每场推演的算力，同一账号最多同时运行 {limit} 场。名额满时，需等其中一场结束（或在运行页提前结束）才能再开新的一场。"
+    "quotaHint": "为保证每场推演的算力，同一账号最多同时运行 {limit} 场。名额满时，需等其中一场结束（或在运行页提前结束）才能再开新的一场。",
+    "projectQuotaChip": "项目名额 {used}/{limit}",
+    "projectQuotaHint": "同一账号最多保存 {limit} 个项目。名额满时，需在「记录」里删除部分旧项目，才能新建预测。"
   },
   "step1": {
     "ontologyGeneration": "本体生成",

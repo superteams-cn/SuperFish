@@ -167,6 +167,13 @@
     "promptPlaceholder": "// Describe your simulation or prediction requirement in natural language",
     "engineBadge": "Engine: SuperFish-V1.0",
     "startEngine": "Start Engine",
+    "startConfirmTitle": "Start prediction",
+    "startConfirmDesc": "This will create 1 new project. Project quota: {used} / {limit} used ({available} left). Start now?",
+    "startConfirmNoQuota": "This will create 1 new project. Start now?",
+    "startConfirmGo": "Start",
+    "quotaFullTitle": "Project quota full",
+    "quotaFullDesc": "You've used all {used}/{limit} project slots. Delete some old projects in Records before starting a new prediction.",
+    "quotaFullGoManage": "Manage projects",
     "initializing": "Initializing...",
     "scrollToHistory": "View simulation history",
     "heroPill": "AI swarm simulation · See the future of every decision",
@@ -246,7 +253,9 @@
     "stepProgress": "Step {current}/{total}",
     "goToStage": "Back to “{stage}”",
     "quotaChip": "Runs {running}/{limit}",
-    "quotaHint": "To guarantee compute for each run, one account can run at most {limit} simulations at once. When full, wait for one to finish (or end it early on its run page) before starting another."
+    "quotaHint": "To guarantee compute for each run, one account can run at most {limit} simulations at once. When full, wait for one to finish (or end it early on its run page) before starting another.",
+    "projectQuotaChip": "Projects {used}/{limit}",
+    "projectQuotaHint": "One account can keep at most {limit} projects. When full, delete some old projects in Records before creating a new prediction."
   },
   "step1": {
     "ontologyGeneration": "Ontology Generation",
