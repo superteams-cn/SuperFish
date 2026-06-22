@@ -112,6 +112,7 @@ async def generate_ontology(
     project_name: str = Form(default="Unnamed Project"),
     additional_context: str = Form(default=""),
     kind: str = Form(default="social_opinion"),
+    narrative_mode: str = Form(default="free"),
     current=Depends(require_verified_user),
 ):
     """接口1：上传文件（PDF/MD/TXT），分析生成本体定义。
@@ -135,11 +136,16 @@ async def generate_ontology(
             return _error(t("auth.projectQuotaExceeded", limit=settings.max_projects_per_user), 403)
 
         # 推演类型：未知值回落社媒舆论模拟（旧流程默认）
-        project_kind = kind if kind in ("social_opinion", "narrative") else "social_opinion"
+        project_kind = (
+            kind if kind in ("social_opinion", "narrative", "screenwriting") else "social_opinion"
+        )
 
         # 创建项目（盖章当前用户为属主）
         project = ProjectManager.create_project(name=project_name, user_id=current["user_id"])
         project.kind = project_kind
+        project.narrative_mode = (
+            narrative_mode if narrative_mode in ("free", "faithful") else "free"
+        )
         project.simulation_requirement = simulation_requirement
         logger.info(f"创建项目: {project.project_id} (kind={project_kind})")
 

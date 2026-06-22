@@ -129,6 +129,7 @@ class SimulationManager:
         simulation_requirement: str,
         defined_entity_types: list[str] | None,
         progress_callback: Callable | None,
+        narrative_mode: str = "free",
     ) -> SimulationState:
         """剧本推演准备：图谱角色 + 主题 → NarrativeSeed，落 sim_dir，状态置 READY。"""
         from ..repositories.project_repo import ProjectRepository
@@ -170,6 +171,8 @@ class SimulationManager:
             # 主题取项目 analysis_summary（P0 叙事拆解的主题/冲突主线）
             proj = ProjectRepository.get(state.project_id)
             theme = (proj.analysis_summary if proj else "") or ""
+            # 模式以项目存储为准（HomePage 选择），prepare 请求为兜底
+            mode = (proj.narrative_mode if proj and proj.narrative_mode else None) or narrative_mode
 
             seed = build_seed(
                 simulation_id=state.simulation_id,
@@ -178,6 +181,7 @@ class SimulationManager:
                 or (proj.simulation_requirement if proj else "")
                 or "",
                 theme=theme,
+                mode=mode,
             )
             save_seed(sim_dir, seed)
             self._mirror_to_s3(state.simulation_id, "narrative_seed.json")
@@ -221,6 +225,7 @@ class SimulationManager:
         use_llm_for_profiles: bool = True,
         progress_callback: Callable | None = None,
         parallel_profile_count: int = 3,
+        narrative_mode: str = "free",
     ) -> SimulationState:
         """
         准备模拟环境（全程自动化）
@@ -248,11 +253,17 @@ class SimulationManager:
         if not state:
             raise AppError(f"模拟不存在: {simulation_id}", status=404)
 
-        # 剧本推演（kind=narrative）：走叙事准备路径——读角色 → 建 NarrativeSeed → READY，
-        # 跳过 OASIS 人设/配置生成。
-        if self._project_kind(state) == "narrative":
+        # 剧本推演（叙事家族 narrative/screenwriting）：走叙事准备路径——读角色 →
+        # 建 NarrativeSeed → READY，跳过 OASIS 人设/配置生成。
+        from ..domain.project import is_narrative_kind
+
+        if is_narrative_kind(self._project_kind(state)):
             return self._prepare_narrative(
-                state, simulation_requirement, defined_entity_types, progress_callback
+                state,
+                simulation_requirement,
+                defined_entity_types,
+                progress_callback,
+                narrative_mode,
             )
 
         try:

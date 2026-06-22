@@ -297,9 +297,12 @@ B. **具体类型（__ENTITY_SPECIFIC__个，根据剧情设计）**：
 
 
 # 按推演类型选择系统提示词模板；未知类型回落社媒（保持旧默认行为）
+# 编剧专业(screenwriting)与通用叙事(narrative)共用同一套人物/关系本体——差异在报告维度，
+# 而非抽取实体本身（引擎都需要"能演的角色"）。
 _SYSTEM_PROMPT_BY_KIND = {
     "social_opinion": SOCIAL_ONTOLOGY_SYSTEM_PROMPT,
     "narrative": NARRATIVE_ONTOLOGY_SYSTEM_PROMPT,
+    "screenwriting": NARRATIVE_ONTOLOGY_SYSTEM_PROMPT,
 }
 
 
@@ -403,7 +406,9 @@ class OntologyGenerator:
 """
 
         entity_total = settings.ontology_entity_types
-        if kind == "narrative":
+        from ..domain.project import is_narrative_kind
+
+        if is_narrative_kind(kind):
             message += f"""
 请根据以上剧本/小说内容，拆解出适合剧情推演的人物/势力实体类型和戏剧关系类型。
 

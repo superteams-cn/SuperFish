@@ -24,7 +24,19 @@ class ProjectKind(StrEnum):
     """
 
     SOCIAL_OPINION = "social_opinion"  # 社交媒体舆论模拟（原有默认流程）
-    NARRATIVE = "narrative"  # 剧本/小说剧情拆解 + 推演
+    NARRATIVE = "narrative"  # 剧本/小说剧情拆解 + 推演（通用叙事）
+    SCREENWRITING = (
+        "screenwriting"  # 编剧专业拆解（三幕/节拍/弧光），引擎同 narrative，报告维度不同
+    )
+
+
+# 叙事家族：共享叙事引擎/运行器/采访，仅本体与报告模板按 kind 细分
+NARRATIVE_KINDS = frozenset({ProjectKind.NARRATIVE.value, ProjectKind.SCREENWRITING.value})
+
+
+def is_narrative_kind(kind: str | None) -> bool:
+    """该推演类型是否属于叙事家族（narrative / screenwriting）。"""
+    return (kind or "") in NARRATIVE_KINDS
 
 
 @dataclass
@@ -39,6 +51,8 @@ class Project:
 
     # 推演类型（决定本体/报告模板与引擎分派）；存量数据回落社媒舆论模拟
     kind: str = ProjectKind.SOCIAL_OPINION.value
+    # 剧本推演模式（free 自由推演 / faithful 忠实复演）；仅叙事家族有意义
+    narrative_mode: str = "free"
 
     # 所属用户（数据隔离归属根）
     user_id: str = ""
@@ -71,6 +85,7 @@ class Project:
             "name": self.name,
             "status": self.status.value if isinstance(self.status, ProjectStatus) else self.status,
             "kind": self.kind,
+            "narrative_mode": self.narrative_mode,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "files": self.files,
@@ -98,6 +113,7 @@ class Project:
             name=data.get("name", "Unnamed Project"),
             status=status,
             kind=data.get("kind") or ProjectKind.SOCIAL_OPINION.value,
+            narrative_mode=data.get("narrative_mode") or "free",
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
             files=data.get("files", []),

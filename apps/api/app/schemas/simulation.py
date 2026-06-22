@@ -28,6 +28,7 @@ class PrepareSimulationRequest(BaseModel):
     use_llm_for_profiles: bool = Field(default=True, description="是否用 LLM 生成人设")
     parallel_profile_count: int = Field(default=5, description="并行生成人设数量")
     force_regenerate: bool = Field(default=False, description="是否强制重新生成")
+    mode: str = Field(default="free", description="剧本推演模式：free 自由推演 / faithful 忠实复演")
 
 
 class PrepareStatusRequest(BaseModel):

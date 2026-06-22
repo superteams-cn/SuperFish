@@ -266,6 +266,7 @@ def prepare_simulation(req: PrepareSimulationRequest, current=Depends(require_ve
                     use_llm_for_profiles=use_llm_for_profiles,
                     progress_callback=progress_callback,
                     parallel_profile_count=parallel_profile_count,
+                    narrative_mode=req.mode,
                 )
 
                 # 任务完成

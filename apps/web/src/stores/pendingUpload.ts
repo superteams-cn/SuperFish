@@ -4,13 +4,16 @@
  * 仅在导航时一次性读取，无需响应式，模块级单例即可。
  */
 
-/** 推演类型：社媒舆论模拟（默认）/ 剧本剧情拆解推演。与后端 project.kind 对齐。 */
-export type SimulationKind = 'social_opinion' | 'narrative'
+/** 推演类型：社媒舆论 / 通用剧情 / 编剧专业。与后端 project.kind 对齐。 */
+export type SimulationKind = 'social_opinion' | 'narrative' | 'screenwriting'
+/** 剧本推演模式：自由推演 / 忠实复演。与后端 project.narrative_mode 对齐。 */
+export type NarrativeMode = 'free' | 'faithful'
 
 interface PendingUploadState {
   files: File[]
   simulationRequirement: string
   kind: SimulationKind
+  narrativeMode: NarrativeMode
   isPending: boolean
 }
 
@@ -18,6 +21,7 @@ const state: PendingUploadState = {
   files: [],
   simulationRequirement: '',
   kind: 'social_opinion',
+  narrativeMode: 'free',
   isPending: false,
 }
 
@@ -25,10 +29,12 @@ export function setPendingUpload(
   files: File[],
   requirement: string,
   kind: SimulationKind = 'social_opinion',
+  narrativeMode: NarrativeMode = 'free',
 ) {
   state.files = files
   state.simulationRequirement = requirement
   state.kind = kind
+  state.narrativeMode = narrativeMode
   state.isPending = true
 }
 
@@ -37,6 +43,7 @@ export function getPendingUpload(): PendingUploadState {
     files: state.files,
     simulationRequirement: state.simulationRequirement,
     kind: state.kind,
+    narrativeMode: state.narrativeMode,
     isPending: state.isPending,
   }
 }
@@ -45,5 +52,6 @@ export function clearPendingUpload() {
   state.files = []
   state.simulationRequirement = ''
   state.kind = 'social_opinion'
+  state.narrativeMode = 'free'
   state.isPending = false
 }

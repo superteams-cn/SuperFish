@@ -201,9 +201,14 @@ def run_report_generate(
 
         sim_dir = SimulationManager()._get_simulation_dir(simulation_id)
         if is_narrative(sim_dir):
+            from .repositories.project_repo import ProjectRepository
             from .services.narrative.report import NarrativeReportGenerator
 
-            report = NarrativeReportGenerator(sim_dir).generate(
+            # 报告风格随项目 kind：screenwriting → 编剧专业维度
+            sim = SimulationManager().get_simulation(simulation_id)
+            proj = ProjectRepository.get(sim.project_id) if sim else None
+            style = "screenwriting" if (proj and proj.kind == "screenwriting") else "narrative"
+            report = NarrativeReportGenerator(sim_dir, style=style).generate(
                 report_id=report_id, progress_callback=progress_callback
             )
         else:

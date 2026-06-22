@@ -23,7 +23,7 @@ import { VerifyDialog } from '@/components/auth/VerifyDialog'
 import { HistoryDatabase } from '@/components/HistoryDatabase'
 import { Logo } from '@/components/common/Logo'
 import { QuotaChip } from '@/components/common/QuotaChip'
-import { setPendingUpload, type SimulationKind } from '@/stores/pendingUpload'
+import { setPendingUpload, type SimulationKind, type NarrativeMode } from '@/stores/pendingUpload'
 import { useAuth } from '@/stores/auth'
 
 const ACCEPTED = ['pdf', 'md', 'txt']
@@ -85,6 +85,8 @@ export default function HomePage() {
 
   const [stage, setStage] = useState<Stage>('topic')
   const [kind, setKind] = useState<SimulationKind>('social_opinion')
+  const [narrativeMode, setNarrativeMode] = useState<NarrativeMode>('free')
+  const isNarrative = kind !== 'social_opinion'
   const [thinking, setThinking] = useState(false)
   const [draft, setDraft] = useState('')
   const [requirement, setRequirement] = useState('')
@@ -139,6 +141,7 @@ export default function HomePage() {
     setThinking(false)
     setStage('topic')
     setKind('social_opinion')
+    setNarrativeMode('free')
     setRequirement('')
     setDraft('')
     setFiles([])
@@ -146,7 +149,7 @@ export default function HomePage() {
 
   const startEngine = () => {
     if (!requirement || files.length === 0) return
-    setPendingUpload(files, requirement, kind)
+    setPendingUpload(files, requirement, kind, narrativeMode)
     navigate('/process/new')
   }
 
@@ -235,30 +238,89 @@ export default function HomePage() {
 
         {stage === 'topic' ? (
           <div className="animate-rise-in ml-12 flex flex-col gap-3">
-            {/* 推演模式切换：社媒舆论预测（默认）/ 剧本剧情拆解推演 */}
+            {/* 顶层：社媒舆论预测（默认）/ 剧本推演 */}
             <div
               role="radiogroup"
               aria-label={t('home.modeLabel')}
               className="bg-card flex w-fit gap-1 rounded-full border p-1 shadow-sm backdrop-blur-xl"
             >
-              {(['social_opinion', 'narrative'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  role="radio"
-                  aria-checked={kind === m}
-                  onClick={() => setKind(m)}
-                  className={
-                    'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ' +
-                    (kind === m
-                      ? 'bg-primary text-primary-foreground shadow'
-                      : 'text-muted-foreground hover:text-foreground')
-                  }
-                >
-                  {t(m === 'narrative' ? 'home.modeNarrative' : 'home.modeSocial')}
-                </button>
-              ))}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!isNarrative}
+                onClick={() => setKind('social_opinion')}
+                className={
+                  'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ' +
+                  (!isNarrative
+                    ? 'bg-primary text-primary-foreground shadow'
+                    : 'text-muted-foreground hover:text-foreground')
+                }
+              >
+                {t('home.modeSocial')}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isNarrative}
+                onClick={() => setKind('narrative')}
+                className={
+                  'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ' +
+                  (isNarrative
+                    ? 'bg-primary text-primary-foreground shadow'
+                    : 'text-muted-foreground hover:text-foreground')
+                }
+              >
+                {t('home.modeNarrative')}
+              </button>
             </div>
+
+            {/* 剧本推演的子选项：拆解视角 + 推演模式 */}
+            {isNarrative && (
+              <div className="animate-rise-in flex flex-col gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground w-16 shrink-0">{t('home.nLens')}</span>
+                  <div className="bg-card flex gap-1 rounded-full border p-0.5 backdrop-blur-xl">
+                    {(['narrative', 'screenwriting'] as const).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        aria-pressed={kind === k}
+                        onClick={() => setKind(k)}
+                        className={
+                          'rounded-full px-3 py-1 transition-colors ' +
+                          (kind === k
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground')
+                        }
+                      >
+                        {t(k === 'screenwriting' ? 'home.nLensScreenwriting' : 'home.nLensGeneral')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground w-16 shrink-0">{t('home.nMode')}</span>
+                  <div className="bg-card flex gap-1 rounded-full border p-0.5 backdrop-blur-xl">
+                    {(['free', 'faithful'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        aria-pressed={narrativeMode === m}
+                        onClick={() => setNarrativeMode(m)}
+                        className={
+                          'rounded-full px-3 py-1 transition-colors ' +
+                          (narrativeMode === m
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground')
+                        }
+                      >
+                        {t(m === 'faithful' ? 'home.nModeFaithful' : 'home.nModeFree')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               {(['chatEg1', 'chatEg2', 'chatEg3', 'chatEg4', 'chatEg5'] as const).map((k) => (
